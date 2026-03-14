@@ -1,0 +1,2 @@
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

@@ -104,10 +104,9 @@
 /* ── Timeline slider ─────────────────────────────────────────────────────── */
 .timeline-bar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  height: 52px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -130,8 +129,8 @@
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 18px;
-  padding: 2px 7px;
+  font-size: 22px;
+  padding: 4px 10px;
   border-radius: 3px;
   cursor: pointer;
   flex-shrink: 0;
@@ -145,6 +144,22 @@
 .tl-btn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+.tl-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tl-key-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #c8a84b;
+  background: #3a2e0e;
+  border: 1px solid #6a5520;
+  border-radius: 3px;
+  padding: 1px 6px;
+  letter-spacing: 0.06em;
+  margin-left: 4px;
 }
 
 
@@ -160,9 +175,10 @@
 
 /* Wrapper holds the custom visuals + invisible native input */
 .timeline-slider-wrap {
-  flex: 1;
+  width: 100%;
   position: relative;
   height: 36px;
+  padding: 0 20px;
 }
 
 /* Custom track */
@@ -216,6 +232,24 @@
 .timeline-tick-num.active {
   color: var(--accent);
   font-weight: 600;
+}
+
+.timeline-tick.key {
+  background: #6a6a6a;
+  border-color: #6a6a6a;
+}
+
+.timeline-tick.key.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.timeline-tick-num.key {
+  color: #9a9a9a;
+}
+
+.timeline-tick-num.key.active {
+  color: var(--accent);
 }
 
 /* Invisible native input layered on top for interaction */
@@ -406,13 +440,12 @@
   padding: 16px;
 }
 
-.canvas-rect {
-  background: #ffffff;
-  aspect-ratio: 3 / 2;
+.canvas-image {
   max-width: 100%;
   max-height: 100%;
-  width: 100%;
+  object-fit: contain;
   box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  image-rendering: pixelated;
 }
 
 /* ── WebSocket status ──────────────────────────────────────────────────────── */

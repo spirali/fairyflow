@@ -2,24 +2,25 @@ use tracing::{debug, info, warn};
 use axum::{
     Router,
     extract::{
-        State,
+        Path, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
 };
 use clap::Parser;
+use renderer::Animation;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc};
 use tower_http::services::ServeDir;
-
-const PREAMBLE: &str = include_str!("../../../python/preamble.py");
 
 #[derive(Parser)]
 struct Args {
@@ -33,6 +34,7 @@ struct Args {
 #[derive(Clone)]
 struct AppState {
     file_path: Option<PathBuf>,
+    animation: Arc<Mutex<Option<Animation>>>,
 }
 
 #[derive(Deserialize)]
@@ -49,7 +51,7 @@ enum ServerMsg {
     Output { text: String },
     Error { text: String },
     Done { exit_code: Option<i32> },
-    Tree { steps: u64, nodes: serde_json::Value },
+    Tree { key_frames: Vec<u64>, frames: serde_json::Value },
 }
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
@@ -80,10 +82,14 @@ async fn main() {
         }
     }
 
-    let state = AppState { file_path: args.file };
+    let state = AppState {
+        file_path: args.file,
+        animation: Arc::new(Mutex::new(None)),
+    };
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        .route("/frame/{n}", get(frame_handler))
         .fallback_service(ServeDir::new("web/dist"))
         .with_state(state);
 
@@ -96,6 +102,27 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+async fn frame_handler(
+    Path(n): Path<usize>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let animation = state.animation.lock().unwrap();
+    let Some(anim) = animation.as_ref() else {
+        return (StatusCode::NOT_FOUND, "no animation").into_response();
+    };
+    let Some(scene) = anim.frames.get(n) else {
+        return (StatusCode::NOT_FOUND, "frame out of range").into_response();
+    };
+    let pixmap = renderer::render_scene(scene);
+    match pixmap.encode_png() {
+        Ok(png) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
+        Err(e) => {
+            warn!("failed to encode PNG: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
+        }
+    }
+}
+
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
@@ -105,7 +132,6 @@ async fn ws_handler(
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
     info!("WebSocket connection established");
-    // Send file content immediately on connect
     if let Some(ref path) = state.file_path {
         let content = tokio::fs::read_to_string(path).await.unwrap_or_default();
         let msg = serde_json::to_string(&ServerMsg::File { content }).unwrap();
@@ -125,7 +151,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         match serde_json::from_str::<ClientMsg>(&text) {
                             Ok(ClientMsg::Run { code }) => {
                                 info!(bytes = code.len(), "received Run request");
-                                // Persist to file before running
                                 if let Some(ref path) = state.file_path {
                                     tokio::fs::write(path, &code).await.ok();
                                 }
@@ -134,7 +159,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                                 let tx = out_tx.clone();
                                 let kill_rx = kill_tx.subscribe();
                                 debug!("subscribed new kill_rx, spawning run_python");
-                                tokio::spawn(run_python(code, tx, kill_rx));
+                                tokio::spawn(run_python(code, tx, kill_rx, state.animation.clone()));
                             }
                             Ok(ClientMsg::Terminate) => {
                                 info!("received Terminate request");
@@ -173,15 +198,14 @@ async fn run_python(
     code: String,
     tx: mpsc::Sender<ServerMsg>,
     mut kill_rx: broadcast::Receiver<()>,
+    animation_cache: Arc<Mutex<Option<Animation>>>,
 ) {
     let id = RUN_ID.fetch_add(1, Ordering::Relaxed);
     info!(run_id = id, "run_python started");
     let tmp = std::env::temp_dir().join(format!("alsie_{id}.py"));
     let tree_path = std::env::temp_dir().join(format!("alsie_{id}_tree.json"));
 
-    let full_code = format!("{PREAMBLE}\n{code}");
-
-    if let Err(e) = tokio::fs::write(&tmp, &full_code).await {
+    if let Err(e) = tokio::fs::write(&tmp, &code).await {
         warn!(run_id = id, error = %e, "failed to write temp script");
         tx.send(ServerMsg::Error { text: e.to_string() }).await.ok();
         tx.send(ServerMsg::Done { exit_code: None }).await.ok();
@@ -189,8 +213,10 @@ async fn run_python(
     }
 
     let mut child = match Command::new("python3")
+        .args(["-m", "alsie"])
         .arg(&tmp)
-        .env("ALSIE_TREE_PATH", &tree_path)
+        .arg(&tree_path)
+        .env("PYTHONPATH", "python")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -251,15 +277,28 @@ async fn run_python(
 
     if exit_code == Some(0) {
         match tokio::fs::read_to_string(&tree_path).await {
-            Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
-                Ok(mut data) => {
-                    let steps = data["steps"].as_u64().unwrap_or(1);
-                    let nodes = data["nodes"].take();
-                    info!(run_id = id, steps, "sending Tree message");
-                    tx.send(ServerMsg::Tree { steps, nodes }).await.ok();
+            Ok(json_str) => {
+                // Send tree to frontend for the scene tree view
+                match serde_json::from_str::<serde_json::Value>(&json_str) {
+                    Ok(mut data) => {
+                        let key_frames = data["key_frames"].as_array()
+                            .map(|a| a.iter().filter_map(|v| v.as_u64()).collect())
+                            .unwrap_or_default();
+                        let frames = data["frames"].take();
+                        info!(run_id = id, "sending Tree message");
+                        tx.send(ServerMsg::Tree { key_frames, frames }).await.ok();
+                    }
+                    Err(e) => warn!(run_id = id, error = %e, "failed to parse tree JSON"),
                 }
-                Err(e) => warn!(run_id = id, error = %e, "failed to parse tree JSON"),
-            },
+                // Parse and cache the animation for on-demand rendering
+                match renderer::parse_scene(&json_str) {
+                    Ok(anim) => {
+                        info!(run_id = id, frames = anim.frames.len(), "animation cached");
+                        *animation_cache.lock().unwrap() = Some(anim);
+                    }
+                    Err(e) => warn!(run_id = id, error = %e, "failed to parse animation for renderer"),
+                }
+            }
             Err(e) => warn!(run_id = id, error = %e, "failed to read tree file"),
         }
     }

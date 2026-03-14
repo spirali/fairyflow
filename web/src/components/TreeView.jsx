@@ -1,33 +1,26 @@
 import { useState } from 'react';
 
-const TREE = {
-  id: 'root',
-  label: 'root',
-  icon: '📁',
-  children: [
-    {
-      id: 'node1',
-      label: 'node',
-      icon: '📦',
-      children: [
-        { id: 'rect1', label: 'rect', icon: '▭', children: [] },
-        { id: 'rect2', label: 'rect', icon: '▭', children: [] },
-      ],
-    },
-    {
-      id: 'node2',
-      label: 'node',
-      icon: '📦',
-      children: [
-        { id: 'rect3', label: 'rect', icon: '▭', children: [] },
-      ],
-    },
-  ],
-};
+const ICONS = { node: '📦', rect: '▭', circle: '○' };
+
+function nodeLabel(n) {
+  const { width, height, radius, color } = n.props ?? {};
+  let label = n.type;
+  if (width != null && height != null) label += ` ${width}×${height}`;
+  else if (radius != null) label += ` r=${radius}`;
+  if (color) label += ` [${color}]`;
+  return label;
+}
+
+function addIds(nodes, prefix = '') {
+  return nodes.map((n, i) => {
+    const id = `${prefix}${i}`;
+    return { ...n, id, children: addIds(n.children ?? [], `${id}.`) };
+  });
+}
 
 function TreeNode({ node, depth, selected, onSelect }) {
   const [open, setOpen] = useState(true);
-  const hasChildren = node.children.length > 0;
+  const hasChildren = node.children?.length > 0;
 
   return (
     <div>
@@ -42,11 +35,11 @@ function TreeNode({ node, depth, selected, onSelect }) {
         <span className="tree-node-toggle">
           {hasChildren ? (open ? '▾' : '▸') : ''}
         </span>
-        <span className="tree-node-icon">{node.icon}</span>
-        {node.label}
+        <span className="tree-node-icon">{ICONS[node.type] ?? '◆'}</span>
+        {nodeLabel(node)}
       </div>
       {open &&
-        node.children.map((child) => (
+        node.children?.map((child) => (
           <TreeNode
             key={child.id}
             node={child}
@@ -59,13 +52,18 @@ function TreeNode({ node, depth, selected, onSelect }) {
   );
 }
 
-export default function TreeView() {
-  const [selected, setSelected] = useState('root');
+export default function TreeView({ nodes }) {
+  const [selected, setSelected] = useState(null);
 
   return (
     <div className="tree-panel">
       <div className="tree-panel-label">Scene</div>
-      <TreeNode node={TREE} depth={0} selected={selected} onSelect={setSelected} />
+      {nodes?.length
+        ? nodes.map((n) => (
+            <TreeNode key={n.id} node={n} depth={0} selected={selected} onSelect={setSelected} />
+          ))
+        : <div className="tree-empty">Run a script to see the scene tree</div>
+      }
     </div>
   );
 }

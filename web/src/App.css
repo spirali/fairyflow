@@ -203,6 +203,13 @@
   flex-shrink: 0;
 }
 
+.tree-empty {
+  padding: 16px 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
 /* ── Console panel ───────────────────────────────────────────────────────── */
 .console-panel {
   display: flex;

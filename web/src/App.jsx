@@ -5,38 +5,48 @@ import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import './App.css';
 
+function addIds(nodes, prefix = '') {
+  return (nodes ?? []).map((n, i) => {
+    const id = `${prefix}${i}`;
+    return { ...n, id, children: addIds(n.children, `${id}.`) };
+  });
+}
+
 const DEFAULT_CODE = `\
-from alsie import Scene, Rect, animate
+with node().size(300, 200):
+    rect().size(30, 20).color("green")  # Add node into the root node
 
-scene = Scene(width=800, height=533)
-
-r = Rect(x=100, y=100, width=200, height=150, color="#4a9eff")
-scene.add(r)
-
-@animate(duration=2.0)
-def intro(t):
-    r.x = 100 + t * 300
-    r.opacity = t
-
-scene.render()
+    with node():
+        rect()
+        circle().radius(10)
 `;
 
 export default function App() {
   const [frame, setFrame] = useState(0);
   const [lines, setLines] = useState([]);
   const [running, setRunning] = useState(false);
+  const [treeNodes, setTreeNodes] = useState([]);
   const wsRef = useRef(null);
   const editorRef = useRef(null);
+  const pendingFileContent = useRef(null);
   const consoleEndRef = useRef(null);
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${window.location.host}/ws`);
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'output') {
+      if (msg.type === 'file') {
+        if (editorRef.current) {
+          editorRef.current.setValue(msg.content);
+        } else {
+          pendingFileContent.current = msg.content;
+        }
+      } else if (msg.type === 'output') {
         setLines((prev) => [...prev, { kind: 'out', text: msg.text }]);
       } else if (msg.type === 'error') {
         setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
+      } else if (msg.type === 'tree') {
+        setTreeNodes(addIds(msg.nodes));
       } else if (msg.type === 'done') {
         setRunning(false);
         const label =
@@ -58,6 +68,10 @@ export default function App() {
 
   function handleEditorMount(editor, monaco) {
     editorRef.current = editor;
+    if (pendingFileContent.current !== null) {
+      editor.setValue(pendingFileContent.current);
+      pendingFileContent.current = null;
+    }
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       const code = editorRef.current?.getValue();
       if (!code || !wsRef.current) return;
@@ -147,7 +161,7 @@ export default function App() {
             <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
-                  <TreeView />
+                  <TreeView nodes={treeNodes} />
                 </div>
               </Panel>
 

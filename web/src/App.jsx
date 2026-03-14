@@ -5,8 +5,6 @@ import MenuBar from './components/MenuBar';
 import TreeView, { addIds } from './components/TreeView';
 import './App.css';
 
-const FRAMES_PER_STEP = 10;
-
 const DEFAULT_CODE = `\
 with node().size(300, 200):
     rect().size(30, 20).color("green")  # Add node into the root node
@@ -20,88 +18,86 @@ export default function App() {
   // ── scene state ──────────────────────────────────────────────────────────
   const [treeNodes, setTreeNodes] = useState([]);
   const [steps, setSteps] = useState(1);
-
-  // ── mode ─────────────────────────────────────────────────────────────────
-  const [mode, setMode] = useState('step');   // 'step' | 'animation'
-
-  // ── step mode ────────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
-
-  // ── animation mode ───────────────────────────────────────────────────────
-  const [absFrame, setAbsFrame] = useState(0); // 0 .. steps*FRAMES_PER_STEP-1
-  const [timePerStep, setTimePerStep] = useState(1.0);
-  const [playing, setPlaying] = useState(false);
 
   // ── editor / console ─────────────────────────────────────────────────────
   const [lines, setLines] = useState([]);
   const [running, setRunning] = useState(false);
+  const [wsStatus, setWsStatus] = useState('connecting'); // 'connected' | 'reconnecting' | 'failed'
   const wsRef = useRef(null);
   const editorRef = useRef(null);
   const pendingFileContent = useRef(null);
   const consoleEndRef = useRef(null);
+  const reconnectCount = useRef(0);
 
   // ── derived ───────────────────────────────────────────────────────────────
   const maxStep = steps - 1;
-  const totalFrames = steps * FRAMES_PER_STEP;
-  const currentStep = mode === 'step' ? step : Math.floor(absFrame / FRAMES_PER_STEP);
-  const currentFrame = mode === 'step' ? 0 : absFrame % FRAMES_PER_STEP;
 
   // ── websocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'file') {
-        if (editorRef.current) editorRef.current.setValue(msg.content);
-        else pendingFileContent.current = msg.content;
-      } else if (msg.type === 'output') {
-        setLines((prev) => [...prev, { kind: 'out', text: msg.text }]);
-      } else if (msg.type === 'error') {
-        setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
-      } else if (msg.type === 'tree') {
-        setTreeNodes(addIds(msg.nodes));
-        setSteps(msg.steps);
-        setStep(0);
-        setAbsFrame(0);
-        setPlaying(false);
-      } else if (msg.type === 'done') {
-        setRunning(false);
-        const label =
-          msg.exit_code === 0 ? 'Process finished successfully'
-          : msg.exit_code != null ? `Process exited with code ${msg.exit_code}`
-          : 'Process terminated';
-        setLines((prev) => [...prev, { kind: 'sys', text: label }]);
-      }
-    };
-    wsRef.current = ws;
-    return () => ws.close();
-  }, []);
+    let dead = false;
+    let retryTimer = null;
+    const MAX_RETRIES = 3;
 
-  // ── playback ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!playing) return;
-    const msPerFrame = Math.max(16, Math.round((timePerStep * 1000) / FRAMES_PER_STEP));
-    const id = setInterval(() => {
-      setAbsFrame((f) => {
-        if (f >= totalFrames - 1) { setPlaying(false); return f; }
-        return f + 1;
-      });
-    }, msPerFrame);
-    return () => clearInterval(id);
-  }, [playing, timePerStep, totalFrames]);
+    function connect() {
+      const ws = new WebSocket(`ws://${window.location.host}/ws`);
+
+      ws.onopen = () => {
+        if (dead) { ws.close(); return; }
+        reconnectCount.current = 0;
+        setWsStatus('connected');
+        wsRef.current = ws;
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'file') {
+          if (editorRef.current) editorRef.current.setValue(msg.content);
+          else pendingFileContent.current = msg.content;
+        } else if (msg.type === 'output') {
+          setLines((prev) => [...prev, { kind: 'out', text: msg.text }]);
+        } else if (msg.type === 'error') {
+          setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
+        } else if (msg.type === 'tree') {
+          setTreeNodes(addIds(msg.nodes));
+          setSteps(msg.steps);
+          setStep(0);
+        } else if (msg.type === 'done') {
+          setRunning(false);
+          const label =
+            msg.exit_code === 0 ? 'Process finished successfully'
+            : msg.exit_code != null ? `Process exited with code ${msg.exit_code}`
+            : 'Process terminated';
+          setLines((prev) => [...prev, { kind: 'sys', text: label }]);
+        }
+      };
+
+      ws.onclose = () => {
+        if (dead) return;
+        wsRef.current = null;
+        setRunning(false);
+        reconnectCount.current += 1;
+        if (reconnectCount.current > MAX_RETRIES) {
+          setWsStatus('failed');
+        } else {
+          setWsStatus('reconnecting');
+          retryTimer = setTimeout(connect, 2000);
+        }
+      };
+    }
+
+    connect();
+    return () => {
+      dead = true;
+      clearTimeout(retryTimer);
+      wsRef.current?.close();
+    };
+  }, []);
 
   // ── auto-scroll console ────────────────────────────────────────────────────
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lines]);
-
-  // ── mode switch ───────────────────────────────────────────────────────────
-  function switchMode(m) {
-    setPlaying(false);
-    if (m === 'animation') setAbsFrame(step * FRAMES_PER_STEP);
-    else setStep(Math.floor(absFrame / FRAMES_PER_STEP));
-    setMode(m);
-  }
 
   // ── editor ────────────────────────────────────────────────────────────────
   function handleEditorMount(editor, monaco) {
@@ -134,18 +130,14 @@ export default function App() {
           const pct = maxStep > 0 ? (i / maxStep) * 100 : 0;
           return (
             <div key={i} className="timeline-tick-wrap" style={{ left: `${pct}%` }}>
-              <div className={`timeline-tick${i === currentStep ? ' active' : ''}`} />
-              <div className={`timeline-tick-num${i === currentStep ? ' active' : ''}`}>{i}</div>
+              <div className={`timeline-tick${i === step ? ' active' : ''}`} />
+              <div className={`timeline-tick-num${i === step ? ' active' : ''}`}>{i}</div>
             </div>
           );
         })}
         <input type="range" min={0} max={maxStep} step={1}
-          value={mode === 'step' ? step : currentStep}
-          onChange={(e) => {
-            const s = Number(e.target.value);
-            if (mode === 'step') setStep(s);
-            else setAbsFrame(s * FRAMES_PER_STEP);
-          }}
+          value={step}
+          onChange={(e) => setStep(Number(e.target.value))}
           className="timeline-slider"
         />
       </div>
@@ -155,6 +147,21 @@ export default function App() {
   return (
     <div className="app">
       <MenuBar />
+
+      {wsStatus === 'reconnecting' && (
+        <div className="ws-banner ws-banner-reconnecting">
+          Connection lost — reconnecting…
+        </div>
+      )}
+      {wsStatus === 'failed' && (
+        <div className="ws-overlay">
+          <div className="ws-error-box">
+            <div className="ws-error-title">Connection lost</div>
+            <div className="ws-error-body">Could not reconnect to the server. Restart the server and reload the page.</div>
+            <button className="ws-error-reload" onClick={() => window.location.reload()}>Reload</button>
+          </div>
+        </div>
+      )}
 
       <PanelGroup orientation="horizontal" className="main-content">
         {/* ── Left: editor + console ── */}
@@ -209,65 +216,15 @@ export default function App() {
 
             {/* Timeline bar */}
             <div className="timeline-bar">
-              {/* Mode toggle — always visible */}
-              <div className="mode-toggle">
-                <button className={`mode-btn${mode === 'step' ? ' active' : ''}`}
-                  onClick={() => switchMode('step')}>Step</button>
-                <button className={`mode-btn${mode === 'animation' ? ' active' : ''}`}
-                  onClick={() => switchMode('animation')}>Animation</button>
-              </div>
-
               {!hasScene ? (
                 <span className="timeline-no-scene">No scene</span>
-              ) : mode === 'step' ? (
-                /* ── Step mode ── */
+              ) : (
                 <>
                   <span className="timeline-label">{step} / {maxStep}</span>
                   <button className="tl-btn" onClick={() => setStep(0)}          disabled={step === 0}>⏮</button>
                   <button className="tl-btn" onClick={() => setStep(s => s - 1)} disabled={step === 0}>◀</button>
                   <button className="tl-btn" onClick={() => setStep(s => s + 1)} disabled={step === maxStep}>▶</button>
                   <button className="tl-btn" onClick={() => setStep(maxStep)}    disabled={step === maxStep}>⏭</button>
-                  <StepSlider />
-                </>
-              ) : (
-                /* ── Animation mode ── */
-                <>
-                  <span className="timeline-label">
-                    s{currentStep}&thinsp;f{currentFrame}/{FRAMES_PER_STEP}
-                  </span>
-                  {/* Step nav */}
-                  <button className="tl-btn" onClick={() => { setPlaying(false); setAbsFrame(0); }}
-                    disabled={absFrame === 0}>⏮</button>
-                  <button className="tl-btn" onClick={() => { setPlaying(false); setAbsFrame(f => Math.max(0, f - FRAMES_PER_STEP)); }}
-                    disabled={absFrame === 0}>◀</button>
-                  <button className="tl-btn" onClick={() => { setPlaying(false); setAbsFrame(f => Math.min(totalFrames - 1, f + FRAMES_PER_STEP)); }}
-                    disabled={absFrame >= totalFrames - 1}>▶</button>
-                  <button className="tl-btn" onClick={() => { setPlaying(false); setAbsFrame(totalFrames - 1); }}
-                    disabled={absFrame >= totalFrames - 1}>⏭</button>
-                  {/* Frame nav */}
-                  <button className="tl-btn tl-btn-frame" title="Prev frame"
-                    onClick={() => { setPlaying(false); setAbsFrame(f => Math.max(0, f - 1)); }}
-                    disabled={absFrame === 0}>❮</button>
-                  <button className="tl-btn tl-btn-frame" title="Next frame"
-                    onClick={() => { setPlaying(false); setAbsFrame(f => Math.min(totalFrames - 1, f + 1)); }}
-                    disabled={absFrame >= totalFrames - 1}>❯</button>
-                  {/* Play */}
-                  <button className="tl-btn tl-btn-play"
-                    onClick={() => {
-                      if (absFrame >= totalFrames - 1) setAbsFrame(0);
-                      setPlaying(p => !p);
-                    }}>
-                    {playing ? '⏸' : '▶'}
-                  </button>
-                  {/* Time per step */}
-                  <label className="tl-time-label">
-                    <input type="number" className="tl-time-input"
-                      min={0.1} max={60} step={0.1}
-                      value={timePerStep}
-                      onChange={(e) => setTimePerStep(Math.max(0.1, Number(e.target.value)))}
-                    />
-                    s/step
-                  </label>
                   <StepSlider />
                 </>
               )}
@@ -277,7 +234,7 @@ export default function App() {
             <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
-                  <TreeView nodes={treeNodes} step={currentStep} frame={currentFrame} framesPerStep={FRAMES_PER_STEP} />
+                  <TreeView nodes={treeNodes} step={step} />
                 </div>
               </Panel>
 

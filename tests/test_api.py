@@ -3,12 +3,23 @@
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
+
 def kf(node_dict, step):
-    """Return the keyframe dict for a given step, or {} if absent."""
+    """Return {prop: value} for a given step, unwrapping {value, transition} entries."""
+    raw = node_dict["keyframes"].get(str(step), {})
+    return {
+        k: (v["value"] if isinstance(v, dict) and "value" in v else v)
+        for k, v in raw.items()
+    }
+
+
+def kf_raw(node_dict, step):
+    """Return the raw keyframe dict (with transition info) for a given step."""
     return node_dict["keyframes"].get(str(step), {})
 
 
 # ── basic node creation ────────────────────────────────────────────────────
+
 
 def test_rect_type(scene):
     scene["rect"]()
@@ -38,6 +49,7 @@ def test_multiple_roots(scene):
 
 # ── property setters ───────────────────────────────────────────────────────
 
+
 def test_size(scene):
     scene["rect"]().size(30, 20)
     n = scene["tree"]()["nodes"][0]
@@ -66,6 +78,7 @@ def test_position(scene):
 
 # ── type-based property filtering ─────────────────────────────────────────
 
+
 def test_rect_ignores_radius(scene):
     scene["rect"]().radius(10)
     n = scene["tree"]()["nodes"][0]
@@ -80,6 +93,7 @@ def test_circle_ignores_size(scene):
 
 
 # ── keyframes & steps ──────────────────────────────────────────────────────
+
 
 def test_at_writes_to_correct_step(scene):
     scene["rect"]().color("green").at(1).color("red")
@@ -113,6 +127,7 @@ def test_move_from_zero_when_no_prior_position(scene):
 
 
 # ── lifetime (at= / remove) ────────────────────────────────────────────────
+
 
 def test_start_default_is_zero(scene):
     scene["rect"]()
@@ -151,6 +166,7 @@ def test_no_end_when_not_removed(scene):
 
 # ── nesting ────────────────────────────────────────────────────────────────
 
+
 def test_children_added_inside_with(scene):
     with scene["node"]():
         scene["rect"]()
@@ -177,6 +193,7 @@ def test_deep_nesting(scene):
 
 # ── group ──────────────────────────────────────────────────────────────────
 
+
 def test_group_applies_color_to_all(scene):
     r1 = scene["rect"]()
     r2 = scene["rect"]()
@@ -191,8 +208,8 @@ def test_group_ignores_unsupported_prop(scene):
     c = scene["circle"]()
     scene["group"]([r, c]).radius(30)
     nodes = scene["tree"]()["nodes"]
-    assert "radius" not in kf(nodes[0], 0)   # rect: ignored
-    assert kf(nodes[1], 0)["radius"] == 30   # circle: applied
+    assert "radius" not in kf(nodes[0], 0)  # rect: ignored
+    assert kf(nodes[1], 0)["radius"] == 30  # circle: applied
 
 
 def test_group_at_sets_step_for_all(scene):
@@ -209,3 +226,54 @@ def test_group_returns_self_for_chaining(scene):
     r2 = scene["rect"]()
     g = scene["group"]([r1, r2])
     assert g.color("red").at(1).color("blue") is g
+
+
+# ── transitions ────────────────────────────────────────────────────────────
+
+
+def test_default_transition_is_sharp(scene):
+    scene["circle"]().radius(10)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 0)["radius"]["transition"] == "sharp"
+
+
+def test_smooth_sets_transition(scene):
+    scene["circle"]().radius(10).at(1).smooth().radius(20)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 1)["radius"]["transition"] == "smooth"
+
+
+def test_sharp_sets_transition_explicitly(scene):
+    scene["circle"]().radius(10).at(1).sharp().radius(20)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 1)["radius"]["transition"] == "sharp"
+
+
+def test_smooth_does_not_affect_previous_keyframe(scene):
+    scene["circle"]().radius(10).at(1).smooth().radius(20)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 0)["radius"]["transition"] == "sharp"
+
+
+def test_transition_persists_across_setters(scene):
+    """smooth() should apply to all setters that follow until changed."""
+    scene["rect"]().color("red").at(1).smooth().color("blue").size(10, 20)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 1)["color"]["transition"] == "smooth"
+    assert kf_raw(n, 1)["width"]["transition"] == "smooth"
+    assert kf_raw(n, 1)["height"]["transition"] == "smooth"
+
+
+def test_sharp_reverts_after_smooth(scene):
+    scene["circle"]().radius(5).at(1).smooth().radius(10).at(2).sharp().radius(15)
+    n = scene["tree"]()["nodes"][0]
+    assert kf_raw(n, 1)["radius"]["transition"] == "smooth"
+    assert kf_raw(n, 2)["radius"]["transition"] == "sharp"
+
+
+def test_smooth_color_interpolation_stored(scene):
+    scene["circle"]().color("#101010").at(1).smooth().color("#ff9090")
+    n = scene["tree"]()["nodes"][0]
+    assert kf(n, 0)["color"] == "#101010"
+    assert kf(n, 1)["color"] == "#ff9090"
+    assert kf_raw(n, 1)["color"]["transition"] == "smooth"

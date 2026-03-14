@@ -1,3 +1,4 @@
+use tracing::{debug, info, warn};
 use axum::{
     Router,
     extract::{
@@ -64,6 +65,13 @@ with node().size(300, 200):
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("debug")),
+        )
+        .init();
+
     let args = Args::parse();
 
     if let Some(ref path) = args.file {
@@ -82,6 +90,7 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
+    info!("http://localhost:{}", args.port);
     println!("http://localhost:{}", args.port);
 
     axum::serve(listener, app).await.unwrap();
@@ -95,6 +104,7 @@ async fn ws_handler(
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
+    info!("WebSocket connection established");
     // Send file content immediately on connect
     if let Some(ref path) = state.file_path {
         let content = tokio::fs::read_to_string(path).await.unwrap_or_default();
@@ -114,28 +124,44 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMsg>(&text) {
                             Ok(ClientMsg::Run { code }) => {
+                                info!(bytes = code.len(), "received Run request");
                                 // Persist to file before running
                                 if let Some(ref path) = state.file_path {
                                     tokio::fs::write(path, &code).await.ok();
                                 }
-                                kill_tx.send(()).ok();
+                                let n = kill_tx.send(()).unwrap_or(0);
+                                debug!(killed_receivers = n, "sent kill signal");
                                 let tx = out_tx.clone();
                                 let kill_rx = kill_tx.subscribe();
+                                debug!("subscribed new kill_rx, spawning run_python");
                                 tokio::spawn(run_python(code, tx, kill_rx));
                             }
                             Ok(ClientMsg::Terminate) => {
+                                info!("received Terminate request");
                                 kill_tx.send(()).ok();
                             }
                             _ => {}
                         }
                     }
-                    None | Some(Err(_)) => break,
+                    None | Some(Err(_)) => {
+                        info!("WebSocket closed or errored — exiting handle_socket");
+                        break;
+                    }
                     _ => {}
                 }
             }
             Some(msg) = out_rx.recv() => {
+                let kind = match &msg {
+                    ServerMsg::Output { .. } => "output",
+                    ServerMsg::Error  { .. } => "error",
+                    ServerMsg::Tree   { .. } => "tree",
+                    ServerMsg::Done   { .. } => "done",
+                    ServerMsg::File   { .. } => "file",
+                };
+                debug!(kind, "forwarding message to WebSocket");
                 let text = serde_json::to_string(&msg).unwrap();
                 if socket.send(Message::Text(text.into())).await.is_err() {
+                    warn!("WebSocket send failed — exiting handle_socket");
                     break;
                 }
             }
@@ -149,12 +175,14 @@ async fn run_python(
     mut kill_rx: broadcast::Receiver<()>,
 ) {
     let id = RUN_ID.fetch_add(1, Ordering::Relaxed);
+    info!(run_id = id, "run_python started");
     let tmp = std::env::temp_dir().join(format!("alsie_{id}.py"));
     let tree_path = std::env::temp_dir().join(format!("alsie_{id}_tree.json"));
 
     let full_code = format!("{PREAMBLE}\n{code}");
 
     if let Err(e) = tokio::fs::write(&tmp, &full_code).await {
+        warn!(run_id = id, error = %e, "failed to write temp script");
         tx.send(ServerMsg::Error { text: e.to_string() }).await.ok();
         tx.send(ServerMsg::Done { exit_code: None }).await.ok();
         return;
@@ -167,8 +195,12 @@ async fn run_python(
         .stderr(Stdio::piped())
         .spawn()
     {
-        Ok(c) => c,
+        Ok(c) => {
+            info!(run_id = id, pid = c.id(), "python3 process spawned");
+            c
+        }
         Err(e) => {
+            warn!(run_id = id, error = %e, "failed to spawn python3");
             tx.send(ServerMsg::Error { text: format!("Failed to start python3: {e}") }).await.ok();
             tx.send(ServerMsg::Done { exit_code: None }).await.ok();
             return;
@@ -201,11 +233,15 @@ async fn run_python(
 
     let exit_code = tokio::select! {
         result = child.wait() => {
+            info!(run_id = id, "python3 process exited, draining stdout/stderr");
             stdout_task.await.ok();
             stderr_task.await.ok();
-            result.ok().and_then(|s| s.code())
+            let code = result.ok().and_then(|s| s.code());
+            info!(run_id = id, exit_code = ?code, "stdout/stderr drained");
+            code
         }
-        _ = kill_rx.recv() => {
+        res = kill_rx.recv() => {
+            info!(run_id = id, kill_result = ?res, "kill signal received, terminating process");
             child.kill().await.ok();
             stdout_task.abort();
             stderr_task.abort();
@@ -214,17 +250,24 @@ async fn run_python(
     };
 
     if exit_code == Some(0) {
-        if let Ok(json_str) = tokio::fs::read_to_string(&tree_path).await {
-            if let Ok(mut data) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                let steps = data["steps"].as_u64().unwrap_or(1);
-                let nodes = data["nodes"].take();
-                tx.send(ServerMsg::Tree { steps, nodes }).await.ok();
-            }
+        match tokio::fs::read_to_string(&tree_path).await {
+            Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                Ok(mut data) => {
+                    let steps = data["steps"].as_u64().unwrap_or(1);
+                    let nodes = data["nodes"].take();
+                    info!(run_id = id, steps, "sending Tree message");
+                    tx.send(ServerMsg::Tree { steps, nodes }).await.ok();
+                }
+                Err(e) => warn!(run_id = id, error = %e, "failed to parse tree JSON"),
+            },
+            Err(e) => warn!(run_id = id, error = %e, "failed to read tree file"),
         }
     }
 
+    info!(run_id = id, exit_code = ?exit_code, "sending Done message");
     tx.send(ServerMsg::Done { exit_code }).await.ok();
 
     tokio::fs::remove_file(&tmp).await.ok();
     tokio::fs::remove_file(&tree_path).await.ok();
+    info!(run_id = id, "run_python finished");
 }

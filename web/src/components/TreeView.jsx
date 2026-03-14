@@ -2,14 +2,54 @@ import { useState } from 'react';
 
 const ICONS = { node: '📦', rect: '▭', circle: '○' };
 
-/** Accumulate keyframes from t=0 up to and including `step`. */
+/** Accumulate keyframes from t=0 up to and including `step`, unwrapping {value,transition}. */
 function resolveProps(node, step) {
   const out = {};
   for (let t = 0; t <= step; t++) {
     const kf = node.keyframes?.[String(t)];
-    if (kf) Object.assign(out, kf);
+    if (kf) {
+      for (const [key, entry] of Object.entries(kf)) {
+        out[key] = entry?.value ?? entry;
+      }
+    }
   }
   return out;
+}
+
+/** Resolve props with smooth interpolation for animation mode.
+ *  frame: 0..framesPerStep-1 within the current step. */
+export function resolvePropsAnimated(node, step, frame, framesPerStep) {
+  const cur = resolveProps(node, step);
+  if (frame === 0 || step >= Infinity) return cur;
+
+  // Look for smooth transitions in the next step
+  const nextKf = node.keyframes?.[String(step + 1)];
+  if (!nextKf) return cur;
+
+  const t = frame / framesPerStep;
+  const out = { ...cur };
+
+  for (const [key, entry] of Object.entries(nextKf)) {
+    if (entry?.transition !== 'smooth') continue;
+    const from = cur[key];
+    const to = entry.value;
+    if (from == null || to == null) continue;
+
+    if (typeof to === 'number' && typeof from === 'number') {
+      out[key] = from + (to - from) * t;
+    } else if (typeof to === 'string' && to.startsWith('#') && from.startsWith?.('#')) {
+      out[key] = lerpColor(from, to, t);
+    }
+  }
+  return out;
+}
+
+function lerpColor(a, b, t) {
+  const p = (s, i) => parseInt(s.slice(i, i + 2), 16);
+  const r = Math.round(p(a, 1) + (p(b, 1) - p(a, 1)) * t);
+  const g = Math.round(p(a, 3) + (p(b, 3) - p(a, 3)) * t);
+  const bl = Math.round(p(a, 5) + (p(b, 5) - p(a, 5)) * t);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${bl.toString(16).padStart(2,'0')}`;
 }
 
 /** Whether a node exists at this step. */
@@ -36,8 +76,12 @@ function Prop({ label, changed }) {
     : <span className="prop-chip">{label}</span>;
 }
 
-function NodeLabel({ node, step }) {
-  const props = resolveProps(node, step);
+function fmt(v) {
+  return typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(1)) : v;
+}
+
+function NodeLabel({ node, step, frame, framesPerStep }) {
+  const props = resolvePropsAnimated(node, step, frame, framesPerStep);
   const changed = changedAt(node, step);
   const anyChanged = changed.size > 0;
 
@@ -46,10 +90,10 @@ function NodeLabel({ node, step }) {
   return (
     <span className={anyChanged ? 'node-label node-label-changed' : 'node-label'}>
       <span className="node-type">{node.type}</span>
-      {props.width  != null && <Prop label={`${props.width}×${props.height}`} changed={hi('width','height')} />}
-      {props.color  != null && <Prop label={props.color}                       changed={hi('color')} />}
-      {props.x      != null && <Prop label={`${props.x}, ${props.y ?? 0}`}    changed={hi('x','y')} />}
-      {props.radius != null && <Prop label={`r=${props.radius}`}               changed={hi('radius')} />}
+      {props.width  != null && <Prop label={`${fmt(props.width)}×${fmt(props.height)}`} changed={hi('width','height')} />}
+      {props.color  != null && <Prop label={fmt(props.color)}                            changed={hi('color')} />}
+      {props.x      != null && <Prop label={`${fmt(props.x)}, ${fmt(props.y ?? 0)}`}    changed={hi('x','y')} />}
+      {props.radius != null && <Prop label={`r=${fmt(props.radius)}`}                   changed={hi('radius')} />}
     </span>
   );
 }
@@ -61,7 +105,7 @@ function addIds(nodes, prefix = '') {
   });
 }
 
-function TreeNode({ node, depth, selected, onSelect, step }) {
+function TreeNode({ node, depth, selected, onSelect, step, frame, framesPerStep }) {
   const [open, setOpen] = useState(true);
 
   if (!isVisible(node, step)) return null;
@@ -90,17 +134,17 @@ function TreeNode({ node, depth, selected, onSelect, step }) {
           {hasChildren ? (open ? '▾' : '▸') : ''}
         </span>
         <span className="tree-node-icon">{ICONS[node.type] ?? '◆'}</span>
-        <NodeLabel node={node} step={step} />
+        <NodeLabel node={node} step={step} frame={frame} framesPerStep={framesPerStep} />
       </div>
       {open &&
         node.children?.map((child) => (
-          <TreeNode key={child.id} node={child} depth={depth + 1} selected={selected} onSelect={onSelect} step={step} />
+          <TreeNode key={child.id} node={child} depth={depth + 1} selected={selected} onSelect={onSelect} step={step} frame={frame} framesPerStep={framesPerStep} />
         ))}
     </div>
   );
 }
 
-export default function TreeView({ nodes, step = 0 }) {
+export default function TreeView({ nodes, step = 0, frame = 0, framesPerStep = 1 }) {
   const [selected, setSelected] = useState(null);
   const tree = nodes?.length ? nodes : null;
 
@@ -109,7 +153,7 @@ export default function TreeView({ nodes, step = 0 }) {
       <div className="tree-panel-label">Scene</div>
       {tree
         ? tree.map((n) => (
-            <TreeNode key={n.id} node={n} depth={0} selected={selected} onSelect={setSelected} step={step} />
+            <TreeNode key={n.id} node={n} depth={0} selected={selected} onSelect={setSelected} step={step} frame={frame} framesPerStep={framesPerStep} />
           ))
         : <div className="tree-empty">Run a script to see the scene tree</div>
       }

@@ -107,9 +107,43 @@
   align-items: center;
   gap: 10px;
   padding: 0 12px;
-  height: 38px;
+  height: 52px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.timeline-step-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.timeline-no-scene {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.tl-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+  line-height: 1;
+}
+.tl-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.tl-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .timeline-label {
@@ -117,38 +151,80 @@
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  min-width: 44px;
+  min-width: 36px;
   text-align: right;
+  flex-shrink: 0;
 }
 
-.timeline-slider {
+/* Wrapper holds the custom visuals + invisible native input */
+.timeline-slider-wrap {
   flex: 1;
-  -webkit-appearance: none;
-  height: 4px;
-  border-radius: 2px;
+  position: relative;
+  height: 36px;
+}
+
+/* Custom track */
+.timeline-track {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  right: 0;
+  height: 3px;
   background: var(--border);
-  outline: none;
-  cursor: pointer;
+  border-radius: 2px;
+  pointer-events: none;
 }
-.timeline-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+
+/* Per-step tick */
+.timeline-tick-wrap {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.timeline-tick {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  transition: transform 0.1s;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+  margin-top: 3px;
 }
-.timeline-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.25);
-}
-.timeline-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: none;
-  border-radius: 50%;
+
+.timeline-tick.active {
   background: var(--accent);
+  border-color: var(--accent);
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+}
+
+.timeline-tick-num {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-tick-num.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Invisible native input layered on top for interaction */
+.timeline-slider {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
+  margin: 0;
 }
 
 /* ── Tree view ───────────────────────────────────────────────────────────── */
@@ -201,6 +277,55 @@
 .tree-node-icon {
   font-size: 13px;
   flex-shrink: 0;
+}
+
+/* ── Tree change highlighting ─────────────────────────────────────────────── */
+.node-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.node-type {
+  color: var(--text-primary);
+}
+
+.node-changed > .node-type {
+  color: #e5c07b;
+}
+
+.prop-chip {
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  line-height: 17px;
+}
+
+.prop-chip-changed {
+  background: #e5c07b;
+  color: #1e1e1e;
+  font-weight: 700;
+}
+
+.tree-node.node-changed {
+  border-left: 2px solid #e5c07b;
+}
+
+.tree-node.node-new {
+  border-left: 2px solid #98c379;
+}
+
+.tree-node.node-new .node-type {
+  color: #98c379;
+}
+
+.tree-node.node-new .prop-chip {
+  background: #98c379;
+  color: #1e1e1e;
+  font-weight: 700;
 }
 
 .tree-empty {

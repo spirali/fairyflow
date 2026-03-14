@@ -2,15 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import Editor from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
-import TreeView from './components/TreeView';
+import TreeView, { addIds } from './components/TreeView';
 import './App.css';
-
-function addIds(nodes, prefix = '') {
-  return (nodes ?? []).map((n, i) => {
-    const id = `${prefix}${i}`;
-    return { ...n, id, children: addIds(n.children, `${id}.`) };
-  });
-}
 
 const DEFAULT_CODE = `\
 with node().size(300, 200):
@@ -22,7 +15,8 @@ with node().size(300, 200):
 `;
 
 export default function App() {
-  const [frame, setFrame] = useState(0);
+  const [step, setStep] = useState(0);
+  const [steps, setSteps] = useState(1);
   const [lines, setLines] = useState([]);
   const [running, setRunning] = useState(false);
   const [treeNodes, setTreeNodes] = useState([]);
@@ -47,6 +41,8 @@ export default function App() {
         setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
       } else if (msg.type === 'tree') {
         setTreeNodes(addIds(msg.nodes));
+        setSteps(msg.steps);
+        setStep(0);
       } else if (msg.type === 'done') {
         setRunning(false);
         const label =
@@ -84,6 +80,8 @@ export default function App() {
   function terminate() {
     wsRef.current?.send(JSON.stringify({ type: 'terminate' }));
   }
+
+  const maxStep = steps - 1;
 
   return (
     <div className="app">
@@ -143,25 +141,47 @@ export default function App() {
         {/* ── Right column ── */}
         <Panel defaultSize={50} minSize={20}>
           <div className="right-column">
-            {/* Timeline slider */}
+            {/* Timeline bar */}
             <div className="timeline-bar">
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Frame</span>
-              <input
-                type="range"
-                min={0}
-                max={120}
-                value={frame}
-                onChange={(e) => setFrame(Number(e.target.value))}
-                className="timeline-slider"
-              />
-              <span className="timeline-label">{frame} / 120</span>
+              {treeNodes.length === 0 ? (
+                <span className="timeline-no-scene">No scene</span>
+              ) : (
+                <>
+                  <span className="timeline-label" style={{ minWidth: 0, marginRight: 4 }}>{step} / {maxStep}</span>
+                  <button className="tl-btn" title="Start"    onClick={() => setStep(0)}          disabled={step === 0}>⏮</button>
+                  <button className="tl-btn" title="Previous" onClick={() => setStep(s => s - 1)} disabled={step === 0}>◀</button>
+                  <button className="tl-btn" title="Next"     onClick={() => setStep(s => s + 1)} disabled={step === maxStep}>▶</button>
+                  <button className="tl-btn" title="End"      onClick={() => setStep(maxStep)}    disabled={step === maxStep}>⏭</button>
+                  <div className="timeline-slider-wrap">
+                    <div className="timeline-track" />
+                    {Array.from({ length: steps }, (_, i) => {
+                      const pct = maxStep > 0 ? (i / maxStep) * 100 : 0;
+                      return (
+                        <div key={i} className="timeline-tick-wrap" style={{ left: `${pct}%` }}>
+                          <div className={`timeline-tick${i === step ? ' active' : ''}`} />
+                          <div className={`timeline-tick-num${i === step ? ' active' : ''}`}>{i}</div>
+                        </div>
+                      );
+                    })}
+                    <input
+                      type="range"
+                      min={0}
+                      max={maxStep}
+                      step={1}
+                      value={step}
+                      onChange={(e) => setStep(Number(e.target.value))}
+                      className="timeline-slider"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Scene tree + canvas */}
             <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
-                  <TreeView nodes={treeNodes} />
+                  <TreeView nodes={treeNodes} step={step} />
                 </div>
               </Panel>
 

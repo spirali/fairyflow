@@ -48,7 +48,7 @@ enum ServerMsg {
     Output { text: String },
     Error { text: String },
     Done { exit_code: Option<i32> },
-    Tree { nodes: serde_json::Value },
+    Tree { steps: u64, nodes: serde_json::Value },
 }
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
@@ -215,8 +215,10 @@ async fn run_python(
 
     if exit_code == Some(0) {
         if let Ok(json_str) = tokio::fs::read_to_string(&tree_path).await {
-            if let Ok(nodes) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                tx.send(ServerMsg::Tree { nodes }).await.ok();
+            if let Ok(mut data) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                let steps = data["steps"].as_u64().unwrap_or(1);
+                let nodes = data["nodes"].take();
+                tx.send(ServerMsg::Tree { steps, nodes }).await.ok();
             }
         }
     }

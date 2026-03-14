@@ -1,0 +1,26 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary:   #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary:  #2d2d30;
+  --bg-hover:     #37373d;
+  --border:       #3c3c3c;
+  --text-primary: #cccccc;
+  --text-muted:   #858585;
+  --accent:       #007acc;
+  --accent-hover: #1a8ad4;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}

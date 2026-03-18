@@ -1,5 +1,5 @@
-from .items import node, rect, ellipse, scene
+from .items import node, rect, path, ellipse, scene
 from .color import Color
 from .composer import write_tree
 
-__all__ = ["node", "rect", "ellipse", "scene", "Color"]
+__all__ = ["node", "rect", "path", "ellipse", "scene", "Color"]

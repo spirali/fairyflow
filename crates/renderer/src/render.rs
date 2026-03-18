@@ -1,6 +1,6 @@
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 
-use crate::scene::{NodeKind, Scene, SceneNode, Style};
+use crate::scene::{NodeKind, PathCommand, Position, Scene, SceneNode, Style};
 
 pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
     let width = (scene.width as f32 * scale).round() as u32;
@@ -18,32 +18,66 @@ fn render_children(nodes: &[SceneNode], pixmap: &mut Pixmap, parent_transform: T
 }
 
 fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
-    let transform = local_transform(node, parent_transform);
-    let alpha = parent_alpha * node.alpha as f32;
     match &node.kind {
-        NodeKind::Node { children } => render_children(children, pixmap, transform, alpha),
-        NodeKind::Rect { style } => {
-            let Some(rect) = Rect::from_xywh(0.0, 0.0, node.width as f32, node.height as f32) else { return };
-            let path = PathBuilder::from_rect(rect);
-            fill_and_stroke(&path, style, pixmap, transform, alpha);
+        NodeKind::Node { position, size: _, alpha, scale, rotation, children } => {
+            let transform = positional_transform(position, *scale, *rotation, parent_transform);
+            render_children(children, pixmap, transform, parent_alpha * *alpha as f32);
         }
-        NodeKind::Ellipse { style } => {
-            let Some(oval) = Rect::from_xywh(0.0, 0.0, node.width as f32, node.height as f32) else { return };
+        NodeKind::Rect { position, size, style } => {
+            let transform = positional_transform(position, 1.0, 0.0, parent_transform);
+            let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
+            let path = PathBuilder::from_rect(rect);
+            fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
+        }
+        NodeKind::Ellipse { position, size, style } => {
+            let transform = positional_transform(position, 1.0, 0.0, parent_transform);
+            let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
             let Some(path) = PathBuilder::from_oval(oval) else { return };
-            fill_and_stroke(&path, style, pixmap, transform, alpha);
+            fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
+        }
+        NodeKind::Path { style, children } => {
+            if let Some(path) = build_path(children) {
+                fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha);
+            }
         }
     }
 }
 
-/// Builds the accumulated transform for a node: parent → translate → scale → rotate.
-fn local_transform(node: &SceneNode, parent: Transform) -> Transform {
-    Transform::from_translate(node.x as f32, node.y as f32)
-        .post_scale(node.scale as f32, node.scale as f32)
-        .post_rotate(node.rotation as f32)
+fn positional_transform(position: &Position, scale: f64, rotation: f64, parent: Transform) -> Transform {
+    Transform::from_translate(position.x as f32, position.y as f32)
+        .post_scale(scale as f32, scale as f32)
+        .post_rotate(rotation as f32)
         .post_concat(parent)
 }
 
-fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, transform: Transform, alpha: f32) {
+fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
+    let mut pb = PathBuilder::new();
+    let mut cur = (0.0f32, 0.0f32);
+    for cmd in commands {
+        match cmd {
+            PathCommand::Move { position } => {
+                cur = (position.x as f32, position.y as f32);
+                pb.move_to(cur.0, cur.1);
+            }
+            PathCommand::Line { position } => {
+                cur = (position.x as f32, position.y as f32);
+                pb.line_to(cur.0, cur.1);
+            }
+            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y } => {
+                let end = (position.x as f32, position.y as f32);
+                // c1 is relative to the start (cur), c2 is relative to the end point
+                let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);
+                let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
+                pb.cubic_to(c1.0, c1.1, c2.0, c2.1, end.0, end.1);
+                cur = end;
+            }
+        }
+    }
+    pb.finish()
+}
+
+fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, transform: Transform, parent_alpha: f32) {
+    let alpha = parent_alpha * style.alpha as f32;
     if let Some(ref fc) = style.fill_color {
         let mut color = parse_color(fc);
         color.set_alpha(color.alpha() * alpha);

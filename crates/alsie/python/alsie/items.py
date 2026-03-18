@@ -22,7 +22,6 @@ class ItemBase(TimedObject):
             self._id = parent._new_id()
         else:
             self._id = 0
-        self._add_attr("alpha", 1)
 
     def parent_chain(self) -> list["Node"]:
         result = [self]
@@ -32,10 +31,6 @@ class ItemBase(TimedObject):
             node = node._parent
         return result
                 
-    def alpha(self, value):
-        self._set_attr("alpha", value)
-        return self
-
     def _new_id(self):
         return self._parent._new_id()
     
@@ -58,12 +53,23 @@ class ItemBase(TimedObject):
     def __repr__(self):
         return f"<{self.kind} id={self._id}>"
 
+
+class AlphaMixin:
+
+    def _init_alpha(self):
+        self._add_attr("alpha", 1)
+
+    
+    def alpha(self, value):
+        self._set_attr("alpha", value)
+        return self
+
+
 class SizeMixin:
 
     def _init_size(self, width, height):
         self._add_attr("width", width)
         self._add_attr("height", height)
-        self._add_attr("scale", 1)
 
     def width(self, value):
         self._set_attr("width", value)
@@ -84,27 +90,20 @@ class PositionMixin:
     def _init_position(self, x, y):
         self._add_attr("x", 0)
         self._add_attr("y", 0)     
-        self._add_attr("rotation", 0)   
 
-    def pos_x(self, *, px: float | None, align: float | None = None):
-        if align is not None:
-            parent_val = self._get_parent()._get_attr("width")
-            self._set_attr("x", DynExpr(lambda ctx: ctx.eval_obj(parent_val) * align))
-            return self
-        if px is not None:
-            self._set_attr("x", px)
+    def x(self, px):
+        self._set_attr("x", px)
         return self
     
-    def pos_y(self, *, px: float | None, align: float | None = None):
-        if align is not None:
-            parent_val = self._get_parent()._get_attr("width")
-            self._set_attr("y", DynExpr(lambda ctx: ctx.eval_obj(parent_val) * align))
-            return self
-        if px is None:
-            self._set_attr("y", px)
+    def y(self, px):
+        self._set_attr("y", px)
         return self
 
-    
+    def xy(self, x, y):
+        self.x(x)
+        self.y(y)
+        return self
+
     def pos(self, position: Position):
         position = position.into_node(self._parent)
         self._set_attr("x", position.x)
@@ -117,12 +116,14 @@ class PositionMixin:
         return Position(self._parent, x, y)
 
 
-class StyleMixin:
+
+class StyleMixin(AlphaMixin):
 
     def _init_style(self):
         self._add_attr("fill_color", None)
         self._add_attr("stroke_color", None)
         self._add_attr("stroke_width", 1)
+        self._init_alpha()
 
     def fill_color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
@@ -174,7 +175,7 @@ class ContextManagerMixin:
         self._ctx = None
 
 
-class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin):
+class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
     kind = "node"
 
     def __init__(self, parent, frame):
@@ -182,6 +183,10 @@ class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin):
         self._init_context_manager()
         self._init_position(0, 0)
         self._init_size(0, 0)
+        self._init_alpha()
+        self._add_attr("rotation", 0)
+        self._add_attr("scale", 1)
+
 
 
 class Scene(ItemWithChildren, ContextManagerMixin, SizeMixin):
@@ -223,6 +228,90 @@ class Ellipse(ItemBase, PositionMixin, SizeMixin, StyleMixin):
         self._init_style()
 
 
+class Path(ItemWithChildren, StyleMixin):
+    kind = "path"
+    def __init__(self, parent, frame):
+        super().__init__(parent, frame)
+        self._init_style()
+
+    def _prev_coords(self):
+        if self._children:
+            c = self._children[0]
+            return (c._get_attr("y"), c._get_attr("y"))
+        else:
+            return (0, 0)
+
+    def move(self):
+        p = PathMove(self, self._frame, *self._prev_coords())
+        self._children.append(p)
+        return p
+
+    def line(self):
+        p = PathLine(self, self._frame, *self._prev_coords())
+        self._children.append(p)
+        return p
+
+    def cubic(self):
+        p = PathCubic(self, self._frame, *self._prev_coords())
+        self._children.append(p)
+        return p
+
+class PathMove(ItemBase, PositionMixin):
+
+    kind = "move"
+
+    def __init__(self, parent, frame, x, y):
+        super().__init__(parent, frame)
+        self._init_position(x, y)
+
+
+class PathLine(ItemBase, PositionMixin):
+
+    kind = "line"
+
+    def __init__(self, parent, frame, x, y):
+        super().__init__(parent, frame)
+        self._init_position(x, y)
+
+
+class PathCubic(ItemBase, PositionMixin):
+
+    kind = "cubic"
+
+    def __init__(self, parent, frame, x, y):
+        super().__init__(parent, frame)
+        self._init_position(x, y)
+        self._add_attr("c1_x", 0)
+        self._add_attr("c1_y", 0)
+        self._add_attr("c2_x", 0)
+        self._add_attr("c2_y", 0)
+
+    def c1_x(self, px):
+        """ Set x-coordinate of control point 1. It is relative to the start point of the path"""
+        self._set_attr("c1_x", px)
+
+    def c1_y(self, px):
+        """ Set y-coordinate of control point 1. It is relative to the start point of the path"""
+        self._set_attr("c1_x", px)
+
+    def c2_x(self, px):
+        """ Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        self._set_attr("c2_x", px)
+
+    def c2_y(self, px):
+        """ Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        self._set_attr("c2_y", px)
+
+    def c1_xy(self, x, y):
+        self.c1_x(x)
+        self.c1_y(y)
+        return self
+
+    def c2_xy(self, x, y):
+        self.c2_x(x)
+        self.c2_y(y)
+        return self
+
 
 def make_item(cls, frame):
     if NODE_CONTEXT is None:
@@ -251,3 +340,7 @@ def rect(*, frame=None):
 
 def ellipse(*, frame=None):
     return make_item(Ellipse, frame)
+
+
+def path(*, frame=None):
+    return make_item(Path, frame)

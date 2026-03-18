@@ -70,7 +70,9 @@ pub enum NodeKind {
         #[serde(default = "default_alpha")]
         alpha: f64,
         #[serde(default = "default_scale")]
-        scale: f64,
+        scale_x: f64,
+        #[serde(default = "default_scale")]
+        scale_y: f64,
         #[serde(default)]
         rotation: f64,
         children: Vec<SceneNode>,

@@ -53,24 +53,36 @@ class NodePosTransformBase(BaseExpr):
 
 
 class FromNodePosX(NodePosTransformBase):
+    """Local → parent:  parent_x = local_x * scale_x + node_x"""
 
     def eval(self, ctx: EvalCtx):
-        return ctx.eval_obj(self.x) + ctx.eval_obj(self.node._get_attr("x"))
+        node_x = ctx.eval_obj(self.node._get_attr("x"))
+        scale_x = ctx.eval_obj(self.node._get_attr("scale_x"))
+        return ctx.eval_obj(self.x) * scale_x + node_x
 
 
 class FromNodePosY(NodePosTransformBase):
+    """Local → parent:  parent_y = local_y * scale_y + node_y"""
 
     def eval(self, ctx: EvalCtx):
-        return ctx.eval_obj(self.y) + ctx.eval_obj(self.node._get_attr("y"))
+        node_y = ctx.eval_obj(self.node._get_attr("y"))
+        scale_y = ctx.eval_obj(self.node._get_attr("scale_y"))
+        return ctx.eval_obj(self.y) * scale_y + node_y
 
 
 class IntoNodePosX(NodePosTransformBase):
+    """Parent → local:  local_x = (parent_x - node_x) / scale_x"""
 
     def eval(self, ctx: EvalCtx):
-        return ctx.eval_obj(self.x) - ctx.eval_obj(self.node._get_attr("x"))
+        node_x = ctx.eval_obj(self.node._get_attr("x"))
+        scale_x = ctx.eval_obj(self.node._get_attr("scale_x"))
+        return (ctx.eval_obj(self.x) - node_x) / scale_x
 
 
 class IntoNodePosY(NodePosTransformBase):
+    """Parent → local:  local_y = (parent_y - node_y) / scale_y"""
 
     def eval(self, ctx: EvalCtx):
-        return ctx.eval_obj(self.y) - ctx.eval_obj(self.node._get_attr("y"))
+        node_y = ctx.eval_obj(self.node._get_attr("y"))
+        scale_y = ctx.eval_obj(self.node._get_attr("scale_y"))
+        return (ctx.eval_obj(self.y) - node_y) / scale_y

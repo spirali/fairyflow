@@ -19,18 +19,18 @@ fn render_children(nodes: &[SceneNode], pixmap: &mut Pixmap, parent_transform: T
 
 fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     match &node.kind {
-        NodeKind::Node { position, size: _, alpha, scale, rotation, children } => {
-            let transform = positional_transform(position, *scale, *rotation, parent_transform);
+        NodeKind::Node { position, size: _, alpha, scale_x, scale_y, rotation, children } => {
+            let transform = positional_transform(position, *scale_x, *scale_y, *rotation, parent_transform);
             render_children(children, pixmap, transform, parent_alpha * *alpha as f32);
         }
         NodeKind::Rect { position, size, style } => {
-            let transform = positional_transform(position, 1.0, 0.0, parent_transform);
+            let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
             let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
             let path = PathBuilder::from_rect(rect);
             fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
         }
         NodeKind::Ellipse { position, size, style } => {
-            let transform = positional_transform(position, 1.0, 0.0, parent_transform);
+            let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
             let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
             let Some(path) = PathBuilder::from_oval(oval) else { return };
             fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
@@ -43,10 +43,11 @@ fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transfor
     }
 }
 
-fn positional_transform(position: &Position, scale: f64, rotation: f64, parent: Transform) -> Transform {
-    Transform::from_translate(position.x as f32, position.y as f32)
-        .post_scale(scale as f32, scale as f32)
+fn positional_transform(position: &Position, scale_x: f64, scale_y: f64, rotation: f64, parent: Transform) -> Transform {
+    // Order: Scale → Rotate → Translate, so the node's position is stable under scale/rotation.
+    Transform::from_scale(scale_x as f32, scale_y as f32)
         .post_rotate(rotation as f32)
+        .post_translate(position.x as f32, position.y as f32)
         .post_concat(parent)
 }
 

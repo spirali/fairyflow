@@ -349,9 +349,9 @@
 }
 
 .tree-node-toggle {
-  font-size: 10px;
+  font-size: 14px;
   color: var(--text-muted);
-  width: 12px;
+  width: 16px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -384,8 +384,9 @@
   font-size: 11px;
   padding: 0 5px;
   border-radius: 3px;
-  background: var(--bg-hover);
-  color: var(--text-muted);
+  background: #2d2d35;
+  color: #c8c8d0;
+  border: 1px solid #4a4a55;
   line-height: 17px;
 }
 

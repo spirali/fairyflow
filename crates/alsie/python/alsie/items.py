@@ -185,7 +185,21 @@ class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, Alph
         self._init_size(0, 0)
         self._init_alpha()
         self._add_attr("rotation", 0)
-        self._add_attr("scale", 1)
+        self._add_attr("scale_x", 1)
+        self._add_attr("scale_y", 1)
+
+    def scale_x(self, value):
+        self._set_attr("scale_x", value)
+        return self
+
+    def scale_y(self, value):
+        self._set_attr("scale_y", value)
+        return self
+
+    def scale(self, value):
+        self.scale_x(value)
+        self.scale_y(value)
+        return self
 
 
 

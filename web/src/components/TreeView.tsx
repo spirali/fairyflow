@@ -16,7 +16,9 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
   const ch = (key: keyof TreeNodeData): boolean =>
     prevNode != null && prevNode[key] !== node[key];
 
-  const anyChanged = (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha', 'x', 'radius'] as const).some(ch);
+  const TRACKED = ['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
+                   'x', 'y', 'radius', 'scale_x', 'scale_y', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const;
+  const anyChanged = TRACKED.some(ch);
 
   return (
     <span className={anyChanged ? 'node-label node-label-changed' : 'node-label'}>
@@ -34,9 +36,15 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
           {fmt(node.stroke_color)}{node.stroke_width !== 1 && ` ${fmt(node.stroke_width ?? 1)}px`}
         </span>
       )}
-      {node.alpha != null && node.alpha !== 1 && <Prop label={`α=${fmt(node.alpha)}`} changed={ch('alpha')} />}
-      {node.x      != null && <Prop label={`x=${fmt(node.x)}`}      changed={ch('x')} />}
-      {node.radius != null && <Prop label={`r=${fmt(node.radius)}`} changed={ch('radius')} />}
+      {node.alpha   != null && node.alpha !== 1 && <Prop label={`α=${fmt(node.alpha)}`}    changed={ch('alpha')} />}
+      {node.x       != null && <Prop label={`(${fmt(node.x)}, ${fmt(node.y ?? 0)})`}       changed={ch('x') || ch('y')} />}
+      {node.c1_x    != null && <Prop label={`c1=(${fmt(node.c1_x)}, ${fmt(node.c1_y ?? 0)})`} changed={ch('c1_x') || ch('c1_y')} />}
+      {node.c2_x    != null && <Prop label={`c2=(${fmt(node.c2_x)}, ${fmt(node.c2_y ?? 0)})`} changed={ch('c2_x') || ch('c2_y')} />}
+      {node.scale_x != null && (node.scale_x !== 1 || node.scale_y !== 1) && (
+        <Prop label={node.scale_x === node.scale_y ? `s=${fmt(node.scale_x)}` : `sx=${fmt(node.scale_x)} sy=${fmt(node.scale_y ?? 1)}`}
+              changed={ch('scale_x') || ch('scale_y')} />
+      )}
+      {node.radius  != null && <Prop label={`r=${fmt(node.radius)}`} changed={ch('radius')} />}
     </span>
   );
 }
@@ -54,7 +62,8 @@ function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) 
   const hasChildren = (node.children?.length ?? 0) > 0;
 
   const anyChanged = prevNode != null &&
-    (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha', 'x', 'radius'] as const).some(k => prevNode[k] !== node[k]);
+    (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
+      'x', 'y', 'radius', 'scale_x', 'scale_y', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const).some(k => prevNode[k] !== node[k]);
 
   return (
     <div>

@@ -9,6 +9,12 @@ export interface RawNode {
   stroke_width?: number;
   alpha?: number;
   radius?: number;
+  scale_x?: number;
+  scale_y?: number;
+  c1_x?: number;
+  c1_y?: number;
+  c2_x?: number;
+  c2_y?: number;
   children?: RawNode[];
 }
 

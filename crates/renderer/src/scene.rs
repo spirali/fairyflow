@@ -29,6 +29,7 @@ pub struct SceneNode {
     pub height: f64,
     pub scale: f64,
     pub rotation: f64,
+    pub alpha: f64,
 
     #[serde(flatten)]
     pub kind: NodeKind,
@@ -59,7 +60,7 @@ mod tests {
 
     #[test]
     fn parse_sample() {
-        let json = r#"{"key_frames":[0,10],"frames":[{"kind":"scene","id":0,"x":0,"y":0,"width":300,"height":300,"scale":1,"rotation":0,"children":[{"kind":"node","id":1,"x":100,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"children":[{"kind":"rect","id":2,"x":5,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"fill_color":"red"}]},{"kind":"node","id":3,"x":100,"y":0,"width":0,"height":0,"scale":1,"rotation":0,"children":[{"kind":"rect","id":4,"x":0,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"fill_color":"yellow"}]}]}]}"#;
+        let json = r#"{"key_frames":[0,10],"frames":[{"kind":"scene","id":0,"x":0,"y":0,"width":300,"height":300,"scale":1,"rotation":0,"fill_color":"white","children":[{"kind":"node","id":1,"x":100,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"alpha":1,"children":[{"kind":"rect","id":2,"x":5,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"alpha":1,"fill_color":"red"}]},{"kind":"node","id":3,"x":100,"y":0,"width":0,"height":0,"scale":1,"rotation":0,"alpha":1,"children":[{"kind":"rect","id":4,"x":0,"y":0,"width":5,"height":5,"scale":1,"rotation":0,"alpha":1,"fill_color":"yellow"}]}]}]}"#;
         let anim = parse_scene(json).expect("parse failed");
         assert_eq!(anim.key_frames, vec![0, 10]);
         assert_eq!(anim.frames.len(), 1);

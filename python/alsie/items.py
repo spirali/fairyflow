@@ -18,6 +18,7 @@ class ItemBase(TimedObject):
         self._add_attr("height", 0)
         self._add_attr("scale", 1)
         self._add_attr("rotation", 0)
+        self._add_attr("alpha", 1)
 
     def width(self, value):
         self._set_attr("width", value)
@@ -55,11 +56,16 @@ class ItemBase(TimedObject):
         position = position.into_node(self._parent)
         self._set_attr("x", position.x)
         self._set_attr("y", position.y)
+        return self
 
     def get_pos(self) -> Position:
         x = self._get_attr("x")
         y = self._get_attr("y")
         return Position(self._parent, x, y)
+
+    def alpha(self, value):
+        self._set_attr("alpha", value)
+        return self
 
     def move_x(self, value):
         # TODO        

@@ -7,21 +7,22 @@ pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
     let height = (scene.height as f32 * scale).round() as u32;
     let mut pixmap = Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
     pixmap.fill(parse_color(&scene.fill_color));
-    render_children(&scene.children, &mut pixmap, Transform::from_scale(scale, scale));
+    render_children(&scene.children, &mut pixmap, Transform::from_scale(scale, scale), 1.0);
     pixmap
 }
 
-fn render_children(nodes: &[SceneNode], pixmap: &mut Pixmap, parent_transform: Transform) {
+fn render_children(nodes: &[SceneNode], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     for node in nodes {
-        render_node(node, pixmap, parent_transform);
+        render_node(node, pixmap, parent_transform, parent_alpha);
     }
 }
 
-fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transform) {
+fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     let transform = local_transform(node, parent_transform);
+    let alpha = parent_alpha * node.alpha as f32;
     match &node.kind {
-        NodeKind::Node { children } => render_children(children, pixmap, transform),
-        NodeKind::Rect { style } => render_rect(node, style, pixmap, transform),
+        NodeKind::Node { children } => render_children(children, pixmap, transform, alpha),
+        NodeKind::Rect { style } => render_rect(node, style, pixmap, transform, alpha),
     }
 }
 
@@ -34,12 +35,14 @@ fn local_transform(node: &SceneNode, parent: Transform) -> Transform {
 }
 
 /// Draws a rect at local origin (0, 0); the transform positions it in the pixmap.
-fn render_rect(node: &SceneNode, style: &Style, pixmap: &mut Pixmap, transform: Transform) {
+fn render_rect(node: &SceneNode, style: &Style, pixmap: &mut Pixmap, transform: Transform, alpha: f32) {
     let Some(rect) = Rect::from_xywh(0.0, 0.0, node.width as f32, node.height as f32) else {
         return;
     };
+    let mut color = parse_color(&style.fill_color);
+    color.set_alpha(color.alpha() * alpha);
     let mut paint = Paint::default();
-    paint.set_color(parse_color(&style.fill_color));
+    paint.set_color(color);
     paint.anti_alias = true;
     pixmap.fill_rect(rect, &paint, transform, None);
 }

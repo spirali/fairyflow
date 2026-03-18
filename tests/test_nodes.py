@@ -16,30 +16,18 @@ def test_simple_scene():
             "key_frames": [0],
             "frames": [
                 {
-                    "kind": "scene",
-                    "x": 0,
-                    "width": 100,
-                    "height": 100,
+                    "kind": "scene", "width": 100, 'fill_color': 'white', "height": 100,
                     "children": [
                         {
-                            "kind": "node",
-                            "x": 0,
-                            "width": 0,
-                            "height": 0,
-                            "children": [
+                            "kind": "node", 'id': 1, "x": 0, 'y': 0, "width": 0,
+                            "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "children": [
                                 {
-                                    "kind": "rect",
-                                    "x": 0,
-                                    "width": 0,
-                                    "height": 0,
-                                    "fill_color": None,
+                                    "kind": "rect", 'id': 2, "x": 0, 'y': 0, "width": 0,
+                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None,
                                 },
                                 {
-                                    "kind": "rect",
-                                    "x": 0,
-                                    "width": 0,
-                                    "height": 0,
-                                    "fill_color": None,
+                                    "kind": "rect", 'id': 3, "x": 0, 'y': 0, "width": 0,
+                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None,
                                 },
                             ],
                         }

@@ -286,7 +286,7 @@ async fn run_python(
         .args(["-m", "alsie"])
         .arg(&tmp)
         .arg(&tree_path)
-        .env("PYTHONPATH", "python")
+        .env("PYTHONPATH", "crates/alsie/python")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

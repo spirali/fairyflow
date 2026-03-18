@@ -7,7 +7,7 @@ from typing import Union
 
 def _serialize(val):
     if isinstance(val, Color):
-        return val.to_css()
+        return str(val)
     return val
 
 class ItemBase(TimedObject):

@@ -1,0 +1,12 @@
+[package]
+name = "alsie"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "_alsie"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["abi3-py311", "extension-module"] }
+csscolorparser = "0.7"

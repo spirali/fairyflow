@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use clap::Parser;
 use renderer::Animation;
 use serde::{Deserialize, Serialize};
@@ -90,6 +91,7 @@ async fn main() {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/frame/{n}", get(frame_handler))
+        .route("/frames", get(frames_handler))
         .fallback_service(ServeDir::new("web/dist"))
         .with_state(state);
 
@@ -106,6 +108,20 @@ async fn main() {
 struct FrameQuery {
     #[serde(default = "default_scale")]
     scale: f32,
+}
+
+#[derive(Deserialize)]
+struct FramesQuery {
+    from: usize,
+    to: usize,
+    #[serde(default = "default_scale")]
+    scale: f32,
+}
+
+#[derive(Serialize)]
+struct RenderedFrame {
+    n: usize,
+    png: String, // base64-encoded PNG
 }
 
 fn default_scale() -> f32 { 1.0 }
@@ -128,6 +144,50 @@ async fn frame_handler(
         Ok(png) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
         Err(e) => {
             warn!("failed to encode PNG: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
+        }
+    }
+}
+
+async fn frames_handler(
+    Query(params): Query<FramesQuery>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let scale = params.scale.clamp(0.01, 256.0);
+
+    // Clone the needed scenes while holding the lock briefly, then release.
+    let scenes: Vec<(usize, renderer::Scene)> = {
+        let animation = state.animation.lock().unwrap();
+        let Some(anim) = animation.as_ref() else {
+            return (StatusCode::NOT_FOUND, "no animation").into_response();
+        };
+        let to = params.to.min(anim.frames.len().saturating_sub(1));
+        if params.from > to {
+            return (StatusCode::BAD_REQUEST, "invalid range").into_response();
+        }
+        (params.from..=to)
+            .filter_map(|n| anim.frames.get(n).map(|s| (n, s.clone())))
+            .collect()
+    };
+
+    // Render all frames in parallel on the rayon thread pool (one blocking task).
+    let results = tokio::task::spawn_blocking(move || {
+        use rayon::prelude::*;
+        scenes
+            .par_iter()
+            .map(|(n, scene)| {
+                let pixmap = renderer::render_scene(scene, scale);
+                let png = pixmap.encode_png().unwrap_or_default();
+                RenderedFrame { n: *n, png: B64.encode(&png) }
+            })
+            .collect::<Vec<_>>()
+    })
+    .await;
+
+    match results {
+        Ok(frames) => axum::Json(frames).into_response(),
+        Err(e) => {
+            warn!("rayon render panicked: {e}");
             (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
         }
     }

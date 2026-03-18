@@ -173,6 +173,55 @@
   flex-shrink: 0;
 }
 
+.tl-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.tl-play-btn {
+  font-size: 13px !important;
+  padding: 4px 10px !important;
+  color: var(--text-primary) !important;
+  min-width: 70px;
+  text-align: center;
+}
+.tl-play-btn.active {
+  color: #e07070 !important;
+}
+
+.tl-fps-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tl-fps-input {
+  width: 40px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 1px 4px;
+  text-align: center;
+}
+.tl-fps-input::-webkit-outer-spin-button,
+.tl-fps-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.tl-fps-input[type=number] {
+  -moz-appearance: textfield;
+}
+.tl-fps-input:disabled {
+  opacity: 0.4;
+}
+
 /* Wrapper holds the custom visuals + invisible native input */
 .timeline-slider-wrap {
   width: 100%;

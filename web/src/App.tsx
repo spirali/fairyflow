@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView, { addIds } from './components/TreeView';
-import type { ConsoleLine, RawNode, ServerMsg, TreeNodeData, WsStatus } from './types';
+import type { ConsoleLine, NodeBounds, RawNode, ServerMsg, TreeNodeData, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -41,6 +41,10 @@ export default function App() {
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playReturnFrameRef = useRef(0);
   const cancelledRef = useRef(false);
+
+  // ── node selection ────────────────────────────────────────────────────────
+  const [selectedNid, setSelectedNid] = useState<number | null>(null);
+  const [nodeBounds, setNodeBounds] = useState<NodeBounds | null>(null);
 
   // ── editor / console ─────────────────────────────────────────────────────
   const [lines, setLines] = useState<ConsoleLine[]>([]);
@@ -126,11 +130,13 @@ export default function App() {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lines]);
 
-  // ── cache invalidation: clear blob URLs when a new run arrives ────────────
+  // ── cache invalidation + selection clear when a new run arrives ───────────
   useEffect(() => {
     const cache = imageCacheRef.current;
     cache.forEach(url => URL.revokeObjectURL(url));
     cache.clear();
+    setSelectedNid(null);
+    setNodeBounds(null);
   }, [runId]);
 
   // ── cleanup interval on unmount ────────────────────────────────────────────
@@ -139,6 +145,17 @@ export default function App() {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     };
   }, []);
+
+  // ── node bounds fetch ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedNid == null) { setNodeBounds(null); return; }
+    const ctrl = new AbortController();
+    fetch(`/node/${selectedNid}?frame=${frame}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() as Promise<NodeBounds> : null)
+      .then(data => setNodeBounds(data))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [selectedNid, frame]);
 
   // ── editor ────────────────────────────────────────────────────────────────
   const handleEditorMount: OnMount = (editor, monaco) => {
@@ -424,7 +441,7 @@ export default function App() {
             <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
-                  <TreeView nodes={treeNodes} prevNodes={prevTreeNodes} />
+                  <TreeView nodes={treeNodes} prevNodes={prevTreeNodes} selectedNid={selectedNid} onSelect={setSelectedNid} />
                 </div>
               </Panel>
 
@@ -434,12 +451,39 @@ export default function App() {
                 <div className="canvas-panel">
                   <div ref={canvasContentRef} className="canvas-content">
                     {hasScene && canvasLayout && (
-                      <img
-                        src={imgSrc}
-                        style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}
-                        className="canvas-image"
-                        alt="rendered frame"
-                      />
+                      <div className="canvas-image-wrap" style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}>
+                        <img
+                          src={imgSrc}
+                          style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}
+                          className="canvas-image"
+                          alt="rendered frame"
+                        />
+                        {nodeBounds && sceneWidth != null && sceneHeight != null && (() => {
+                          const sx = canvasLayout.cssWidth / sceneWidth;
+                          const sy = canvasLayout.cssHeight / sceneHeight;
+                          const bx = nodeBounds.x * sx;
+                          const by = nodeBounds.y * sy;
+                          const bw = nodeBounds.width * sx;
+                          const bh = nodeBounds.height * sy;
+                          const isPoint = bw < 2 && bh < 2;
+                          if (isPoint) return (
+                            <>
+                              <div className="nh-vline" style={{ left: bx }} />
+                              <div className="nh-hline" style={{ top: by }} />
+                              <div className="nh-dot" style={{ left: bx, top: by }} />
+                            </>
+                          );
+                          return (
+                            <>
+                              <div className="nh-vline" style={{ left: bx }} />
+                              <div className="nh-vline" style={{ left: bx + bw }} />
+                              <div className="nh-hline" style={{ top: by }} />
+                              <div className="nh-hline" style={{ top: by + bh }} />
+                              <div className="nh-rect" style={{ left: bx, top: by, width: bw, height: bh }} />
+                            </>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
                   <div className="canvas-statusbar">

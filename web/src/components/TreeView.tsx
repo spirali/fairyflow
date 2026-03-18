@@ -53,11 +53,11 @@ interface TreeNodeProps {
   node: TreeNodeData;
   prevNode?: TreeNodeData;
   depth: number;
-  selected: string | null;
-  onSelect: (id: string) => void;
+  selectedNid: number | null;
+  onSelect: (nid: number | null) => void;
 }
 
-function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) {
+function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProps) {
   const [open, setOpen] = useState(true);
   const hasChildren = (node.children?.length ?? 0) > 0;
 
@@ -68,14 +68,14 @@ function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) 
   return (
     <div>
       <div
-        className={['tree-node', selected === node.id ? 'selected' : '', anyChanged ? 'node-changed' : ''].filter(Boolean).join(' ')}
+        className={['tree-node', selectedNid === node.nid ? 'selected' : '', anyChanged ? 'node-changed' : ''].filter(Boolean).join(' ')}
         style={{ paddingLeft: 8 + depth * 16 }}
-        onClick={() => {
-          if (hasChildren) setOpen((o) => !o);
-          onSelect(node.id);
-        }}
+        onClick={() => onSelect(selectedNid === node.nid ? null : node.nid)}
       >
-        <span className="tree-node-toggle">{hasChildren ? (open ? '▾' : '▸') : ''}</span>
+        <span
+          className="tree-node-toggle"
+          onClick={hasChildren ? (e) => { e.stopPropagation(); setOpen((o: boolean) => !o); } : undefined}
+        >{hasChildren ? (open ? '▾' : '▸') : ''}</span>
         <span className="tree-node-icon"><NodeKindIcon kind={node.kind} /></span>
         <NodeLabel node={node} prevNode={prevNode} />
       </div>
@@ -86,7 +86,7 @@ function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) 
             node={child}
             prevNode={prevNode?.children?.[i]}
             depth={depth + 1}
-            selected={selected}
+            selectedNid={selectedNid}
             onSelect={onSelect}
           />
         ))}
@@ -97,10 +97,11 @@ function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) 
 interface TreeViewProps {
   nodes: TreeNodeData[];
   prevNodes: TreeNodeData[];
+  selectedNid: number | null;
+  onSelect: (nid: number | null) => void;
 }
 
-export default function TreeView({ nodes, prevNodes }: TreeViewProps) {
-  const [selected, setSelected] = useState<string | null>(null);
+export default function TreeView({ nodes, prevNodes, selectedNid, onSelect }: TreeViewProps) {
   const tree = nodes.length > 0 ? nodes : null;
 
   return (
@@ -108,7 +109,7 @@ export default function TreeView({ nodes, prevNodes }: TreeViewProps) {
       <div className="tree-panel-label">Scene</div>
       {tree
         ? tree.map((n, i) => (
-            <TreeNode key={n.id} node={n} prevNode={prevNodes[i]} depth={0} selected={selected} onSelect={setSelected} />
+            <TreeNode key={n.id} node={n} prevNode={prevNodes[i]} depth={0} selectedNid={selectedNid} onSelect={onSelect} />
           ))
         : <div className="tree-empty">Run a script to see the scene tree</div>
       }
@@ -118,7 +119,8 @@ export default function TreeView({ nodes, prevNodes }: TreeViewProps) {
 
 export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
+    const { id: nid, children: rawChildren, ...rest } = n;
     const id = `${prefix}${i}`;
-    return { ...n, id, children: addIds(n.children, `${id}.`) };
+    return { ...rest, id, nid, children: addIds(rawChildren, `${id}.`) };
   });
 }

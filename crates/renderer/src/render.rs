@@ -1,6 +1,95 @@
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use serde::Serialize;
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Point, Rect, Stroke, Transform};
 
 use crate::scene::{NodeKind, PathCommand, Position, Scene, SceneNode, Style};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NodeBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Find the axis-aligned bounding box of `node_id` in scene coordinates (scale = 1).
+pub fn find_node_bounds(scene: &Scene, node_id: u64) -> Option<NodeBounds> {
+    search_children(&scene.children, node_id, Transform::identity())
+}
+
+fn search_children(nodes: &[SceneNode], node_id: u64, parent: Transform) -> Option<NodeBounds> {
+    nodes.iter().find_map(|n| search_node(n, node_id, parent))
+}
+
+fn search_node(node: &SceneNode, node_id: u64, parent: Transform) -> Option<NodeBounds> {
+    match &node.kind {
+        NodeKind::Node { position, size, alpha: _, scale_x, scale_y, rotation, children } => {
+            let t = positional_transform(position, *scale_x, *scale_y, *rotation, parent);
+            if node.id == node_id {
+                return Some(aabb(size.width as f32, size.height as f32, t));
+            }
+            search_children(children, node_id, t)
+        }
+        NodeKind::Rect { position, size, .. } | NodeKind::Ellipse { position, size, .. } => {
+            if node.id == node_id {
+                let t = positional_transform(position, 1.0, 1.0, 0.0, parent);
+                return Some(aabb(size.width as f32, size.height as f32, t));
+            }
+            None
+        }
+        NodeKind::Path { children, .. } => {
+            if node.id == node_id {
+                return path_bounds(children, parent);
+            }
+            children.iter().find_map(|cmd| search_path_cmd(cmd, node_id, parent))
+        }
+    }
+}
+
+fn search_path_cmd(cmd: &PathCommand, node_id: u64, parent: Transform) -> Option<NodeBounds> {
+    let (id, pos) = match cmd {
+        PathCommand::Move { id, position } => (id, position),
+        PathCommand::Line { id, position } => (id, position),
+        PathCommand::Cubic { id, position, .. } => (id, position),
+    };
+    if *id == node_id {
+        let mut pts = [Point::from_xy(pos.x as f32, pos.y as f32)];
+        parent.map_points(&mut pts);
+        Some(NodeBounds { x: pts[0].x, y: pts[0].y, width: 0.0, height: 0.0 })
+    } else {
+        None
+    }
+}
+
+fn path_bounds(cmds: &[PathCommand], t: Transform) -> Option<NodeBounds> {
+    let mut pts: Vec<Point> = cmds.iter().map(|cmd| {
+        let pos = match cmd {
+            PathCommand::Move { position, .. } => position,
+            PathCommand::Line { position, .. } => position,
+            PathCommand::Cubic { position, .. } => position,
+        };
+        Point::from_xy(pos.x as f32, pos.y as f32)
+    }).collect();
+    if pts.is_empty() { return None; }
+    t.map_points(&mut pts);
+    let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
+    let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
+    let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+    Some(NodeBounds { x: min_x, y: min_y, width: max_x - min_x, height: max_y - min_y })
+}
+
+fn aabb(w: f32, h: f32, t: Transform) -> NodeBounds {
+    let mut pts = [
+        Point::from_xy(0.0, 0.0), Point::from_xy(w, 0.0),
+        Point::from_xy(0.0, h),   Point::from_xy(w, h),
+    ];
+    t.map_points(&mut pts);
+    let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
+    let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
+    let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+    NodeBounds { x: min_x, y: min_y, width: max_x - min_x, height: max_y - min_y }
+}
 
 pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
     let width = (scene.width as f32 * scale).round() as u32;
@@ -56,15 +145,15 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
     let mut cur = (0.0f32, 0.0f32);
     for cmd in commands {
         match cmd {
-            PathCommand::Move { position } => {
+            PathCommand::Move { position, .. } => {
                 cur = (position.x as f32, position.y as f32);
                 pb.move_to(cur.0, cur.1);
             }
-            PathCommand::Line { position } => {
+            PathCommand::Line { position, .. } => {
                 cur = (position.x as f32, position.y as f32);
                 pb.line_to(cur.0, cur.1);
             }
-            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y } => {
+            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y, .. } => {
                 let end = (position.x as f32, position.y as f32);
                 // c1 is relative to the start (cur), c2 is relative to the end point
                 let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);

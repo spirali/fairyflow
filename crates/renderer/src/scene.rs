@@ -39,14 +39,17 @@ pub struct Style {
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum PathCommand {
     Move {
+        id: u64,
         #[serde(flatten)]
         position: Position,
     },
     Line {
+        id: u64,
         #[serde(flatten)]
         position: Position,
     },
     Cubic {
+        id: u64,
         #[serde(flatten)]
         position: Position,
         c1_x: f64,

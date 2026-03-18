@@ -92,6 +92,7 @@ async fn main() {
         .route("/ws", get(ws_handler))
         .route("/frame/{n}", get(frame_handler))
         .route("/frames", get(frames_handler))
+        .route("/node/{id}", get(node_handler))
         .fallback_service(ServeDir::new("web/dist"))
         .with_state(state);
 
@@ -125,6 +126,30 @@ struct RenderedFrame {
 }
 
 fn default_scale() -> f32 { 1.0 }
+
+#[derive(Deserialize)]
+struct NodeQuery {
+    #[serde(default)]
+    frame: usize,
+}
+
+async fn node_handler(
+    Path(id): Path<u64>,
+    Query(params): Query<NodeQuery>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let animation = state.animation.lock().unwrap();
+    let Some(anim) = animation.as_ref() else {
+        return (StatusCode::NOT_FOUND, "no animation").into_response();
+    };
+    let Some(scene) = anim.frames.get(params.frame) else {
+        return (StatusCode::NOT_FOUND, "frame out of range").into_response();
+    };
+    match renderer::find_node_bounds(scene, id) {
+        Some(bounds) => axum::Json(bounds).into_response(),
+        None => (StatusCode::NOT_FOUND, "node not found or has no bounds").into_response(),
+    }
+}
 
 async fn frame_handler(
     Path(n): Path<usize>,

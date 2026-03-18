@@ -1,4 +1,5 @@
 
+import math
 from .expr import BaseExpr, EvalCtx
 
 def tree_path(node1, node2):
@@ -36,12 +37,14 @@ class Position:
         path_up, path_down = tree_path(self.node, node)
         x = self.x
         y = self.y
-        for node in path_up[1:]:
-            x = FromNodePosX(node, x, y)
-            y = FromNodePosY(node, x, y)
-        for node in path_down:
-            x = IntoNodePosX(node, x, y)
-            y = IntoNodePosY(node, x, y)
+        for n in path_up[1:]:
+            new_x = FromNodePosX(n, x, y)
+            new_y = FromNodePosY(n, x, y)
+            x, y = new_x, new_y
+        for n in path_down:
+            new_x = IntoNodePosX(n, x, y)
+            new_y = IntoNodePosY(n, x, y)
+            x, y = new_x, new_y
         return Position(self.node, x, y)
 
 
@@ -51,38 +54,53 @@ class NodePosTransformBase(BaseExpr):
         self.x = x
         self.y = y
 
+    def _node_attrs(self, ctx: EvalCtx):
+        node_x   = ctx.eval_obj(self.node._get_attr("x"))
+        node_y   = ctx.eval_obj(self.node._get_attr("y"))
+        scale_x  = ctx.eval_obj(self.node._get_attr("scale_x"))
+        scale_y  = ctx.eval_obj(self.node._get_attr("scale_y"))
+        rotation = ctx.eval_obj(self.node._get_attr("rotation"))
+        r = math.radians(rotation)
+        return node_x, node_y, scale_x, scale_y, math.cos(r), math.sin(r)
+
 
 class FromNodePosX(NodePosTransformBase):
-    """Local → parent:  parent_x = local_x * scale_x + node_x"""
+    """Local → parent:  parent_x = cos(r)*sx*lx - sin(r)*sy*ly + node_x"""
 
     def eval(self, ctx: EvalCtx):
-        node_x = ctx.eval_obj(self.node._get_attr("x"))
-        scale_x = ctx.eval_obj(self.node._get_attr("scale_x"))
-        return ctx.eval_obj(self.x) * scale_x + node_x
+        node_x, _node_y, sx, sy, cos_r, sin_r = self._node_attrs(ctx)
+        lx = ctx.eval_obj(self.x)
+        ly = ctx.eval_obj(self.y)
+        return cos_r * sx * lx - sin_r * sy * ly + node_x
 
 
 class FromNodePosY(NodePosTransformBase):
-    """Local → parent:  parent_y = local_y * scale_y + node_y"""
+    """Local → parent:  parent_y = sin(r)*sx*lx + cos(r)*sy*ly + node_y"""
 
     def eval(self, ctx: EvalCtx):
-        node_y = ctx.eval_obj(self.node._get_attr("y"))
-        scale_y = ctx.eval_obj(self.node._get_attr("scale_y"))
-        return ctx.eval_obj(self.y) * scale_y + node_y
+        _node_x, node_y, sx, sy, cos_r, sin_r = self._node_attrs(ctx)
+        lx = ctx.eval_obj(self.x)
+        ly = ctx.eval_obj(self.y)
+        return sin_r * sx * lx + cos_r * sy * ly + node_y
 
 
 class IntoNodePosX(NodePosTransformBase):
-    """Parent → local:  local_x = (parent_x - node_x) / scale_x"""
+    """Parent → local:  local_x = (cos(r)*qx + sin(r)*qy) / sx
+       where q = parent_pos - node_translation"""
 
     def eval(self, ctx: EvalCtx):
-        node_x = ctx.eval_obj(self.node._get_attr("x"))
-        scale_x = ctx.eval_obj(self.node._get_attr("scale_x"))
-        return (ctx.eval_obj(self.x) - node_x) / scale_x
+        node_x, node_y, sx, _sy, cos_r, sin_r = self._node_attrs(ctx)
+        qx = ctx.eval_obj(self.x) - node_x
+        qy = ctx.eval_obj(self.y) - node_y
+        return (cos_r * qx + sin_r * qy) / sx
 
 
 class IntoNodePosY(NodePosTransformBase):
-    """Parent → local:  local_y = (parent_y - node_y) / scale_y"""
+    """Parent → local:  local_y = (-sin(r)*qx + cos(r)*qy) / sy
+       where q = parent_pos - node_translation"""
 
     def eval(self, ctx: EvalCtx):
-        node_y = ctx.eval_obj(self.node._get_attr("y"))
-        scale_y = ctx.eval_obj(self.node._get_attr("scale_y"))
-        return (ctx.eval_obj(self.y) - node_y) / scale_y
+        node_x, node_y, _sx, sy, cos_r, sin_r = self._node_attrs(ctx)
+        qx = ctx.eval_obj(self.x) - node_x
+        qy = ctx.eval_obj(self.y) - node_y
+        return (-sin_r * qx + cos_r * qy) / sy

@@ -1,4 +1,5 @@
 export interface RawNode {
+  id: number;
   kind: string;
   x?: number;
   y?: number;
@@ -18,9 +19,14 @@ export interface RawNode {
   children?: RawNode[];
 }
 
-export interface TreeNodeData extends Omit<RawNode, 'children'> {
-  id: string;
+export interface TreeNodeData extends Omit<RawNode, 'id' | 'children'> {
+  id: string;    // tree-position key, e.g. "0.1.2"
+  nid: number;   // original Python numeric node id
   children?: TreeNodeData[];
+}
+
+export interface NodeBounds {
+  x: number; y: number; width: number; height: number;
 }
 
 export type ConsoleLine = { kind: 'out' | 'err' | 'sys'; text: string };

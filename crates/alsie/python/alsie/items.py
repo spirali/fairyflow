@@ -201,6 +201,10 @@ class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, Alph
         self.scale_y(value)
         return self
 
+    def rotate(self, value):
+        self._set_attr("rotation", value)
+        return self
+
 
 
 class Scene(ItemWithChildren, ContextManagerMixin, SizeMixin):

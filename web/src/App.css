@@ -505,9 +505,49 @@
   border-top: 1px solid var(--border);
 }
 
+.canvas-image-wrap {
+  position: relative;
+  display: inline-block;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+
 .canvas-image {
   display: block;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+
+.nh-vline {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 0;
+  border-left: 2px dashed #e040fb;
+  pointer-events: none;
+}
+
+.nh-hline {
+  position: absolute;
+  left: 0; right: 0;
+  height: 0;
+  border-top: 2px dashed #e040fb;
+  pointer-events: none;
+}
+
+.nh-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #e040fb;
+  background: rgba(224, 64, 251, 0.10);
+  pointer-events: none;
+}
+
+.nh-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e040fb;
+  border: 1px solid #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* ── WebSocket status ──────────────────────────────────────────────────────── */

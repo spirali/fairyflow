@@ -1,7 +1,14 @@
 from .position import Position
 from .expr import BaseExpr, DynExpr, EvalCtx, TimedValue, Transition
 from .tobject import TimedObject
+from .color import Color
 from typing import Union
+
+
+def _serialize(val):
+    if isinstance(val, Color):
+        return val.to_css()
+    return val
 
 class ItemBase(TimedObject):
 
@@ -78,8 +85,8 @@ class ItemBase(TimedObject):
         result = {"kind": self.kind, "id": self._id}
         attrs = self._attrs
         for name in attrs:
-            result[name] = ctx.eval_obj(attrs[name])
-        return result    
+            result[name] = _serialize(ctx.eval_obj(attrs[name]))
+        return result
     
     def key_frames(self, out):
         for value in self._attrs.values():
@@ -154,12 +161,12 @@ class Scene(Node):
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
-        self._add_attr("fill_color", "white")
+        self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
 
     def fill_color(self, value: str):
-        self._set_attr("fill_color", value)
-        return self        
+        self._set_attr("fill_color", Color.parse(value))
+        return self
 
     def _new_id(self):
         self._id_counter += 1
@@ -167,17 +174,17 @@ class Scene(Node):
     
     def build(self, ctx: EvalCtx):
         attrs = self._attrs
-        return {"kind": self.kind, "width": ctx.eval_obj(attrs["width"]), "height": ctx.eval_obj(attrs["height"]), "fill_color": ctx.eval_obj(attrs["fill_color"]), "children": [child.build(ctx) for child in self._children]}
+        return {"kind": self.kind, "width": ctx.eval_obj(attrs["width"]), "height": ctx.eval_obj(attrs["height"]), "fill_color": _serialize(ctx.eval_obj(attrs["fill_color"])), "children": [child.build(ctx) for child in self._children]}
 
 
 class StyledItem(ItemBase):
-    
+
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._add_attr("fill_color", None)
-    
+
     def fill_color(self, value: str):
-        self._set_attr("fill_color", value)
+        self._set_attr("fill_color", Color.parse(value))
         return self
 
 

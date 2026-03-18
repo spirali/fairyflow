@@ -1,4 +1,5 @@
 from typing import TypeVar, Callable
+from .color import Color
 
 type Transition = Literal["sharp", "linear"]
     
@@ -84,6 +85,8 @@ class TimedValue(BaseExpr):
             return v
         v2 = ctx.eval_obj(v2)
         t = (frame - f) / (f2 - f)
+        if isinstance(v, Color) and isinstance(v2, Color):
+            return v.lerp(v2, t)
         return t * (v2 - v) + v
 
 

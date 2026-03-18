@@ -16,7 +16,7 @@ def test_simple_scene():
             "key_frames": [0],
             "frames": [
                 {
-                    "kind": "scene", "width": 100, 'fill_color': 'white', "height": 100,
+                    "kind": "scene", "width": 100, 'fill_color': '#ffffff', "height": 100,
                     "children": [
                         {
                             "kind": "node", 'id': 1, "x": 0, 'y': 0, "width": 0,

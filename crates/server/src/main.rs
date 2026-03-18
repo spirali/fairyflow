@@ -2,7 +2,7 @@ use tracing::{debug, info, warn};
 use axum::{
     Router,
     extract::{
-        Path, State,
+        Path, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{header, StatusCode},
@@ -102,10 +102,20 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+#[derive(Deserialize)]
+struct FrameQuery {
+    #[serde(default = "default_scale")]
+    scale: f32,
+}
+
+fn default_scale() -> f32 { 1.0 }
+
 async fn frame_handler(
     Path(n): Path<usize>,
+    Query(params): Query<FrameQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    let scale = params.scale.clamp(0.01, 256.0);
     let animation = state.animation.lock().unwrap();
     let Some(anim) = animation.as_ref() else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
@@ -113,7 +123,7 @@ async fn frame_handler(
     let Some(scene) = anim.frames.get(n) else {
         return (StatusCode::NOT_FOUND, "frame out of range").into_response();
     };
-    let pixmap = renderer::render_scene(scene);
+    let pixmap = renderer::render_scene(scene, scale);
     match pixmap.encode_png() {
         Ok(png) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
         Err(e) => {

@@ -2,12 +2,12 @@ use tiny_skia::{Paint, Pixmap, Rect, Transform};
 
 use crate::scene::{NodeKind, Scene, SceneNode, Style};
 
-pub fn render_scene(scene: &Scene) -> Pixmap {
-    let width = scene.width as u32;
-    let height = scene.height as u32;
-    let mut pixmap = Pixmap::new(width, height).expect("invalid scene dimensions");
+pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
+    let width = (scene.width as f32 * scale).round() as u32;
+    let height = (scene.height as f32 * scale).round() as u32;
+    let mut pixmap = Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
     pixmap.fill(parse_color(&scene.fill_color));
-    render_children(&scene.children, &mut pixmap, Transform::identity());
+    render_children(&scene.children, &mut pixmap, Transform::from_scale(scale, scale));
     pixmap
 }
 

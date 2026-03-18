@@ -23,12 +23,10 @@ def test_simple_scene():
                             "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "children": [
                                 {
                                     "kind": "rect", 'id': 2, "x": 0, 'y': 0, "width": 0,
-                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None,
-                                },
+                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None, 'stroke_color': None, 'stroke_width': 1},
                                 {
                                     "kind": "rect", 'id': 3, "x": 0, 'y': 0, "width": 0,
-                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None,
-                                },
+                                    "height": 0, 'scale': 1, 'rotation': 0, 'alpha': 1, "fill_color": None, 'stroke_color': None, 'stroke_width': 1},
                             ],
                         }
                     ],

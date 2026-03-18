@@ -1,9 +1,15 @@
 use serde::Deserialize;
 
+fn default_stroke_width() -> f64 { 1.0 }
+
 /// Visual style fields (mirrors StyledItem in Python).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Style {
-    pub fill_color: String,
+    pub fill_color: Option<String>,
+    #[serde(default)]
+    pub stroke_color: Option<String>,
+    #[serde(default = "default_stroke_width")]
+    pub stroke_width: f64,
 }
 
 /// Kind-specific data for a scene node.
@@ -14,6 +20,10 @@ pub enum NodeKind {
         children: Vec<SceneNode>,
     },
     Rect {
+        #[serde(flatten)]
+        style: Style,
+    },
+    Ellipse {
         #[serde(flatten)]
         style: Style,
     },
@@ -73,7 +83,7 @@ mod tests {
         match &first.kind {
             NodeKind::Node { children } => {
                 match &children[0].kind {
-                    NodeKind::Rect { style } => assert_eq!(style.fill_color, "red"),
+                    NodeKind::Rect { style } => assert_eq!(style.fill_color.as_deref(), Some("red")),
                     _ => panic!("expected rect"),
                 }
             }

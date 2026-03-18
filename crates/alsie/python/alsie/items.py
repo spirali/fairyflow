@@ -5,6 +5,9 @@ from .color import Color
 from typing import Union
 
 
+NODE_CONTEXT = None
+ROOT_OBJECT = None
+
 def _serialize(val):
     if isinstance(val, Color):
         return str(val)
@@ -19,13 +22,48 @@ class ItemBase(TimedObject):
             self._id = parent._new_id()
         else:
             self._id = 0
-        self._add_attr("x", 0)
-        self._add_attr("y", 0)
-        self._add_attr("width", 0)
-        self._add_attr("height", 0)
-        self._add_attr("scale", 1)
-        self._add_attr("rotation", 0)
         self._add_attr("alpha", 1)
+
+    def parent_chain(self) -> list["Node"]:
+        result = [self]
+        node = self._parent
+        while node is not None:
+            result.append(node)
+            node = node._parent
+        return result
+                
+    def alpha(self, value):
+        self._set_attr("alpha", value)
+        return self
+
+    def _new_id(self):
+        return self._parent._new_id()
+    
+    def build(self, ctx: EvalCtx):
+        result = {"kind": self.kind, "id": self._id}
+        attrs = self._attrs
+        for name in attrs:
+            result[name] = _serialize(ctx.eval_obj(attrs[name]))
+        return result
+    
+    def key_frames(self, out):
+        for value in self._attrs.values():
+            value.key_frames(out)
+    
+    def _get_parent(self):
+        if self._parent is None:
+            raise Exception("Node does not have parent")
+        return self._parent
+
+    def __repr__(self):
+        return f"<{self.kind} id={self._id}>"
+
+class SizeMixin:
+
+    def _init_size(self, width, height):
+        self._add_attr("width", width)
+        self._add_attr("height", height)
+        self._add_attr("scale", 1)
 
     def width(self, value):
         self._set_attr("width", value)
@@ -39,7 +77,15 @@ class ItemBase(TimedObject):
         self.width(width)
         self.height(height)
         return self
-    
+
+
+class PositionMixin:
+
+    def _init_position(self, x, y):
+        self._add_attr("x", 0)
+        self._add_attr("y", 0)     
+        self._add_attr("rotation", 0)   
+
     def pos_x(self, *, px: float | None, align: float | None = None):
         if align is not None:
             parent_val = self._get_parent()._get_attr("width")
@@ -70,60 +116,34 @@ class ItemBase(TimedObject):
         y = self._get_attr("y")
         return Position(self._parent, x, y)
 
-    def alpha(self, value):
-        self._set_attr("alpha", value)
+
+class StyleMixin:
+
+    def _init_style(self):
+        self._add_attr("fill_color", None)
+        self._add_attr("stroke_color", None)
+        self._add_attr("stroke_width", 1)
+
+    def fill_color(self, value: str):
+        self._set_attr("fill_color", Color.parse(value))
         return self
 
-    def move_x(self, value):
-        # TODO        
+    def stroke_color(self, value: str):
+        self._set_attr("stroke_color", Color.parse(value))
         return self
-    
-    def _new_id(self):
-        return self._parent._new_id()
-    
-    def build(self, ctx: EvalCtx):
-        result = {"kind": self.kind, "id": self._id}
-        attrs = self._attrs
-        for name in attrs:
-            result[name] = _serialize(ctx.eval_obj(attrs[name]))
-        return result
-    
-    def key_frames(self, out):
-        for value in self._attrs.values():
-            value.key_frames(out)
-    
-    def _get_parent(self):
-        if self._parent is None:
-            raise Exception("Node does not have parent")
-        return self._parent
 
-    def __repr__(self):
-        return f"<{self.kind} id={self._id}>"
+    def stroke_width(self, value: float):
+        self._set_attr("stroke_width", value)
+        return self
 
 
-NODE_CONTEXT = None
-ROOT_OBJECT = None
 
-
-class Node(ItemBase):
-    kind = "node"
+class ItemWithChildren(ItemBase):
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
-        self._parent = parent
         self._children = []
         self._ctx = None
-
-    def dump(self):
-        obj = super().dump()
-        if self._children:
-            obj["children"] = [c.dump() for c in self._children]
-        return obj
-    
-    def key_frames(self, out: set):
-        super().key_frames(out)
-        for child in self._children:
-            child.key_frames(out)
 
     def build(self, ctx):
         result = super().build(ctx)
@@ -131,15 +151,16 @@ class Node(ItemBase):
             result["children"] = [child.build(ctx) for child in self._children]
         return result
     
-    def parent_chain(self) -> list["Node"]:
-        result = [self]
-        node = self._parent
-        while node is not None:
-            result.append(node)
-            node = node._parent
-        return result
-        
+    def key_frames(self, out: set):
+        super().key_frames(out)
+        for child in self._children:
+            child.key_frames(out)
 
+class ContextManagerMixin:
+
+    def _init_context_manager(self):
+        self._ctx = None
+      
     def __enter__(self):
         global NODE_CONTEXT
         assert self._ctx is None
@@ -152,15 +173,24 @@ class Node(ItemBase):
         NODE_CONTEXT = self._ctx
         self._ctx = None
 
-    def __repr__(self):
-        return f"<{self.kind} id={self.id} #c={len(self._children)}>"
 
-
-class Scene(Node):
-    kind = "scene"
+class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin):
+    kind = "node"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
+        self._init_context_manager()
+        self._init_position(0, 0)
+        self._init_size(0, 0)
+
+
+class Scene(ItemWithChildren, ContextManagerMixin, SizeMixin):
+    kind = "scene"
+
+    def __init__(self, width, height):
+        super().__init__(None, 0)
+        self._init_context_manager()
+        self._init_size(width, height)
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
 
@@ -172,24 +202,26 @@ class Scene(Node):
         self._id_counter += 1
         return self._id_counter
     
-    def build(self, ctx: EvalCtx):
-        attrs = self._attrs
-        return {"kind": self.kind, "width": ctx.eval_obj(attrs["width"]), "height": ctx.eval_obj(attrs["height"]), "fill_color": _serialize(ctx.eval_obj(attrs["fill_color"])), "children": [child.build(ctx) for child in self._children]}
 
-
-class StyledItem(ItemBase):
+class Rect(ItemBase, PositionMixin, SizeMixin, StyleMixin):
+    kind = "rect"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
-        self._add_attr("fill_color", None)
-
-    def fill_color(self, value: str):
-        self._set_attr("fill_color", Color.parse(value))
-        return self
+        self._init_position(0, 0)
+        self._init_size(0, 0)
+        self._init_style()
 
 
-class Rect(StyledItem):
-    kind = "rect"
+class Ellipse(ItemBase, PositionMixin, SizeMixin, StyleMixin):
+    kind = "ellipse"
+
+    def __init__(self, parent, frame):
+        super().__init__(parent, frame)
+        self._init_position(0, 0)
+        self._init_size(0, 0)
+        self._init_style()
+
 
 
 def make_item(cls, frame):
@@ -204,7 +236,7 @@ def make_item(cls, frame):
 
 def scene(width: int, height: int):
     global ROOT_OBJECT
-    scene = Scene(None, 0).width(width).height(height)
+    scene = Scene(width, height)
     ROOT_OBJECT = scene
     return scene
 
@@ -215,3 +247,7 @@ def node(*, frame=None):
 
 def rect(*, frame=None):
     return make_item(Rect, frame)
+
+
+def ellipse(*, frame=None):
+    return make_item(Ellipse, frame)

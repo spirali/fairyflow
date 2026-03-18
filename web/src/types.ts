@@ -5,6 +5,8 @@ export interface RawNode {
   width?: number;
   height?: number;
   fill_color?: string;
+  stroke_color?: string;
+  stroke_width?: number;
   alpha?: number;
   radius?: number;
   children?: RawNode[];

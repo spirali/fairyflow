@@ -3,3 +3,4 @@ pytest-asyncio
 ruff
 websockets
 inline-snapshot
+maturin

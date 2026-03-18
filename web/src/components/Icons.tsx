@@ -41,18 +41,19 @@ export function RectIcon({ size = 16 }: IconProps) {
   );
 }
 
-export function CircleIcon({ size = 16 }: IconProps) {
+export function EllipseIcon({ size = 16 }: IconProps) {
   const c = '#E8714A';
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
-      <circle cx="16" cy="16" r="11"/>
-      <circle cx="16" cy="5"  r="1.5" fill={c} stroke="none"/>
-      <circle cx="27" cy="16" r="1.5" fill={c} stroke="none"/>
-      <circle cx="16" cy="27" r="1.5" fill={c} stroke="none"/>
-      <circle cx="5"  cy="16" r="1.5" fill={c} stroke="none"/>
+      <ellipse cx="16" cy="16" rx="13" ry="9"/>
+      <circle cx="3"  cy="16" r="1.5" fill={c} stroke="none"/>
+      <circle cx="29" cy="16" r="1.5" fill={c} stroke="none"/>
+      <circle cx="16" cy="7"  r="1.5" fill={c} stroke="none"/>
+      <circle cx="16" cy="25" r="1.5" fill={c} stroke="none"/>
     </svg>
   );
 }
+
 
 export function PathIcon({ size = 16 }: IconProps) {
   const c = '#E8608A';
@@ -108,7 +109,7 @@ const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = 
   scene:   SceneIcon,
   node:    NodeIcon,
   rect:    RectIcon,
-  circle:  CircleIcon,
+  ellipse: EllipseIcon,
   path:    PathIcon,
   image:   ImageIcon,
   layer:   LayerIcon,

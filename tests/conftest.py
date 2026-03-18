@@ -10,8 +10,6 @@ ROOT = Path(__file__).parent.parent
 SERVER_BINARY = ROOT / "target" / "debug" / "server"
 SERVER_STARTUP_TIMEOUT = 10  # seconds
 
-sys.path.insert(0, str(ROOT / "crates" / "alsie" / "python"))
-
 
 @pytest.fixture(scope="session")
 def server_port():

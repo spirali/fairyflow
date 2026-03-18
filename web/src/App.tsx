@@ -166,7 +166,7 @@ export default function App() {
 
   useEffect(() => {
     const el = canvasContentRef.current;
-    if (!el || !sceneWidth || !sceneHeight) { setCanvasLayout(null); return; }
+    if (!el || sceneWidth == null || sceneHeight == null || sceneWidth <= 0 || sceneHeight <= 0) { setCanvasLayout(null); return; }
 
     const recompute = (w: number, h: number) => {
       if (w <= 0 || h <= 0) return;

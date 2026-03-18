@@ -16,7 +16,7 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
   const ch = (key: keyof TreeNodeData): boolean =>
     prevNode != null && prevNode[key] !== node[key];
 
-  const anyChanged = (['width', 'height', 'fill_color', 'alpha', 'x', 'radius'] as const).some(ch);
+  const anyChanged = (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha', 'x', 'radius'] as const).some(ch);
 
   return (
     <span className={anyChanged ? 'node-label node-label-changed' : 'node-label'}>
@@ -26,6 +26,12 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
         <span className={ch('fill_color') ? 'prop-chip prop-chip-changed' : 'prop-chip'}>
           <span style={{ display: 'inline-block', width: 10, height: 10, background: node.fill_color, border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
           {fmt(node.fill_color)}
+        </span>
+      )}
+      {node.stroke_color != null && (
+        <span className={ch('stroke_color') || ch('stroke_width') ? 'prop-chip prop-chip-changed' : 'prop-chip'}>
+          <span style={{ display: 'inline-block', width: 10, height: 10, background: 'transparent', border: `2px solid ${node.stroke_color}`, borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
+          {fmt(node.stroke_color)}{node.stroke_width !== 1 && ` ${fmt(node.stroke_width ?? 1)}px`}
         </span>
       )}
       {node.alpha != null && node.alpha !== 1 && <Prop label={`α=${fmt(node.alpha)}`} changed={ch('alpha')} />}
@@ -48,7 +54,7 @@ function TreeNode({ node, prevNode, depth, selected, onSelect }: TreeNodeProps) 
   const hasChildren = (node.children?.length ?? 0) > 0;
 
   const anyChanged = prevNode != null &&
-    (['width', 'height', 'fill_color', 'alpha', 'x', 'radius'] as const).some(k => prevNode[k] !== node[k]);
+    (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha', 'x', 'radius'] as const).some(k => prevNode[k] !== node[k]);
 
   return (
     <div>

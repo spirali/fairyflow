@@ -1,4 +1,4 @@
-from .expr import TimedValue, Transition
+from .expr import HoldExpr, AddExpr, TimedValue, Transition
 
 class TimedObject:
 
@@ -24,3 +24,18 @@ class TimedObject:
     def transition(self, transition: Transition):
         self._transition = transition
         return self
+
+    def hold(self):
+        for tval in self._attrs.values():
+            if tval.frames is None or self._frame not in tval.frames:
+                tval.set(self._frame, HoldExpr(tval, self._frame), "sharp")
+        return self
+
+    def _move_attr(self, name, delta):
+        tval = self._attrs[name]
+        frame = self._frame
+        if tval.frames is not None and frame in tval.frames:
+            existing_val, _ = tval.frames[frame]
+            tval.frames[frame] = (AddExpr(existing_val, delta), self._transition)
+        else:
+            tval.set(frame, AddExpr(HoldExpr(tval, frame), delta), self._transition)

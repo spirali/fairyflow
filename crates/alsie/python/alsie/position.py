@@ -15,12 +15,9 @@ def tree_path(node1, node2):
         chain2 = node2.parent_chain()
     else:
         chain2 = []
-    last = None
     while chain1 and chain2 and chain1[-1] == chain2[-1]:
-        last = chain1.pop()
+        chain1.pop()
         chain2.pop()
-    if last is not None:
-        chain1.append(last)
     chain2.reverse()
     return chain1, chain2
 
@@ -37,7 +34,7 @@ class Position:
         path_up, path_down = tree_path(self.node, node)
         x = self.x
         y = self.y
-        for n in path_up[1:]:
+        for n in path_up:
             new_x = FromNodePosX(n, x, y)
             new_y = FromNodePosY(n, x, y)
             x, y = new_x, new_y

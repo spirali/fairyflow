@@ -65,7 +65,15 @@ class TimedValue(BaseExpr):
         if self.frames:
             out.update(self.frames)
 
+    def get_before(self, frame):
+        f = max((f for f in self.frames if f < frame), default=None)
+        if f is None:
+            return self.init_val
+        else:
+            return self.frames[f][0]
+
     def eval(self, ctx: EvalCtx):
+
         if self.frames is None:
             return ctx.eval_obj(self.init_val)
         frame = ctx.frame
@@ -87,7 +95,27 @@ class TimedValue(BaseExpr):
         t = (frame - f) / (f2 - f)
         if isinstance(v, Color) and isinstance(v2, Color):
             return v.interpolate_rgb(v2, t)
+        print(v2, v, self.frames)
         return t * (v2 - v) + v
+
+
+class AddExpr(BaseExpr):
+    def __init__(self, expr, delta):
+        self.expr = expr
+        self.delta = delta
+
+    def eval(self, ctx: EvalCtx):
+        return ctx.eval_obj(self.expr) + self.delta
+
+
+class HoldExpr(BaseExpr):
+
+    def __init__(self, tval: 'TimedValue', frame: int):
+        self.tval = tval
+        self.frame = frame
+
+    def eval(self, ctx: EvalCtx):
+        return ctx.eval_obj(self.tval.get_before(self.frame))
 
 
 class BinOpExpr(BaseExpr):

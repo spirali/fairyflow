@@ -24,10 +24,11 @@ class ItemBase(TimedObject):
             self._id = 0
 
     def parent_chain(self) -> list["Node"]:
-        result = [self]
-        node = self._parent
+        result = []
+        node = self
         while node is not None:
-            result.append(node)
+            if isinstance(node, Node):
+                result.append(node)
             node = node._parent
         return result
                 
@@ -108,6 +109,11 @@ class PositionMixin:
         position = position.into_node(self._parent)
         self._set_attr("x", position.x)
         self._set_attr("y", position.y)
+        return self
+
+    def move(self, dx, dy):
+        self._move_attr("x", dx)
+        self._move_attr("y", dy)
         return self
 
     def get_pos(self) -> Position:

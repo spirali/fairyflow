@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 base64 = "0.22"
 rayon = "1"
+engine = { path = "../engine" }
 renderer = { path = "../renderer" }
 axum = { version = "0.8.8", features = ["ws"] }
 clap = { version = "4", features = ["derive"] }

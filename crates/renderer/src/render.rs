@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Point, Rect, Stroke, Transform};
 
-use crate::scene::{NodeKind, PathCommand, Position, Scene, SceneNode, Style};
+use crate::scene::{NodeKind, PathCommand, Position, Scene, Node, Style};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct NodeBounds {
@@ -16,13 +16,13 @@ pub fn find_node_bounds(scene: &Scene, node_id: u64) -> Option<NodeBounds> {
     search_children(&scene.children, node_id, Transform::identity())
 }
 
-fn search_children(nodes: &[SceneNode], node_id: u64, parent: Transform) -> Option<NodeBounds> {
+fn search_children(nodes: &[Node], node_id: u64, parent: Transform) -> Option<NodeBounds> {
     nodes.iter().find_map(|n| search_node(n, node_id, parent))
 }
 
-fn search_node(node: &SceneNode, node_id: u64, parent: Transform) -> Option<NodeBounds> {
+fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBounds> {
     match &node.kind {
-        NodeKind::Node { position, size, alpha: _, scale_x, scale_y, rotation, children } => {
+        NodeKind::Group { position, size, alpha: _, scale_x, scale_y, rotation, children } => {
             let t = positional_transform(position, *scale_x, *scale_y, *rotation, parent);
             if node.id == node_id {
                 return Some(aabb(size.width as f32, size.height as f32, t));
@@ -95,20 +95,20 @@ pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
     let width = (scene.width as f32 * scale).round() as u32;
     let height = (scene.height as f32 * scale).round() as u32;
     let mut pixmap = Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
-    pixmap.fill(parse_color(&scene.fill_color));
+    pixmap.fill(scene.fill_color.to_skia_color());
     render_children(&scene.children, &mut pixmap, Transform::from_scale(scale, scale), 1.0);
     pixmap
 }
 
-fn render_children(nodes: &[SceneNode], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
+fn render_children(nodes: &[Node], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     for node in nodes {
         render_node(node, pixmap, parent_transform, parent_alpha);
     }
 }
 
-fn render_node(node: &SceneNode, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
+fn render_node(node: &Node, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     match &node.kind {
-        NodeKind::Node { position, size: _, alpha, scale_x, scale_y, rotation, children } => {
+        NodeKind::Group { position, size: _, alpha, scale_x, scale_y, rotation, children } => {
             let transform = positional_transform(position, *scale_x, *scale_y, *rotation, parent_transform);
             render_children(children, pixmap, transform, parent_alpha * *alpha as f32);
         }
@@ -169,7 +169,7 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
 fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, transform: Transform, parent_alpha: f32) {
     let alpha = parent_alpha * style.alpha as f32;
     if let Some(ref fc) = style.fill_color {
-        let mut color = parse_color(fc);
+        let mut color = fc.to_skia_color();
         color.set_alpha(color.alpha() * alpha);
         let mut paint = Paint::default();
         paint.set_color(color);
@@ -177,7 +177,7 @@ fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, t
         pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
     }
     if let Some(ref sc) = style.stroke_color {
-        let mut color = parse_color(sc);
+        let mut color = sc.to_skia_color();
         color.set_alpha(color.alpha() * alpha);
         let mut paint = Paint::default();
         paint.set_color(color);
@@ -185,11 +185,4 @@ fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, t
         let stroke = Stroke { width: style.stroke_width as f32, ..Default::default() };
         pixmap.stroke_path(path, &paint, &stroke, transform, None);
     }
-}
-
-fn parse_color(s: &str) -> tiny_skia::Color {
-    let c = csscolorparser::parse(s)
-        .unwrap_or_else(|_| csscolorparser::Color::from([0.0, 0.0, 0.0, 1.0]));
-    tiny_skia::Color::from_rgba(c.r as f32, c.g as f32, c.b as f32, c.a as f32)
-        .unwrap_or(tiny_skia::Color::BLACK)
 }

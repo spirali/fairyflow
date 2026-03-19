@@ -1,6 +1,6 @@
 import sys
 import runpy
-from .composer import write_tree
+from .serializer import write_tree
 
 def main():
     # Usage: <source_filename> <out_filename>

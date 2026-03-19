@@ -3,8 +3,8 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import Editor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
-import TreeView, { addIds } from './components/TreeView';
-import type { ConsoleLine, NodeBounds, RawNode, ServerMsg, TreeNodeData, WsStatus } from './types';
+import TreeView from './components/TreeView';
+import type { ConsoleLine, NodeBounds, SceneData, ServerMsg, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -22,7 +22,8 @@ interface RenderedFrameResponse { n: number; png: string }
 
 export default function App() {
   // ── scene state ──────────────────────────────────────────────────────────
-  const [allFrames, setAllFrames] = useState<RawNode[]>([]);
+  const [sceneData, setSceneData] = useState<SceneData | null>(null);
+  const [prevSceneData, setPrevSceneData] = useState<SceneData | null>(null);
   const [frames, setFrames] = useState(1);
   const [keyFrames, setKeyFrames] = useState<number[]>([]);
   const [frame, setFrame] = useState(0);
@@ -35,9 +36,12 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   const [fps, setFps] = useState(24);
+  const [fpsInput, setFpsInput] = useState('24');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
+  const treeCacheRef = useRef<Map<string, SceneData>>(new Map());
+  const [, setCacheVersion] = useState(0); // incremented to trigger re-render after caching
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playReturnFrameRef = useRef(0);
   const cancelledRef = useRef(false);
@@ -61,6 +65,9 @@ export default function App() {
   const keyFrameSet = new Set(keyFrames);
   const prevKeyFrame: number | null = keyFrames.filter(kf => kf < frame).at(-1) ?? null;
   const nextKeyFrame: number | null = keyFrames.find(kf => kf > frame) ?? null;
+  const hasScene = sceneData != null;
+  const sceneWidth  = sceneData?.width  ?? null;
+  const sceneHeight = sceneData?.height ?? null;
 
   // ── websocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -88,8 +95,7 @@ export default function App() {
         } else if (msg.type === 'error') {
           setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
         } else if (msg.type === 'tree') {
-          setAllFrames(msg.frames);
-          setFrames(msg.frames.length);
+          setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
           setFrame(0);
           setRunId(id => id + 1);
@@ -130,14 +136,65 @@ export default function App() {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lines]);
 
-  // ── cache invalidation + selection clear when a new run arrives ───────────
+  // ── cache + selection clear when a new run arrives ─────────────────────────
+  // sceneData/prevSceneData are intentionally NOT cleared here so the right
+  // panel keeps showing the previous content (grayed out) during evaluation.
   useEffect(() => {
-    const cache = imageCacheRef.current;
-    cache.forEach(url => URL.revokeObjectURL(url));
-    cache.clear();
+    const imgCache = imageCacheRef.current;
+    imgCache.forEach(url => URL.revokeObjectURL(url));
+    imgCache.clear();
+    treeCacheRef.current.clear();
+    setCacheVersion(0);
     setSelectedNid(null);
     setNodeBounds(null);
   }, [runId]);
+
+  // ── fetch scene tree on demand (with cache) ────────────────────────────────
+  useEffect(() => {
+    if (frames <= 0) return;
+    const ctrl = new AbortController();
+
+    const fetchTree = async (n: number): Promise<SceneData | null> => {
+      const key = `${runId}-${n}`;
+      const cached = treeCacheRef.current.get(key);
+      if (cached) return cached;
+      const r = await fetch(`/tree/${n}?v=${runId}`, { signal: ctrl.signal });
+      if (!r.ok) return null;
+      const data = await r.json() as SceneData;
+      treeCacheRef.current.set(key, data);
+      return data;
+    };
+
+    Promise.all([
+      fetchTree(frame),
+      frame > 0 ? fetchTree(frame - 1) : Promise.resolve(null),
+    ]).then(([curr, prev]) => {
+      setSceneData(curr);
+      setPrevSceneData(prev);
+    }).catch(() => {});
+
+    return () => ctrl.abort();
+  }, [frame, runId, frames]);
+
+  // ── per-frame image caching ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!canvasLayout || !hasScene) return;
+    const sk = canvasLayout.serverScale.toFixed(3);
+    const key = cacheKey(frame, sk);
+    if (imageCacheRef.current.has(key)) return; // already cached
+
+    const ctrl = new AbortController();
+    fetch(`/frame/${frame}?scale=${sk}&v=${runId}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.blob() : null)
+      .then(blob => {
+        if (!blob || ctrl.signal.aborted) return;
+        if (imageCacheRef.current.has(key)) return;
+        imageCacheRef.current.set(key, URL.createObjectURL(blob));
+        setCacheVersion(v => v + 1);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [frame, runId, canvasLayout, hasScene]);
 
   // ── cleanup interval on unmount ────────────────────────────────────────────
   useEffect(() => {
@@ -178,9 +235,6 @@ export default function App() {
   }
 
   // ── canvas layout ─────────────────────────────────────────────────────────
-  const sceneWidth  = allFrames[0]?.width  ?? null;
-  const sceneHeight = allFrames[0]?.height ?? null;
-
   useEffect(() => {
     const el = canvasContentRef.current;
     if (!el || sceneWidth == null || sceneHeight == null || sceneWidth <= 0 || sceneHeight <= 0) { setCanvasLayout(null); return; }
@@ -214,8 +268,8 @@ export default function App() {
     return `${runId}-${n}-${scaleKey}`;
   }
 
-  function storeCachedFrame(n: number, scaleKey: string, pngBase64: string) {
-    const key = cacheKey(n, scaleKey);
+  function storeCachedFrame(n: number, sk: string, pngBase64: string) {
+    const key = cacheKey(n, sk);
     if (imageCacheRef.current.has(key)) return;
     const bytes = Uint8Array.from(atob(pngBase64), c => c.charCodeAt(0));
     const blob = new Blob([bytes], { type: 'image/png' });
@@ -229,23 +283,40 @@ export default function App() {
     const startFrame = frame;
     const totalFrames = frames;
     const capturedFps = fps;
-    const scaleKey = canvasLayout.serverScale.toFixed(3);
+    const sk = canvasLayout.serverScale.toFixed(3);
 
-    // Find which frames are not yet cached
-    const uncached: number[] = [];
+    // Find which frames need caching
+    const uncachedImages: number[] = [];
+    const uncachedTrees: number[] = [];
     for (let i = 0; i < totalFrames; i++) {
-      if (!imageCacheRef.current.has(cacheKey(i, scaleKey))) uncached.push(i);
+      if (!imageCacheRef.current.has(cacheKey(i, sk))) uncachedImages.push(i);
+      if (!treeCacheRef.current.has(`${runId}-${i}`)) uncachedTrees.push(i);
     }
 
-    if (uncached.length > 0) {
+    if (uncachedImages.length > 0 || uncachedTrees.length > 0) {
       setIsPrefetching(true);
       try {
-        const from = uncached[0];
-        const to = uncached[uncached.length - 1];
-        const res = await fetch(`/frames?from=${from}&to=${to}&scale=${scaleKey}&v=${runId}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data: RenderedFrameResponse[] = await res.json();
-        for (const { n, png } of data) storeCachedFrame(n, scaleKey, png);
+        await Promise.all([
+          // Images: one bulk request
+          uncachedImages.length > 0
+            ? fetch(`/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}`)
+                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<RenderedFrameResponse[]>; })
+                .then(data => {
+                  for (const { n, png } of data) storeCachedFrame(n, sk, png);
+                  setCacheVersion(v => v + 1);
+                })
+            : Promise.resolve(),
+          // Trees: one bulk request
+          uncachedTrees.length > 0
+            ? fetch(`/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}`)
+                .then(r => r.ok ? r.json() as Promise<Array<{ n: number; scene: SceneData }>> : null)
+                .then(data => {
+                  if (!data) return;
+                  for (const { n, scene } of data) treeCacheRef.current.set(`${runId}-${n}`, scene);
+                })
+                .catch(() => {})
+            : Promise.resolve(),
+        ]);
       } catch (e) {
         console.error('prefetch failed', e);
       } finally {
@@ -283,12 +354,7 @@ export default function App() {
     setFrame(playReturnFrameRef.current);
   }
 
-  // ── timeline ──────────────────────────────────────────────────────────────
-  const treeNodes: TreeNodeData[] = allFrames[frame] ? addIds([allFrames[frame]]) : [];
-  const prevTreeNodes: TreeNodeData[] = frame > 0 && allFrames[frame - 1] ? addIds([allFrames[frame - 1]]) : [];
-  const hasScene = treeNodes.length > 0;
-
-  // Resolve the image src: use cached blob URL if available, else fetch from server
+  // ── image src ──────────────────────────────────────────────────────────────
   const scaleKey = canvasLayout?.serverScale.toFixed(3) ?? '1.000';
   const imgSrc = imageCacheRef.current.get(cacheKey(frame, scaleKey))
     ?? (canvasLayout ? `/frame/${frame}?scale=${scaleKey}&v=${runId}` : '');
@@ -433,7 +499,7 @@ export default function App() {
 
         {/* ── Right column ── */}
         <Panel defaultSize={50} minSize={20}>
-          <div className="right-column">
+          <div className={`right-column${running ? ' right-column-evaluating' : ''}`}>
 
             {/* Timeline bar */}
             <div className="timeline-bar">
@@ -466,11 +532,17 @@ export default function App() {
                       <input
                         type="number"
                         className="tl-fps-input"
-                        value={fps}
+                        value={fpsInput}
                         min={1}
                         max={120}
                         disabled={isActive}
-                        onChange={e => setFps(Math.max(1, Math.min(120, Number(e.target.value))))}
+                        onChange={e => setFpsInput(e.target.value)}
+                        onBlur={e => {
+                          const n = parseInt(e.target.value, 10);
+                          const clamped = Number.isFinite(n) && n >= 1 ? Math.min(120, n) : 1;
+                          setFps(clamped);
+                          setFpsInput(String(clamped));
+                        }}
                       />
                     </label>
 
@@ -487,7 +559,7 @@ export default function App() {
             <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
-                  <TreeView nodes={treeNodes} prevNodes={prevTreeNodes} selectedNid={selectedNid} onSelect={setSelectedNid} />
+                  <TreeView scene={sceneData} prevScene={prevSceneData} selectedNid={selectedNid} onSelect={setSelectedNid} />
                 </div>
               </Panel>
 

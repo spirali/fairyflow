@@ -99,6 +99,16 @@
   flex-direction: column;
   height: 100%;
   background: var(--bg-secondary);
+  position: relative;
+}
+
+.right-column-evaluating::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: all;
+  z-index: 10;
 }
 
 /* ── Timeline slider ─────────────────────────────────────────────────────── */

@@ -1,6 +1,5 @@
 from .position import Position
-from .expr import BaseExpr, DynExpr, EvalCtx, TimedValue, Transition
-from .tobject import TimedObject
+from .aobject import AnimatedObject
 from .color import Color
 from typing import Union
 
@@ -8,14 +7,10 @@ from typing import Union
 NODE_CONTEXT = None
 ROOT_OBJECT = None
 
-def _serialize(val):
-    if isinstance(val, Color):
-        return str(val)
-    return val
 
-class ItemBase(TimedObject):
+class Node(AnimatedObject):
 
-    def __init__(self, parent: Union[None, "Node"], frame: int):
+    def __init__(self, parent: Union[None, "Group"], frame: int):
         super().__init__(frame)
         self._parent = parent
         if parent:
@@ -23,11 +18,11 @@ class ItemBase(TimedObject):
         else:
             self._id = 0
 
-    def parent_chain(self) -> list["Node"]:
+    def parent_chain(self) -> list["Group"]:
         result = []
         node = self
         while node is not None:
-            if isinstance(node, Node):
+            if isinstance(node, Group):
                 result.append(node)
             node = node._parent
         return result
@@ -35,12 +30,19 @@ class ItemBase(TimedObject):
     def _new_id(self):
         return self._parent._new_id()
     
-    def build(self, ctx: EvalCtx):
+    def serialize(self, serializer):
         result = {"kind": self.kind, "id": self._id}
         attrs = self._attrs
         for name in attrs:
-            result[name] = _serialize(ctx.eval_obj(attrs[name]))
+            result[name] = serializer.add_av(attrs[name])
         return result
+    
+    # def build(self, ctx: EvalCtx):
+    #     result = {"kind": self.kind, "id": self._id}
+    #     attrs = self._attrs
+    #     for name in attrs:
+    #         result[name] = _serialize(ctx.eval_obj(attrs[name]))
+    #     return result
     
     def key_frames(self, out):
         for value in self._attrs.values():
@@ -145,23 +147,30 @@ class StyleMixin(AlphaMixin):
 
 
 
-class ItemWithChildren(ItemBase):
+class ItemWithChildren(Node):
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._children = []
         self._ctx = None
 
-    def build(self, ctx):
-        result = super().build(ctx)
+
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
         if self._children:
-            result["children"] = [child.build(ctx) for child in self._children]
+            result["children"] = [serializer.add_node(child) for child in self._children]
         return result
     
-    def key_frames(self, out: set):
-        super().key_frames(out)
-        for child in self._children:
-            child.key_frames(out)
+    # def build(self, ctx):
+    #     result = super().build(ctx)
+    #     if self._children:
+    #         result["children"] = [child.build(ctx) for child in self._children]
+    #     return result
+    
+    # def key_frames(self, out: set):
+    #     super().key_frames(out)
+    #     for child in self._children:
+    #         child.key_frames(out)
 
 class ContextManagerMixin:
 
@@ -181,8 +190,8 @@ class ContextManagerMixin:
         self._ctx = None
 
 
-class Node(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
-    kind = "node"
+class Group(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
+    kind = "group"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
@@ -232,7 +241,7 @@ class Scene(ItemWithChildren, ContextManagerMixin, SizeMixin):
         return self._id_counter
     
 
-class Rect(ItemBase, PositionMixin, SizeMixin, StyleMixin):
+class Rect(Node, PositionMixin, SizeMixin, StyleMixin):
     kind = "rect"
 
     def __init__(self, parent, frame):
@@ -242,7 +251,7 @@ class Rect(ItemBase, PositionMixin, SizeMixin, StyleMixin):
         self._init_style()
 
 
-class Ellipse(ItemBase, PositionMixin, SizeMixin, StyleMixin):
+class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin):
     kind = "ellipse"
 
     def __init__(self, parent, frame):
@@ -280,7 +289,7 @@ class Path(ItemWithChildren, StyleMixin):
         self._children.append(p)
         return p
 
-class PathMove(ItemBase, PositionMixin):
+class PathMove(Node, PositionMixin):
 
     kind = "move"
 
@@ -289,7 +298,7 @@ class PathMove(ItemBase, PositionMixin):
         self._init_position(x, y)
 
 
-class PathLine(ItemBase, PositionMixin):
+class PathLine(Node, PositionMixin):
 
     kind = "line"
 
@@ -298,7 +307,7 @@ class PathLine(ItemBase, PositionMixin):
         self._init_position(x, y)
 
 
-class PathCubic(ItemBase, PositionMixin):
+class PathCubic(Node, PositionMixin):
 
     kind = "cubic"
 
@@ -337,7 +346,7 @@ class PathCubic(ItemBase, PositionMixin):
         return self
 
 
-def make_item(cls, frame):
+def make_node(cls, frame):
     if NODE_CONTEXT is None:
         raise Exception("Element created out of context of a parent ndoe")
     if frame is None:
@@ -354,17 +363,17 @@ def scene(width: int, height: int):
     return scene
 
 
-def node(*, frame=None):
-    return make_item(Node, frame)
+def group(*, frame=None):
+    return make_node(Group, frame)
 
 
 def rect(*, frame=None):
-    return make_item(Rect, frame)
+    return make_node(Rect, frame)
 
 
 def ellipse(*, frame=None):
-    return make_item(Ellipse, frame)
+    return make_node(Ellipse, frame)
 
 
 def path(*, frame=None):
-    return make_item(Path, frame)
+    return make_node(Path, frame)

@@ -107,10 +107,13 @@ export function TextIcon({ size = 16 }: IconProps) {
 
 const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = {
   scene:   SceneIcon,
-  node:    NodeIcon,
+  group:   NodeIcon,
   rect:    RectIcon,
   ellipse: EllipseIcon,
   path:    PathIcon,
+  move:    PathIcon,
+  line:    PathIcon,
+  cubic:   PathIcon,
   image:   ImageIcon,
   layer:   LayerIcon,
   text:    TextIcon,

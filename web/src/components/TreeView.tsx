@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { RawNode, TreeNodeData } from '../types';
+import type { RawNode, SceneData, TreeNodeData } from '../types';
 import { NodeKindIcon } from './Icons';
 
 function fmt(v: number | string): number | string {
@@ -17,7 +17,7 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
     prevNode != null && prevNode[key] !== node[key];
 
   const TRACKED = ['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
-                   'x', 'y', 'radius', 'scale_x', 'scale_y', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const;
+                   'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const;
   const anyChanged = TRACKED.some(ch);
 
   return (
@@ -44,7 +44,7 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
         <Prop label={node.scale_x === node.scale_y ? `s=${fmt(node.scale_x)}` : `sx=${fmt(node.scale_x)} sy=${fmt(node.scale_y ?? 1)}`}
               changed={ch('scale_x') || ch('scale_y')} />
       )}
-      {node.radius  != null && <Prop label={`r=${fmt(node.radius)}`} changed={ch('radius')} />}
+      {node.rotation != null && node.rotation !== 0 && <Prop label={`r=${fmt(node.rotation)}°`} changed={ch('rotation')} />}
     </span>
   );
 }
@@ -63,7 +63,7 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProp
 
   const anyChanged = prevNode != null &&
     (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
-      'x', 'y', 'radius', 'scale_x', 'scale_y', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const).some(k => prevNode[k] !== node[k]);
+      'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const).some(k => prevNode[k] !== node[k]);
 
   return (
     <div>
@@ -95,24 +95,40 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProp
 }
 
 interface TreeViewProps {
-  nodes: TreeNodeData[];
-  prevNodes: TreeNodeData[];
+  scene: SceneData | null;
+  prevScene: SceneData | null;
   selectedNid: number | null;
   onSelect: (nid: number | null) => void;
 }
 
-export default function TreeView({ nodes, prevNodes, selectedNid, onSelect }: TreeViewProps) {
-  const tree = nodes.length > 0 ? nodes : null;
+export default function TreeView({ scene, prevScene, selectedNid, onSelect }: TreeViewProps) {
+  const nodes: TreeNodeData[] = scene ? addIds(scene.children) : [];
+  const prevNodes: TreeNodeData[] = prevScene ? addIds(prevScene.children) : [];
 
   return (
     <div className="tree-panel">
       <div className="tree-panel-label">Scene</div>
-      {tree
-        ? tree.map((n, i) => (
-            <TreeNode key={n.id} node={n} prevNode={prevNodes[i]} depth={0} selectedNid={selectedNid} onSelect={onSelect} />
-          ))
-        : <div className="tree-empty">Run a script to see the scene tree</div>
-      }
+      {scene ? (
+        <>
+          <div className="tree-node" style={{ paddingLeft: 8 }}>
+            <span className="tree-node-toggle" />
+            <span className="tree-node-icon"><NodeKindIcon kind="scene" /></span>
+            <span className="node-label">
+              <span className="node-type">scene</span>
+              <span className="prop-chip">{scene.width}×{scene.height}</span>
+              <span className="prop-chip">
+                <span style={{ display: 'inline-block', width: 10, height: 10, background: scene.fill_color, border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
+                {scene.fill_color}
+              </span>
+            </span>
+          </div>
+          {nodes.map((n, i) => (
+            <TreeNode key={n.id} node={n} prevNode={prevNodes[i]} depth={1} selectedNid={selectedNid} onSelect={onSelect} />
+          ))}
+        </>
+      ) : (
+        <div className="tree-empty">Run a script to see the scene tree</div>
+      )}
     </div>
   );
 }

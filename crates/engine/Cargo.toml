@@ -1,0 +1,12 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+csscolorparser = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = "1.0"
+tracing = { workspace = true }
+renderer = { path = "../renderer" }

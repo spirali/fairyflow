@@ -6,7 +6,7 @@ from inline_snapshot import snapshot
 def test_simple_scene():
 
     with scene(100, 100) as s:
-        with node():
+        with group():
             rect()
             rect()
 

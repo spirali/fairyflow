@@ -222,6 +222,67 @@
   opacity: 0.4;
 }
 
+/* Two-row frame slider container */
+.tl-frame-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ── Overview (global minimap) ── */
+.tl-overview {
+  width: 100%;
+  height: 14px;
+  position: relative;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.tl-ov-track {
+  position: absolute;
+  inset: 5px 0;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* Keyframe markers in overview */
+.tl-ov-kf {
+  position: absolute;
+  width: 2px;
+  height: 8px;
+  top: 3px;
+  background: #c8a84b;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Window indicator — shows the zoomed region */
+.tl-ov-window {
+  position: absolute;
+  height: 14px;
+  top: 0;
+  min-width: 2px;
+  background: rgba(0, 120, 204, 0.15);
+  border-left: 1px solid rgba(0, 120, 204, 0.5);
+  border-right: 1px solid rgba(0, 120, 204, 0.5);
+  pointer-events: none;
+}
+
+/* Current-frame cursor */
+.tl-ov-cursor {
+  position: absolute;
+  width: 2px;
+  height: 14px;
+  top: 0;
+  background: var(--accent);
+  transform: translateX(-50%);
+  pointer-events: none;
+  border-radius: 1px;
+}
+
 /* Wrapper holds the custom visuals + invisible native input */
 .timeline-slider-wrap {
   width: 100%;
@@ -289,8 +350,9 @@
 }
 
 .timeline-tick.key.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: #c8a84b;
+  border-color: #c8a84b;
+  box-shadow: 0 0 4px 1px rgba(200, 168, 75, 0.5);
 }
 
 .timeline-tick-num.key {
@@ -298,7 +360,8 @@
 }
 
 .timeline-tick-num.key.active {
-  color: var(--accent);
+  color: #c8a84b;
+  font-weight: 600;
 }
 
 /* Invisible native input layered on top for interaction */

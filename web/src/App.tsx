@@ -296,25 +296,71 @@ export default function App() {
   const isActive = isPlaying || isPrefetching;
 
   function FrameSlider() {
+    const ZOOM_WIN = Math.min(frames, 31);
+    const half = Math.floor(ZOOM_WIN / 2);
+    const rawStart = frame - half;
+    const winStart = Math.max(0, Math.min(rawStart, maxFrame - ZOOM_WIN + 1));
+    const winEnd = Math.min(maxFrame, winStart + ZOOM_WIN - 1);
+    const winSize = winEnd - winStart + 1;
+
+    const ovCursorPct = maxFrame > 0 ? (frame / maxFrame) * 100 : 0;
+    const ovWinLeft  = maxFrame > 0 ? (winStart / maxFrame) * 100 : 0;
+    const ovWinWidth = maxFrame > 0 ? Math.max(0.5, ((winEnd - winStart) / maxFrame) * 100) : 100;
+
+    function handleOverviewPtr(e: React.PointerEvent<HTMLDivElement>) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      setFrame(Math.round(pct * maxFrame));
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    function handleOverviewMove(e: React.PointerEvent<HTMLDivElement>) {
+      if (e.buttons === 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      setFrame(Math.round(pct * maxFrame));
+    }
+
     return (
-      <div className="timeline-slider-wrap">
-        <div className="timeline-track" />
-        {Array.from({ length: frames }, (_, i) => {
-          const pct = maxFrame > 0 ? (i / maxFrame) * 100 : 0;
-          const isKey = keyFrameSet.has(i);
-          return (
-            <div key={i} className="timeline-tick-wrap" style={{ left: `${pct}%` }}>
-              <div className={`timeline-tick${i === frame ? ' active' : ''}${isKey ? ' key' : ''}`} />
-              <div className={`timeline-tick-num${i === frame ? ' active' : ''}${isKey ? ' key' : ''}`}>{i}</div>
-            </div>
-          );
-        })}
-        <input type="range" min={0} max={maxFrame} step={1}
-          value={frame}
-          onChange={(e) => setFrame(Number(e.target.value))}
-          className="timeline-slider"
-          disabled={isActive}
-        />
+      <div className="tl-frame-slider">
+        {/* Global overview */}
+        <div
+          className="tl-overview"
+          onPointerDown={handleOverviewPtr}
+          onPointerMove={handleOverviewMove}
+        >
+          <div className="tl-ov-track" />
+          {keyFrames.map(kf => {
+            const pct = maxFrame > 0 ? (kf / maxFrame) * 100 : 0;
+            return <div key={kf} className="tl-ov-kf" style={{ left: `${pct}%` }} />;
+          })}
+          <div className="tl-ov-window" style={{ left: `${ovWinLeft}%`, width: `${ovWinWidth}%` }} />
+          <div className="tl-ov-cursor" style={{ left: `${ovCursorPct}%` }} />
+        </div>
+
+        {/* Zoomed detail slider */}
+        <div className="timeline-slider-wrap">
+          <div className="timeline-track" />
+          {Array.from({ length: winSize }, (_, i) => {
+            const fi = winStart + i;
+            const pct = winSize > 1 ? (i / (winSize - 1)) * 100 : 50;
+            const isKey = keyFrameSet.has(fi);
+            const showNum = fi === frame || fi % 5 === 0;
+            return (
+              <div key={fi} className="timeline-tick-wrap" style={{ left: `${pct}%` }}>
+                <div className={`timeline-tick${fi === frame ? ' active' : ''}${isKey ? ' key' : ''}`} />
+                {showNum && (
+                  <div className={`timeline-tick-num${fi === frame ? ' active' : ''}${isKey ? ' key' : ''}`}>{fi}</div>
+                )}
+              </div>
+            );
+          })}
+          <input type="range" min={winStart} max={winEnd} step={1}
+            value={frame}
+            onChange={(e) => setFrame(Number(e.target.value))}
+            className="timeline-slider"
+            disabled={isActive}
+          />
+        </div>
       </div>
     );
   }

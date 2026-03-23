@@ -1,5 +1,12 @@
 [workspace]
-members = ["crates/alsie", "crates/engine", "crates/server", "crates/renderer"]
+members = [
+    "crates/server",
+    "crates/engine",
+    "crates/renderer-core",
+    "crates/renderer-skia",
+    "crates/renderer-pdf",
+    "crates/player",
+]
 resolver = "3"
 
 [profile.release]
@@ -11,3 +18,4 @@ csscolorparser = "0.7"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 tracing = "0.1"
+anyhow = "1.0"

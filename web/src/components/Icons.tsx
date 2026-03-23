@@ -70,6 +70,54 @@ export function PathIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function MoveToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="8" y1="24" x2="24" y2="8" strokeDasharray="3 2.5"/>
+      <circle cx="8" cy="24" r="2.5"/>
+      <circle cx="24" cy="8" r="2.5" fill={c} stroke="none"/>
+    </svg>
+  );
+}
+
+export function LineToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="7" y1="25" x2="25" y2="7"/>
+      <rect x="5" y="23" width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <rect x="23" y="5"  width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+    </svg>
+  );
+}
+
+export function CubicToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <path d="M6 25 C6 10, 26 22, 26 7"/>
+      <rect x="4" y="23" width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <rect x="24" y="5"  width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <circle cx="6"  cy="10" r="2"/>
+      <circle cx="26" cy="22" r="2"/>
+      <line x1="6"  y1="25" x2="6"  y2="10" strokeDasharray="2 2"/>
+      <line x1="26" y1="7"  x2="26" y2="22" strokeDasharray="2 2"/>
+    </svg>
+  );
+}
+
+export function ClosePathIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="7"  y1="9"  x2="25" y2="9"/>
+      <line x1="25" y1="9"  x2="7"  y2="23"/>
+      <line x1="7"  y1="23" x2="25" y2="23"/>
+    </svg>
+  );
+}
+
 export function ImageIcon({ size = 16 }: IconProps) {
   const c = '#95CC35';
   return (
@@ -92,6 +140,17 @@ export function LayerIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ImageLayerIcon({ size = 16 }: IconProps) {
+  const c = '#5BBFD4';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <path d="M4 8 L4 4 L11 4 L11 8" strokeLinejoin="round"/>
+      <rect x="4" y="8" width="24" height="18" rx="2"/>
+      <path d="M7 22 L12 15 L17 20 L21 14 L28 22"/>
+    </svg>
+  );
+}
+
 export function TextIcon({ size = 16 }: IconProps) {
   const c = '#7EC832';
   return (
@@ -105,18 +164,46 @@ export function TextIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function TextLineIcon({ size = 16 }: IconProps) {
+  const c = '#7EC832';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="5" y1="22" x2="27" y2="22"/>
+      {/* small T */}
+      <line x1="12" y1="8" x2="20" y2="8"/>
+      <line x1="16" y1="8" x2="16" y2="18"/>
+    </svg>
+  );
+}
+
+export function TextGroupIcon({ size = 16 }: IconProps) {
+  const c = '#7EC832';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <rect x="4" y="5" width="24" height="22" rx="2"/>
+      {/* small T */}
+      <line x1="12" y1="10" x2="20" y2="10"/>
+      <line x1="16" y1="10" x2="16" y2="22"/>
+    </svg>
+  );
+}
+
 const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = {
   scene:   SceneIcon,
   group:   NodeIcon,
   rect:    RectIcon,
   ellipse: EllipseIcon,
   path:    PathIcon,
-  move:    PathIcon,
-  line:    PathIcon,
-  cubic:   PathIcon,
+  move:    MoveToIcon,
+  line:    LineToIcon,
+  cubic:   CubicToIcon,
+  close:   ClosePathIcon,
   image:   ImageIcon,
-  layer:   LayerIcon,
+  layer:   ImageLayerIcon,
   text:    TextIcon,
+  t_line:  TextLineIcon,
+  t_group: TextGroupIcon,
+  t_span:  TextIcon,
 };
 
 export function NodeKindIcon({ kind, size = 16 }: { kind: string; size?: number }) {

@@ -1,17 +1,18 @@
-"""Integration tests: start the real server and communicate over WebSocket."""
+"""Integration tests: start the real server and communicate over WebSocket and HTTP."""
 
 import asyncio
 import json
+import urllib.request
+import urllib.error
 
 import pytest
 import websockets
 
-WS_TIMEOUT = 15  # seconds — any single test must finish within this time
+WS_TIMEOUT = 15  # seconds
 
 
-async def _run_code_on_ws(ws, code: str) -> list[dict]:
-    """Submit code on an existing WebSocket and collect messages until done."""
-    await ws.send(json.dumps({"type": "run", "code": code}))
+async def _collect_until_done(ws) -> list[dict]:
+    """Collect messages from an open WebSocket until a 'done' message arrives."""
     messages = []
     async with asyncio.timeout(WS_TIMEOUT):
         async for raw in ws:
@@ -22,163 +23,267 @@ async def _run_code_on_ws(ws, code: str) -> list[dict]:
     return messages
 
 
-async def _run_code(uri: str, code: str) -> list[dict]:
-    """Connect to the server, submit code, and collect all messages until done."""
-    async with websockets.connect(uri) as ws:
-        return await _run_code_on_ws(ws, code)
+async def _run_scene(ws, path: str) -> list[dict]:
+    """Send a run request for *path* on an existing WebSocket and collect messages."""
+    await ws.send(json.dumps({"type": "run", "path": path}))
+    return await _collect_until_done(ws)
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 
 def by_type(messages: list[dict], kind: str) -> list[dict]:
     return [m for m in messages if m["type"] == kind]
 
 
-def output_text(messages: list[dict]) -> str:
-    return "\n".join(m["text"] for m in by_type(messages, "output"))
+def http_get(base_url: str, endpoint: str, token: str, **params) -> tuple[int, bytes]:
+    qs = "&".join(f"{k}={v}" for k, v in {**params, "token": token}.items())
+    url = f"{base_url}{endpoint}?{qs}"
+    try:
+        with urllib.request.urlopen(url) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
 
 
-# ── basic connectivity ────────────────────────────────────────────────────────
+def http_put(base_url: str, endpoint: str, token: str, body: str, **params) -> int:
+    qs = "&".join(f"{k}={v}" for k, v in {**params, "token": token}.items())
+    url = f"{base_url}{endpoint}?{qs}"
+    req = urllib.request.Request(url, data=body.encode(), method="PUT")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+# ── connectivity ──────────────────────────────────────────────────────────────
 
 
 async def test_server_accepts_connection(server_uri):
     async with asyncio.timeout(WS_TIMEOUT):
         async with websockets.connect(server_uri):
-            pass  # just connecting is enough
+            pass
 
 
-# ── code execution ────────────────────────────────────────────────────────────
+async def test_config_sent_on_connect(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        async with asyncio.timeout(WS_TIMEOUT):
+            raw = await ws.recv()
+    msg = json.loads(raw)
+    assert msg["type"] == "config"
+    assert isinstance(msg["fps"], int)
+    assert msg["fps"] > 0
 
 
-async def test_print_output_is_forwarded(server_uri):
-    msgs = await _run_code(server_uri, "print('hello world')")
-    assert output_text(msgs) == "hello world"
+# ── scene execution ───────────────────────────────────────────────────────────
 
 
-async def test_multiple_print_lines(server_uri):
-    msgs = await _run_code(server_uri, "print('a')\nprint('b')\nprint('c')")
-    assert output_text(msgs) == "a\nb\nc"
-
-
-async def test_successful_run_exits_with_code_zero(server_uri):
-    msgs = await _run_code(server_uri, "x = 1 + 1")
+async def test_run_valid_scene_exits_zero(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/scene1.ffpy")
     done = by_type(msgs, "done")
     assert len(done) == 1
     assert done[0]["exit_code"] == 0
 
 
-async def test_syntax_error_exits_nonzero(server_uri):
-    msgs = await _run_code(server_uri, "def (")
+async def test_run_valid_scene_sends_tree(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/scene1.ffpy")
+    tree_msgs = by_type(msgs, "tree")
+    assert len(tree_msgs) == 1
+    tree = tree_msgs[0]
+    assert isinstance(tree["frame_count"], int) and tree["frame_count"] > 0
+    assert isinstance(tree["scenes"], list) and len(tree["scenes"]) >= 1
+
+
+async def test_run_error_scene_exits_nonzero(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/error.ffpy")
     done = by_type(msgs, "done")
     assert len(done) == 1
     assert done[0]["exit_code"] != 0
 
 
-async def test_runtime_error_sends_error_messages(server_uri):
-    msgs = await _run_code(server_uri, "raise ValueError('boom')")
+async def test_run_error_scene_sends_error_messages(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/error.ffpy")
     assert by_type(msgs, "error"), "expected at least one error message"
+
+
+async def test_done_always_sent_on_error(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/error.ffpy")
+    assert by_type(msgs, "done"), "done message must always be sent"
+
+
+async def test_nonexistent_file_exits_nonzero(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/does_not_exist.ffpy")
     done = by_type(msgs, "done")
     assert done[0]["exit_code"] != 0
 
 
-async def test_done_message_always_sent(server_uri):
-    """done must arrive even when the script crashes."""
-    msgs = await _run_code(server_uri, "1 / 0")
-    assert by_type(msgs, "done")
-
-
-# ── scene tree ────────────────────────────────────────────────────────────────
-
-
-async def test_tree_sent_on_success(server_uri):
-    msgs = await _run_code(server_uri, """
-with scene(100, 100):
-    pass
-    """)
-    tree_msgs = by_type(msgs, "tree")
-    assert len(tree_msgs) == 1
-
-
-# ── repeated submissions on same connection ───────────────────────────────────
+# ── sequential runs on the same connection ────────────────────────────────────
 
 
 async def test_two_sequential_runs(server_uri):
-    """Second run on the same connection returns correct output."""
     async with websockets.connect(server_uri) as ws:
-        msgs1 = await _run_code_on_ws(ws, "print('first')")
-        msgs2 = await _run_code_on_ws(ws, "print('second')")
-    assert output_text(msgs1) == "first"
-    assert output_text(msgs2) == "second"
-
-
-async def test_many_sequential_runs(server_uri):
-    """Ten runs in a row all complete and return correct results."""
-    async with websockets.connect(server_uri) as ws:
-        for i in range(10):
-            msgs = await _run_code_on_ws(ws, f"print({i})")
-            assert output_text(msgs) == str(i)
-
-
-async def test_tree_updates_between_runs(server_uri):
-    """Each run replaces the previous tree — second run produces a different tree."""
-    async with websockets.connect(server_uri) as ws:
-        msgs1 = await _run_code_on_ws(ws, """
-with scene(100, 100):
-    rect().width(10)
-""")
-        msgs2 = await _run_code_on_ws(ws, """
-with scene(200, 150):
-    pass
-""")
-    tree1 = by_type(msgs1, "tree")[0]
-    tree2 = by_type(msgs2, "tree")[0]
-    assert tree1["frames"][0]["children"][0]["kind"] == "rect"
-    assert tree1["frames"][0]["children"][0]["width"] == 10
-    assert tree2["frames"][0]["width"] == 200
-    assert tree2["frames"][0]["height"] == 150
+        await ws.recv()  # consume config
+        msgs1 = await _run_scene(ws, "scenes/scene1.ffpy")
+        msgs2 = await _run_scene(ws, "scenes/scene1.ffpy")
+    assert by_type(msgs1, "done")[0]["exit_code"] == 0
+    assert by_type(msgs2, "done")[0]["exit_code"] == 0
 
 
 async def test_error_run_followed_by_successful_run(server_uri):
-    """A run that crashes does not break the connection for the next run."""
     async with websockets.connect(server_uri) as ws:
-        err_msgs = await _run_code_on_ws(ws, "raise RuntimeError('oops')")
-        ok_msgs = await _run_code_on_ws(ws, "print('recovered')")
+        await ws.recv()  # consume config
+        err_msgs = await _run_scene(ws, "scenes/error.ffpy")
+        ok_msgs = await _run_scene(ws, "scenes/scene1.ffpy")
     assert by_type(err_msgs, "done")[0]["exit_code"] != 0
-    assert output_text(ok_msgs) == "recovered"
     assert by_type(ok_msgs, "done")[0]["exit_code"] == 0
+
+
+async def test_many_sequential_runs(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        for _ in range(5):
+            msgs = await _run_scene(ws, "scenes/scene1.ffpy")
+            assert by_type(msgs, "done")[0]["exit_code"] == 0
+
+
+# ── run cancellation ──────────────────────────────────────────────────────────
 
 
 async def test_new_run_supersedes_previous(server_uri):
     """Sending a second run while the first is still running cancels the first."""
     async with websockets.connect(server_uri) as ws:
-        # Send a slow script but don't wait for it to finish
-        await ws.send(
-            json.dumps({"type": "run", "code": "import time; time.sleep(30)"})
-        )
-        # Immediately send a fast second run
-        await ws.send(json.dumps({"type": "run", "code": "print('superseded')"}))
-        # Collect all messages; the killed first run sends done(exit_code=null),
-        # the second run sends done(exit_code=0) — stop at the first non-null done.
+        await ws.recv()  # consume config
+        await ws.send(json.dumps({"type": "run", "path": "scenes/slow.ffpy"}))
+        # Small delay lets the process start before we cancel it
+        await asyncio.sleep(0.3)
+        await ws.send(json.dumps({"type": "run", "path": "scenes/scene1.ffpy"}))
+
         all_msgs = []
         async with asyncio.timeout(WS_TIMEOUT):
             async for raw in ws:
                 msg = json.loads(raw)
                 all_msgs.append(msg)
+                # Stop once the second run's done arrives (non-null exit_code)
                 if msg["type"] == "done" and msg.get("exit_code") is not None:
                     break
-    assert any(m["type"] == "output" and m["text"] == "superseded" for m in all_msgs)
+
     done_msgs = by_type(all_msgs, "done")
     assert done_msgs[-1]["exit_code"] == 0
 
 
-# ── timeout protection ────────────────────────────────────────────────────────
+async def test_terminate_stops_current_run(server_uri):
+    async with websockets.connect(server_uri) as ws:
+        await ws.recv()  # consume config
+        await ws.send(json.dumps({"type": "run", "path": "scenes/slow.ffpy"}))
+        await asyncio.sleep(0.3)
+        await ws.send(json.dumps({"type": "terminate"}))
+
+        all_msgs = []
+        async with asyncio.timeout(WS_TIMEOUT):
+            async for raw in ws:
+                msg = json.loads(raw)
+                all_msgs.append(msg)
+                if msg["type"] == "done":
+                    break
+
+    done = by_type(all_msgs, "done")
+    assert len(done) == 1
+    assert done[0]["exit_code"] is None
 
 
-async def test_infinite_loop_times_out(server_uri):
-    """An infinite loop must not block the test suite — asyncio.timeout fires."""
-    with pytest.raises((TimeoutError, asyncio.TimeoutError)):
-        await asyncio.wait_for(
-            _run_code(server_uri, "while True: pass"),
-            timeout=3,
-        )
+# ── HTTP REST endpoints ───────────────────────────────────────────────────────
+
+
+def test_unauthorized_without_token(server_base_url):
+    url = f"{server_base_url}/ls"
+    req = urllib.request.Request(url)
+    try:
+        with urllib.request.urlopen(req):
+            pytest.fail("expected 401")
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+
+
+def test_ls_returns_entries(server_base_url, server_token):
+    status, body = http_get(server_base_url, "/ls", server_token)
+    assert status == 200
+    entries = json.loads(body)
+    assert isinstance(entries, list)
+    names = {e["name"] for e in entries}
+    assert "scenes" in names
+    assert "fairyflow.toml" in names
+
+
+def test_file_read_returns_content(server_base_url, server_token):
+    status, body = http_get(server_base_url, "/file", server_token, path="prologue.py")
+    assert status == 200
+    assert b"fairyflow" in body
+
+
+def test_file_write_and_read(server_base_url, server_token):
+    content = "# test comment\nfrom fairyflow import *\n"
+    status = http_put(
+        server_base_url, "/file", server_token, content, path="prologue.py"
+    )
+    assert status == 204
+    status2, body = http_get(server_base_url, "/file", server_token, path="prologue.py")
+    assert status2 == 200
+    assert body.decode() == content
+
+
+def test_file_read_missing_returns_404(server_base_url, server_token):
+    status, _ = http_get(server_base_url, "/file", server_token, path="nonexistent.py")
+    assert status == 404
+
+
+# ── frame/tree endpoints (require a loaded animation) ─────────────────────────
+
+
+@pytest.fixture(scope="module")
+def loaded_animation(server_uri):
+    """Ensure an animation is loaded by running scene1 once. Sync wrapper."""
+    asyncio.run(_load_scene(server_uri))
+
+
+async def _load_scene(uri: str):
+    async with websockets.connect(uri) as ws:
+        await ws.recv()  # consume config
+        msgs = await _run_scene(ws, "scenes/scene1.ffpy")
+    assert by_type(msgs, "done")[0]["exit_code"] == 0
+
+
+def test_frame_endpoint_returns_png(loaded_animation, server_base_url, server_token):
+    status, body = http_get(server_base_url, "/frame/0", server_token)
+    assert status == 200
+    assert body[:4] == b"\x89PNG"
+
+
+def test_tree_endpoint_returns_json(loaded_animation, server_base_url, server_token):
+    status, body = http_get(server_base_url, "/tree/0", server_token)
+    assert status == 200
+    data = json.loads(body)
+    assert isinstance(data, dict)
+
+
+def test_frames_range_returns_json_array(
+    loaded_animation, server_base_url, server_token
+):
+    status, body = http_get(
+        server_base_url, "/frames", server_token, **{"from": "0", "to": "2"}
+    )
+    assert status == 200
+    data = json.loads(body)
+    assert isinstance(data, list)

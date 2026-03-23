@@ -1,27 +1,17 @@
-use tracing::{debug, info, warn};
-use axum::{
-    Router,
-    extract::{
-        Path, Query, State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
-    http::{header, StatusCode},
-    response::IntoResponse,
-    routing::get,
-};
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use crate::render::render_anim_to_dir;
+use crate::service::start_service;
 use clap::{Parser, Subcommand};
-use engine::{AnimationDef, FrameId};
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use engine::AnimationDef;
 use std::path::PathBuf;
-use std::process::Stdio;
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio::sync::{broadcast, mpsc};
-use tower_http::services::ServeDir;
+use tracing::info;
+
+mod config;
+mod export;
+mod lancher;
+mod package;
+mod pdf_export;
+mod render;
+mod service;
 
 #[derive(Parser)]
 struct Args {
@@ -31,16 +21,20 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Run the HTTP server
-    Serve {
+    /// Run the HTTP server for a project directory
+    Open {
         #[arg(short, long, default_value_t = 3000)]
         port: u16,
 
-        /// Python file to edit. Created with default content if it does not exist.
-        file: Option<PathBuf>,
+        /// Authentication token (default: randomly generated)
+        #[arg(long)]
+        token: Option<String>,
+
+        /// Project directory to serve (must contain fairyflow.toml)
+        directory: PathBuf,
     },
     /// Render all frames from a JSON animation file to PNG images
-    RenderJson {
+    RenderPng {
         /// Path to the JSON animation file
         json_path: PathBuf,
 
@@ -50,50 +44,84 @@ enum Cmd {
         /// Number of threads to use for rendering (default: all available)
         #[arg(short, long)]
         threads: Option<usize>,
+
+        /// Comma-separated list of frame numbers to render (default: all frames)
+        #[arg(long, value_delimiter = ',')]
+        frames: Option<Vec<u32>>,
+
+        /// Directories to load additional fonts from before rendering
+        #[arg(long = "font-dir")]
+        font_dirs: Vec<PathBuf>,
+
+        /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
+        #[arg(long = "target-resolution", value_parser = parse_resolution)]
+        target_resolution: Option<(u32, u32)>,
+
+        /// Also write frame{n}.json with the evaluated scene tree for each rendered frame
+        #[arg(long)]
+        write_tree: bool,
     },
-    /// Evaluate a Python animation file and render all frames to PNG images
-    RenderPy {
-        /// Path to the Python animation file
-        py_file: PathBuf,
 
-        /// Directory to write frame{n}.png files into
-        output_dir: PathBuf,
+    /// Render a JSON animation to a video file via ffmpeg
+    RenderVideo {
+        /// Path to the JSON animation file
+        json_path: PathBuf,
+
+        /// Output video file path (e.g. out.mp4)
+        output_file: PathBuf,
+
+        /// Number of threads to use for rendering (default: all available)
+        #[arg(short, long)]
+        threads: Option<usize>,
+
+        /// Directories to load additional fonts from before rendering
+        #[arg(long = "font-dir")]
+        font_dirs: Vec<PathBuf>,
+
+        /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
+        #[arg(long = "target-resolution", value_parser = parse_resolution)]
+        target_resolution: Option<(u32, u32)>,
+
+        /// Frames per second
+        #[arg(long, default_value_t = 24)]
+        fps: u32,
+
+        /// Video codec: h264, h265, or vp9
+        #[arg(long, default_value = "h264")]
+        codec: String,
+
+        /// Constant rate factor for video quality (lower = better quality)
+        #[arg(long, default_value_t = 23)]
+        crf: u32,
+    },
+
+    /// Render all frames from a JSON animation file to a multi-page PDF
+    RenderPdf {
+        /// Path to the JSON animation file
+        json_path: PathBuf,
+
+        /// Output PDF file path (e.g. out.pdf)
+        output_file: PathBuf,
+
+        /// Comma-separated list of frame numbers to render (default: all frames)
+        #[arg(long, value_delimiter = ',')]
+        frames: Option<Vec<u32>>,
+
+        /// Directories to load additional fonts from before rendering
+        #[arg(long = "font-dir")]
+        font_dirs: Vec<PathBuf>,
+    },
+    /// Initialize a new project directory
+    Init {
+        /// Directory to create the project in
+        directory: PathBuf,
+    },
+    /// Open a .ffpkg package file in the native player window
+    Play {
+        /// Path to the .ffpkg package file
+        package: PathBuf,
     },
 }
-
-#[derive(Clone)]
-struct AppState {
-    file_path: Option<PathBuf>,
-    animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum ClientMsg {
-    Run { code: String },
-    Terminate,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum ServerMsg {
-    File { content: String },
-    Output { text: String },
-    Error { text: String },
-    Done { exit_code: Option<i32> },
-    Tree { key_frames: Vec<u32>, frame_count: u32 },
-}
-
-static RUN_ID: AtomicU64 = AtomicU64::new(0);
-
-const DEFAULT_CONTENT: &str = "\
-with node().size(300, 200):
-    rect().size(30, 20).color(\"green\")  # Add node into the root node
-
-    with node():
-        rect()
-        circle().radius(10)
-";
 
 #[tokio::main]
 async fn main() {
@@ -104,516 +132,291 @@ async fn main() {
         )
         .init();
 
+    renderer_skia::Resources::init();
+
     let args = Args::parse();
 
     match args.command {
-        Cmd::Serve { port, file } => run_serve(port, file).await,
-        Cmd::RenderJson { json_path, output_dir, threads } => run_render_json(json_path, output_dir, threads).await,
-        Cmd::RenderPy { py_file, output_dir } => run_render_py(py_file, output_dir).await,
-    }
-}
-
-async fn run_serve(port: u16, file: Option<PathBuf>) {
-    if let Some(ref path) = file {
-        if !path.exists() {
-            tokio::fs::write(path, DEFAULT_CONTENT).await.unwrap();
+        Cmd::Open {
+            port,
+            token,
+            directory,
+        } => run_serve(port, token, directory).await,
+        Cmd::RenderPng {
+            json_path,
+            output_dir,
+            threads,
+            frames,
+            font_dirs,
+            target_resolution,
+            write_tree,
+        } => {
+            run_render_png(
+                json_path,
+                output_dir,
+                threads,
+                frames,
+                font_dirs,
+                target_resolution,
+                write_tree,
+            )
+            .await
+        }
+        Cmd::RenderVideo {
+            json_path,
+            output_file,
+            threads,
+            font_dirs,
+            target_resolution,
+            fps,
+            codec,
+            crf,
+        } => {
+            run_render_video(
+                json_path,
+                output_file,
+                threads,
+                font_dirs,
+                target_resolution,
+                fps,
+                codec,
+                crf,
+            )
+            .await
+        }
+        Cmd::RenderPdf {
+            json_path,
+            output_file,
+            frames,
+            font_dirs,
+        } => run_render_pdf(json_path, output_file, frames, font_dirs).await,
+        Cmd::Init { directory } => run_init(directory).await,
+        Cmd::Play { package } => {
+            if let Err(e) = player::open_player(&package) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
         }
     }
-
-    let state = AppState {
-        file_path: file,
-        animation: Arc::new(Mutex::new(None)),
-    };
-
-    let app = Router::new()
-        .route("/ws", get(ws_handler))
-        .route("/frame/{n}", get(frame_handler))
-        .route("/frames", get(frames_handler))
-        .route("/tree/{n}", get(tree_handler))
-        .route("/trees", get(trees_handler))
-        .route("/node/{id}", get(node_handler))
-        .fallback_service(ServeDir::new("web/dist"))
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-
-    info!("http://localhost:{}", port);
-    println!("http://localhost:{}", port);
-
-    axum::serve(listener, app).await.unwrap();
 }
 
-async fn run_render_json(json_path: PathBuf, output_dir: PathBuf, threads: Option<usize>) {
-    let json_str = match tokio::fs::read_to_string(&json_path).await {
+async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
+    let toml_path = directory.join("fairyflow.toml");
+    if !toml_path.exists() {
+        eprintln!(
+            "error: {} does not contain fairyflow.toml — run `fairyflow init {}` first",
+            directory.display(),
+            directory.display()
+        );
+        std::process::exit(1);
+    }
+
+    let config = match crate::config::ProjectConfig::load(&toml_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: failed to load fairyflow.toml: {e}");
+            std::process::exit(1);
+        }
+    };
+    renderer_skia::Resources::get().load_font_directories(&config.font_directories);
+
+    if let Err(e) = std::env::set_current_dir(&directory) {
+        eprintln!(
+            "error: could not enter directory {}: {e}",
+            directory.display()
+        );
+        std::process::exit(1);
+    }
+
+    info!(directory = %directory.display(), "serving project");
+
+    let token = token.unwrap_or_else(|| {
+        use rand::Rng;
+        rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect()
+    });
+
+    start_service(&directory, port, config, token).await;
+}
+
+fn parse_resolution(s: &str) -> Result<(u32, u32), String> {
+    let (w, h) = s
+        .split_once('x')
+        .ok_or_else(|| format!("expected WxH format, got '{s}'"))?;
+    let w = w
+        .parse::<u32>()
+        .map_err(|_| format!("invalid width '{w}'"))?;
+    let h = h
+        .parse::<u32>()
+        .map_err(|_| format!("invalid height '{h}'"))?;
+    if w == 0 || h == 0 {
+        return Err("width and height must be greater than zero".into());
+    }
+    Ok((w, h))
+}
+
+async fn run_render_png(
+    json_path: PathBuf,
+    output_dir: PathBuf,
+    threads: Option<usize>,
+    frames: Option<Vec<u32>>,
+    font_dirs: Vec<PathBuf>,
+    target_resolution: Option<(u32, u32)>,
+    write_tree: bool,
+) {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    render_anim_to_dir(
+        anim,
+        output_dir,
+        threads,
+        frames,
+        target_resolution,
+        write_tree,
+    )
+    .await;
+}
+
+async fn run_render_video(
+    json_path: PathBuf,
+    output_file: PathBuf,
+    threads: Option<usize>,
+    font_dirs: Vec<PathBuf>,
+    target_resolution: Option<(u32, u32)>,
+    fps: u32,
+    codec: String,
+    crf: u32,
+) {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    crate::render::render_anim_to_video(
+        anim,
+        output_file,
+        threads,
+        target_resolution,
+        fps,
+        codec,
+        crf,
+    )
+    .await;
+}
+
+async fn run_render_pdf(
+    json_path: PathBuf,
+    output_file: PathBuf,
+    frames: Option<Vec<u32>>,
+    font_dirs: Vec<PathBuf>,
+) {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    crate::render::render_anim_to_pdf(anim, frames, output_file).await;
+}
+
+async fn load_anim(json_path: &PathBuf) -> AnimationDef {
+    let json_str = match tokio::fs::read_to_string(json_path).await {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: failed to read {}: {e}", json_path.display());
             std::process::exit(1);
         }
     };
-
-    let anim = match AnimationDef::from_str(&json_str) {
+    match AnimationDef::from_str(&json_str) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: failed to parse animation JSON: {e}");
             std::process::exit(1);
         }
-    };
-
-    render_anim_to_dir(anim, output_dir, threads).await;
-}
-
-async fn run_render_py(py_file: PathBuf, output_dir: PathBuf) {
-    let tree_path = std::env::temp_dir().join(format!(
-        "alsie_render_{}.json",
-        std::process::id()
-    ));
-
-    info!(py_file = %py_file.display(), tree = %tree_path.display(), "running python");
-
-    let status = tokio::process::Command::new("python3")
-        .args(["-m", "alsie"])
-        .arg(&py_file)
-        .arg(&tree_path)
-        .env("PYTHONPATH", "crates/alsie/python")
-        .status()
-        .await;
-
-    match status {
-        Ok(s) if !s.success() => {
-            eprintln!("error: python3 exited with {s}");
-            std::process::exit(1);
-        }
-        Err(e) => {
-            eprintln!("error: failed to run python3: {e}");
-            std::process::exit(1);
-        }
-        _ => {}
     }
-
-    let json_str = match tokio::fs::read_to_string(&tree_path).await {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("error: failed to read animation JSON from {}: {e}", tree_path.display());
-            std::process::exit(1);
-        }
-    };
-    tokio::fs::remove_file(&tree_path).await.ok();
-
-    let anim = match AnimationDef::from_str(&json_str) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("error: failed to parse animation JSON: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    render_anim_to_dir(anim, output_dir, None).await;
 }
 
-async fn render_anim_to_dir(anim: AnimationDef, output_dir: PathBuf, threads: Option<usize>) {
-    if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
-        eprintln!("error: failed to create output directory {}: {e}", output_dir.display());
+async fn run_init(directory: PathBuf) {
+    let r = "\x1b[0m"; // reset
+    let b = "\x1b[1m"; // bold
+    let pink = "\x1b[95m"; // bright magenta
+    let blue = "\x1b[94m"; // bright blue
+    let _gray = "\x1b[90m"; // dark gray
+    let grn = "\x1b[92m"; // bright green
+    let yel = "\x1b[93m"; // bright yellow
+    let red = "\x1b[91m"; // bright red
+
+    println!();
+    println!("  {b}{pink}Fairy{r}");
+    println!("  {b}{blue}   Flow{r}");
+    println!();
+
+    if let Err(e) = tokio::fs::create_dir_all(&directory).await {
+        eprintln!(
+            "  {red}{b}error:{r} failed to create directory {}: {e}",
+            directory.display()
+        );
         std::process::exit(1);
     }
 
-    let key_frames = anim.key_frames();
-    let frame_count = key_frames.last().map(|f| f.as_u32() + 1).unwrap_or(1);
-    info!(frame_count, "rendering frames");
-
-    let anim = Arc::new(anim);
-    let output_dir = Arc::new(output_dir);
-    let output_dir_display = output_dir.display().to_string();
-
-    let result = tokio::task::spawn_blocking(move || {
-        use rayon::prelude::*;
-        let render = || {
-            (0..frame_count).into_par_iter().try_for_each(|n| -> Result<(), String> {
-                let scene = anim.build_scene(FrameId::new(n)).map_err(|e| e.to_string())?;
-                let pixmap = renderer::render_scene(&scene, 1.0);
-                let png = pixmap.encode_png().map_err(|e| e.to_string())?;
-                let path = output_dir.join(format!("frame{n}.png"));
-                std::fs::write(&path, &png).map_err(|e| e.to_string())?;
-                info!(frame = n, "wrote {}", path.display());
-                Ok(())
-            })
-        };
-        if let Some(n) = threads {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(n)
-                .build()
-                .map_err(|e| e.to_string())
-                .and_then(|pool| pool.install(render))
-        } else {
-            render()
-        }
-    })
-    .await;
-
-    match result {
-        Ok(Ok(())) => {
-            println!("rendered {frame_count} frame(s) to {output_dir_display}");
-        }
-        Ok(Err(e)) => {
-            eprintln!("error: {e}");
-            std::process::exit(1);
-        }
-        Err(e) => {
-            eprintln!("error: render task panicked: {e}");
+    for subdir in &["scenes", "sequences"] {
+        let path = directory.join(subdir);
+        if let Err(e) = tokio::fs::create_dir_all(&path).await {
+            eprintln!(
+                "  {red}{b}error:{r} failed to create directory {}: {e}",
+                path.display()
+            );
             std::process::exit(1);
         }
     }
-}
 
-fn get_animation(state: &AppState) -> Option<Arc<AnimationDef>> {
-    state.animation.lock().unwrap().as_ref().map(Arc::clone)
-}
+    let files: &[(&str, &str)] = &[
+        (
+            "fairyflow.toml",
+            "fps = 24\n\n# Prologue is automatically included into any scene file\nprologue = \"prologue.py\"\n",
+        ),
+        (
+            "prologue.py",
+            "from fairyflow import *\n\nset_default_scene(width=300, height=200, color=\"white\", cue_at_start=True)\n",
+        ),
+        (
+            "scenes/scene1.ffpy",
+            "with Scene():\n    stext(\"Hello world!\").fade_out()\n",
+        ),
+        (
+            "sequences/sequence1.ffsq",
+            "{\n  \"scene_files\": [\n    \"scenes/scene1.ffpy\"\n  ]\n}\n",
+        ),
+    ];
 
-#[derive(Deserialize)]
-struct FrameQuery {
-    #[serde(default = "default_scale")]
-    scale: f32,
-}
-
-#[derive(Deserialize)]
-struct RangeQuery {
-    from: usize,
-    to: usize,
-}
-
-#[derive(Deserialize)]
-struct FramesQuery {
-    from: usize,
-    to: usize,
-    #[serde(default = "default_scale")]
-    scale: f32,
-}
-
-#[derive(Serialize)]
-struct RenderedFrame {
-    n: usize,
-    png: String, // base64-encoded PNG
-}
-
-#[derive(Serialize)]
-struct TreeFrame {
-    n: usize,
-    scene: renderer::Scene,
-}
-
-fn default_scale() -> f32 { 1.0 }
-
-#[derive(Deserialize)]
-struct NodeQuery {
-    #[serde(default)]
-    frame: u32,
-}
-
-async fn tree_handler(
-    Path(n): Path<u32>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let Some(anim) = get_animation(&state) else {
-        return (StatusCode::NOT_FOUND, "no animation").into_response();
-    };
-    match anim.build_scene(FrameId::new(n)) {
-        Ok(scene) => axum::Json(scene).into_response(),
-        Err(e) => {
-            warn!(frame = n, error = %e, "build_scene failed in tree_handler");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+    for (name, content) in files {
+        let path = directory.join(name);
+        if path.exists() {
+            eprintln!(
+                "  {yel}{b}warning:{r} {} already exists, skipping",
+                path.display()
+            );
+            continue;
         }
-    }
-}
-
-async fn trees_handler(
-    Query(params): Query<RangeQuery>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let Some(anim) = get_animation(&state) else {
-        return (StatusCode::NOT_FOUND, "no animation").into_response();
-    };
-    if params.from > params.to {
-        return (StatusCode::BAD_REQUEST, "invalid range").into_response();
-    }
-    let result = tokio::task::spawn_blocking(move || {
-        (params.from..=params.to)
-            .map(|n| anim.build_scene(FrameId::new(n as u32)).map(|scene| TreeFrame { n, scene }))
-            .collect::<Result<Vec<_>, _>>()
-    })
-    .await;
-    match result {
-        Ok(Ok(frames)) => axum::Json(frames).into_response(),
-        Ok(Err(e)) => {
-            warn!(from = params.from, to = params.to, error = %e, "build_scene failed in trees_handler");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        if let Err(e) = tokio::fs::write(&path, content).await {
+            eprintln!(
+                "  {red}{b}error:{r} failed to create {}: {e}",
+                path.display()
+            );
+            std::process::exit(1);
         }
-        Err(e) => {
-            warn!("trees_handler panicked: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "build failed").into_response()
-        }
-    }
-}
-
-async fn node_handler(
-    Path(id): Path<u64>,
-    Query(params): Query<NodeQuery>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let Some(anim) = get_animation(&state) else {
-        return (StatusCode::NOT_FOUND, "no animation").into_response();
-    };
-    let scene = match anim.build_scene(FrameId::new(params.frame)) {
-        Ok(s) => s,
-        Err(e) => {
-            warn!(node = id, frame = params.frame, error = %e, "build_scene failed in node_handler");
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        }
-    };
-    match renderer::find_node_bounds(&scene, id) {
-        Some(bounds) => axum::Json(bounds).into_response(),
-        None => (StatusCode::NOT_FOUND, "node not found or has no bounds").into_response(),
-    }
-}
-
-async fn frame_handler(
-    Path(n): Path<u32>,
-    Query(params): Query<FrameQuery>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let scale = params.scale.clamp(0.01, 256.0);
-    let Some(anim) = get_animation(&state) else {
-        return (StatusCode::NOT_FOUND, "no animation").into_response();
-    };
-    let scene = match anim.build_scene(FrameId::new(n)) {
-        Ok(s) => s,
-        Err(e) => {
-            warn!(frame = n, error = %e, "build_scene failed in frame_handler");
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        }
-    };
-    let pixmap = renderer::render_scene(&scene, scale);
-    match pixmap.encode_png() {
-        Ok(png) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
-        Err(e) => {
-            warn!("failed to encode PNG: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
-        }
-    }
-}
-
-async fn frames_handler(
-    Query(params): Query<FramesQuery>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let scale = params.scale.clamp(0.01, 256.0);
-    let Some(anim) = get_animation(&state) else {
-        return (StatusCode::NOT_FOUND, "no animation").into_response();
-    };
-    let from = params.from;
-    let to = params.to;
-    if from > to {
-        return (StatusCode::BAD_REQUEST, "invalid range").into_response();
+        println!("  {grn}created{r} {}", path.display());
     }
 
-    let results = tokio::task::spawn_blocking(move || {
-        use rayon::prelude::*;
-        (from..=to).into_par_iter().filter_map(|n| {
-            let scene = anim.build_scene(FrameId::new(n as u32)).ok()?;
-            let pixmap = renderer::render_scene(&scene, scale);
-            let png = pixmap.encode_png().ok()?;
-            Some(RenderedFrame { n, png: B64.encode(&png) })
-        }).collect::<Vec<_>>()
-    })
-    .await;
-
-    match results {
-        Ok(frames) => axum::Json(frames).into_response(),
-        Err(e) => {
-            warn!("rayon render panicked: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
-        }
-    }
-}
-
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(mut socket: WebSocket, state: AppState) {
-    info!("WebSocket connection established");
-    if let Some(ref path) = state.file_path {
-        let content = tokio::fs::read_to_string(path).await.unwrap_or_default();
-        let msg = serde_json::to_string(&ServerMsg::File { content }).unwrap();
-        if socket.send(Message::Text(msg.into())).await.is_err() {
-            return;
-        }
-    }
-
-    let (out_tx, mut out_rx) = mpsc::channel::<ServerMsg>(64);
-    let (kill_tx, _) = broadcast::channel::<()>(4);
-
-    loop {
-        tokio::select! {
-            msg = socket.recv() => {
-                match msg {
-                    Some(Ok(Message::Text(text))) => {
-                        match serde_json::from_str::<ClientMsg>(&text) {
-                            Ok(ClientMsg::Run { code }) => {
-                                info!(bytes = code.len(), "received Run request");
-                                if let Some(ref path) = state.file_path {
-                                    tokio::fs::write(path, &code).await.ok();
-                                }
-                                let n = kill_tx.send(()).unwrap_or(0);
-                                debug!(killed_receivers = n, "sent kill signal");
-                                let tx = out_tx.clone();
-                                let kill_rx = kill_tx.subscribe();
-                                debug!("subscribed new kill_rx, spawning run_python");
-                                tokio::spawn(run_python(code, tx, kill_rx, state.animation.clone()));
-                            }
-                            Ok(ClientMsg::Terminate) => {
-                                info!("received Terminate request");
-                                kill_tx.send(()).ok();
-                            }
-                            _ => {}
-                        }
-                    }
-                    None | Some(Err(_)) => {
-                        info!("WebSocket closed or errored — exiting handle_socket");
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            Some(msg) = out_rx.recv() => {
-                let kind = match &msg {
-                    ServerMsg::Output { .. } => "output",
-                    ServerMsg::Error  { .. } => "error",
-                    ServerMsg::Tree   { .. } => "tree",
-                    ServerMsg::Done   { .. } => "done",
-                    ServerMsg::File   { .. } => "file",
-                };
-                debug!(kind, "forwarding message to WebSocket");
-                let text = serde_json::to_string(&msg).unwrap();
-                if socket.send(Message::Text(text.into())).await.is_err() {
-                    warn!("WebSocket send failed — exiting handle_socket");
-                    break;
-                }
-            }
-        }
-    }
-}
-
-async fn run_python(
-    code: String,
-    tx: mpsc::Sender<ServerMsg>,
-    mut kill_rx: broadcast::Receiver<()>,
-    animation_cache: Arc<Mutex<Option<Arc<AnimationDef>>>>,
-) {
-    let id = RUN_ID.fetch_add(1, Ordering::Relaxed);
-    info!(run_id = id, "run_python started");
-    let tmp = std::env::temp_dir().join(format!("alsie_{id}.py"));
-    let tree_path = std::env::temp_dir().join(format!("alsie_{id}_tree.json"));
-
-    if let Err(e) = tokio::fs::write(&tmp, &code).await {
-        warn!(run_id = id, error = %e, "failed to write temp script");
-        tx.send(ServerMsg::Error { text: e.to_string() }).await.ok();
-        tx.send(ServerMsg::Done { exit_code: None }).await.ok();
-        return;
-    }
-
-    let mut child = match Command::new("python3")
-        .args(["-m", "alsie"])
-        .arg(&tmp)
-        .arg(&tree_path)
-        .env("PYTHONPATH", "crates/alsie/python")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => {
-            info!(run_id = id, pid = c.id(), "python3 process spawned");
-            c
-        }
-        Err(e) => {
-            warn!(run_id = id, error = %e, "failed to spawn python3");
-            tx.send(ServerMsg::Error { text: format!("Failed to start python3: {e}") }).await.ok();
-            tx.send(ServerMsg::Done { exit_code: None }).await.ok();
-            return;
-        }
-    };
-
-    let stdout = BufReader::new(child.stdout.take().unwrap());
-    let stderr = BufReader::new(child.stderr.take().unwrap());
-
-    let tx_out = tx.clone();
-    let tx_err = tx.clone();
-
-    let stdout_task = tokio::spawn(async move {
-        let mut lines = stdout.lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if tx_out.send(ServerMsg::Output { text: line }).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let stderr_task = tokio::spawn(async move {
-        let mut lines = stderr.lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if tx_err.send(ServerMsg::Error { text: line }).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let exit_code = tokio::select! {
-        result = child.wait() => {
-            info!(run_id = id, "python3 process exited, draining stdout/stderr");
-            stdout_task.await.ok();
-            stderr_task.await.ok();
-            let code = result.ok().and_then(|s| s.code());
-            info!(run_id = id, exit_code = ?code, "stdout/stderr drained");
-            code
-        }
-        res = kill_rx.recv() => {
-            info!(run_id = id, kill_result = ?res, "kill signal received, terminating process");
-            child.kill().await.ok();
-            stdout_task.abort();
-            stderr_task.abort();
-            None
-        }
-    };
-
-    if exit_code == Some(0) {
-        match tokio::fs::read_to_string(&tree_path).await {
-            Ok(json_str) => {
-                match AnimationDef::from_str(&json_str) {
-                    Ok(anim) => {
-                        let key_frames: Vec<_> = anim.key_frames()
-                            .iter().map(|f| f.as_u32()).collect();
-                        let frame_count = key_frames.last().copied().unwrap_or(0) + 1;
-                        info!(run_id = id, frame_count, "animation cached");
-                        *animation_cache.lock().unwrap() = Some(Arc::new(anim));
-                        tx.send(ServerMsg::Tree { key_frames, frame_count }).await.ok();
-                    }
-                    Err(e) => {
-                        warn!(run_id = id, error = %e, "failed to parse animation");
-                        tx.send(ServerMsg::Error { text: format!("failed to parse animation: {e}") }).await.ok();
-                    }
-                }
-            }
-            Err(e) => warn!(run_id = id, error = %e, "failed to read tree file"),
-        }
-    }
-
-    info!(run_id = id, exit_code = ?exit_code, "sending Done message");
-    tx.send(ServerMsg::Done { exit_code }).await.ok();
-
-    tokio::fs::remove_file(&tmp).await.ok();
-    tokio::fs::remove_file(&tree_path).await.ok();
-    info!(run_id = id, "run_python finished");
+    println!(
+        "\n  {b}{grn}initialized{r} project in {b}{}{r}",
+        directory.display()
+    );
+    println!(
+        "\n  open your project with:\n\n     {b}fairyflow open {}{r}",
+        directory.display()
+    );
+    println!();
 }

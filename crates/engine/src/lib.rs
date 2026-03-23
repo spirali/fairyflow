@@ -1,9 +1,11 @@
-mod basictypes;
 mod animdef;
-mod eval;
 mod avalue;
-mod defs;
-mod cycle;
+mod basictypes;
+mod eval;
+mod layout;
+mod nodes;
+mod paths;
+mod values;
 
+pub use animdef::{AnimationDef, NodeBounds, SceneInfo, SceneSelection};
 pub use basictypes::FrameId;
-pub use animdef::AnimationDef;

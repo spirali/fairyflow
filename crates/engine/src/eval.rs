@@ -4,7 +4,7 @@ use anyhow::bail;
 use crate::animdef::AnimationDef;
 use crate::avalue::{AnimatedValue, AnimatedValueKind};
 use crate::basictypes::{AvId, NodeId};
-use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, Value};
+use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, Value};
 use crate::FrameId;
 
 const EVAL_DEPTH_MAX: u32 = 64;
@@ -264,6 +264,21 @@ impl Style {
     }
 }
 
+impl TextStyle {
+    fn eval_span(&self, ctx: &EvalCtx, text: String) -> anyhow::Result<renderer::TextSpan> {
+        let style = self.style.eval(ctx)?;
+        Ok(renderer::TextSpan {
+            text,
+            font_family: ctx.eval_av(self.font())?.into_str()?,
+            fill_color: style.fill_color,
+            stroke_color: style.stroke_color,
+            stroke_width: style.stroke_width,
+            alpha: style.alpha,
+            italic: ctx.eval_av(self.italic())?.as_bool()?,
+        })
+    }
+}
+
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
@@ -299,7 +314,13 @@ impl Node {
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
-            _ => anyhow::bail!("path command nodes cannot appear as scene tree nodes"),
+            NodeKind::Text { position, children, .. } => renderer::NodeKind::Text {
+                position: position.eval(ctx)?,
+                lines: children.iter()
+                    .map(|&id| ctx.node(id)?.eval_as_text_line(ctx))
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+            },
+            _ => anyhow::bail!("path command / text-internal nodes cannot appear as scene tree nodes"),
         };
         Ok(renderer::Node { id: self.id.as_u64(), kind })
     }
@@ -323,6 +344,27 @@ impl Node {
                 c2_y: ctx.av_f64(*c2_y)?,
             }),
             _ => anyhow::bail!("expected path command node, got {:?}", self.id),
+        }
+    }
+
+    pub fn eval_as_text_line(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextLine> {
+        match &self.kind {
+            NodeKind::TextLine { children, .. } => Ok(renderer::TextLine {
+                spans: children.iter()
+                    .map(|&id| ctx.node(id)?.eval_as_text_span(ctx))
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+            }),
+            _ => anyhow::bail!("expected Line node, got {:?}", self.id),
+        }
+    }
+
+    pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
+        match &self.kind {
+            NodeKind::TextSpan { text_style, text } => {
+                let text_str = ctx.eval_av(*text)?.into_str()?;
+                text_style.eval_span(ctx, text_str)
+            }
+            _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }
     }
 }

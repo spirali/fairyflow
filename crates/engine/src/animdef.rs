@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use serde::Deserialize;
-use tracing::{debug, log};
+use tracing::debug;
 use crate::avalue::{AnimatedValue, AnimatedValueKind, FrameValue};
 use crate::basictypes::{AvId, NodeId};
 use crate::defs::{CallExpr, Expr, Node, SceneDef};
@@ -172,10 +172,8 @@ mod tests {
      "fill_color": 32, "stroke_color": 33, "stroke_width": 34, "alpha": 35},
     {"kind": "path", "id": 21,
      "fill_color": 40, "stroke_color": 41, "stroke_width": 42, "alpha": 43,
-     "children": [50, 51]},
-    {"kind": "move", "id": 50, "x": 50, "y": 51},
-    {"kind": "group", "id": 20, "x": 60, "y": 60,
-     "width": 60, "height": 60, "alpha": 60, "rotation": 60, "scale_x": 60, "scale_y": 60}
+     "children": [50]},
+    {"kind": "move", "id": 50, "x": 50, "y": 51}
   ]
 }"#;
 
@@ -188,10 +186,10 @@ mod tests {
 
         // animated values indexed by id
         let av1 = &anim.animated_values[&AvId::new(1)];
-        assert!(matches!(av1.kind, AnimatedValueKind::Const { value: Value::Int(200) }));
+        assert!(matches!(av1.kind, AnimatedValueKind::Const { value: crate::defs::Expr::Const(Value::Int(200)) }));
 
         let av3 = &anim.animated_values[&AvId::new(3)];
-        assert!(matches!(av3.kind, AnimatedValueKind::Const { value: Value::Color(_) }));
+        assert!(matches!(av3.kind, AnimatedValueKind::Const { value: crate::defs::Expr::Const(Value::Color(_)) }));
 
         let av10 = &anim.animated_values[&AvId::new(10)];
         assert!(matches!(av10.kind, AnimatedValueKind::Animated { .. }));

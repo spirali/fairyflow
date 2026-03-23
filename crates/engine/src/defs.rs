@@ -43,6 +43,7 @@ impl<'de> Deserialize<'de> for Color {
 pub enum Value {
     Int(i64),
     Float(f64),
+    Bool(bool),
     Str(Arc<String>),
     Color(Color),
     None,
@@ -61,6 +62,20 @@ impl Value {
         match self {
             Value::Color(c) => Some(c.into_inner()),
             _ => None,
+        }
+    }
+
+    pub fn into_str(self) -> anyhow::Result<String> {
+        match self {
+            Value::Str(s) => Ok((*s).clone()),
+            _ => Err(anyhow::Error::msg("Value is not a string")),
+        }
+    }
+
+    pub fn as_bool(&self) -> anyhow::Result<bool> {
+        match self {
+            Value::Bool(b) => Ok(*b),
+            _ => Err(anyhow::Error::msg("Value is not a bool")),
         }
     }
 }
@@ -196,10 +211,31 @@ impl Style {
     }
 }
 
+/// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TextStyle {
+    #[serde(flatten)]
+    pub style: Style,
+    font: AvId,
+    italic: AvId,
+}
+
+impl TextStyle {
+    pub fn font(&self) -> AvId { self.font }
+    pub fn italic(&self) -> AvId { self.italic }
+
+    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
+        self.style.check_attributes(f)?;
+        f(self.font)?;
+        f(self.italic)?;
+        Ok(())
+    }
+}
+
 // ──────────────────────────── Path commands ─────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NodeKind {
     /// Python: `Group(PositionMixin, SizeMixin, AlphaMixin)` + rotation + scale
     Group {
@@ -240,6 +276,31 @@ pub enum NodeKind {
         children: Vec<NodeId>,
     },
 
+    /// Python: `Text` — block of styled text with Line children
+    Text {
+        #[serde(flatten)]
+        position: Position,
+        #[serde(flatten)]
+        text_style: TextStyle,
+        #[serde(default)]
+        children: Vec<NodeId>,
+    },
+    /// A line of text within a Text node, containing Span children
+    #[serde(rename="t_line")]
+    TextLine {
+        #[serde(flatten)]
+        text_style: TextStyle,
+        #[serde(default)]
+        children: Vec<NodeId>,
+    },
+    /// A text run with a concrete string value
+    #[serde(rename="t_span")]
+    TextSpan {
+        #[serde(flatten)]
+        text_style: TextStyle,
+        text: AvId,
+    },
+
     /// Path commands; They always have Path as parent
     Move {
         #[serde(flatten)]
@@ -264,7 +325,9 @@ impl NodeKind {
     pub fn children(&self) -> &[NodeId] {
         match self {
             NodeKind::Group { children, .. } |
-            NodeKind::Path { children, .. } => children,
+            NodeKind::Path { children, .. } |
+            NodeKind::Text { children, .. } |
+            NodeKind::TextLine { children, .. } => children,
             _ => &[],
         }
     }
@@ -286,6 +349,17 @@ impl NodeKind {
             }
             NodeKind::Path { style, children: _ } => {
                 style.check_attributes(f)?;
+            }
+            NodeKind::Text { position, text_style, children: _ } => {
+                position.check_attributes(f)?;
+                text_style.check_attributes(f)?;
+            }
+            NodeKind::TextLine { text_style, children: _ } => {
+                text_style.check_attributes(f)?;
+            }
+            NodeKind::TextSpan { text_style, text } => {
+                text_style.check_attributes(f)?;
+                f(*text)?;
             }
             NodeKind::Move { position } => position.check_attributes(f)?,
             NodeKind::Line { position } => position.check_attributes(f)?,

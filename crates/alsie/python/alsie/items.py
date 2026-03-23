@@ -147,11 +147,13 @@ class StyleMixin(AlphaMixin):
 
 
 
-class ItemWithChildren(Node):
+class NodeWithChildren(Node):
 
-    def __init__(self, parent, frame):
+    def __init__(self, parent, frame, children=None):
         super().__init__(parent, frame)
-        self._children = []
+        if children is None:
+            children = []
+        self._children = children
         self._ctx = None
 
 
@@ -190,7 +192,7 @@ class ContextManagerMixin:
         self._ctx = None
 
 
-class Group(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
+class Group(NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
     kind = "group"
 
     def __init__(self, parent, frame):
@@ -222,7 +224,7 @@ class Group(ItemWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, Alp
 
 
 
-class Scene(ItemWithChildren, ContextManagerMixin, SizeMixin):
+class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
     def __init__(self, width, height):
@@ -261,7 +263,7 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin):
         self._init_style()
 
 
-class Path(ItemWithChildren, StyleMixin):
+class Path(NodeWithChildren, StyleMixin):
     kind = "path"
     def __init__(self, parent, frame):
         super().__init__(parent, frame)

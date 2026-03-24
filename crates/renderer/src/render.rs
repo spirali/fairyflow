@@ -183,7 +183,7 @@ const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
     let mut font_cx = FontContext::new();
-    let mut layout_cx: LayoutContext<()> = LayoutContext::new();
+    let mut layout_cx: LayoutContext<usize> = LayoutContext::new();
 
     let mut y_cursor = 0.0f32;
     for line in lines {
@@ -204,6 +204,7 @@ fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transf
 
         for (range, span_idx) in &ranges {
             let span = &line.spans[*span_idx];
+            builder.push(StyleProperty::Brush(*span_idx), range.clone());
             builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
             if span.italic {
                 builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
@@ -220,10 +221,13 @@ fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transf
             for item in layout_line.items() {
                 let PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
 
-                // Pick the fill color from the first span (we only use span styles).
-                let span_idx = glyph_run.glyphs().next()
+                // Read the span index from the brush we stored in the parley style.
+                let style_idx = glyph_run.glyphs().next()
                     .map(|g| g.style_index())
-                    .and_then(|si| ranges.iter().find(|(r, _)| r.contains(&si)).map(|(_, i)| *i))
+                    .unwrap_or(0);
+                let span_idx = layout.styles()
+                    .get(style_idx)
+                    .map(|s| s.brush)
                     .unwrap_or(0);
                 let span = &line.spans[span_idx.min(line.spans.len().saturating_sub(1))];
                 let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());

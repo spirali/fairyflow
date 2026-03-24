@@ -3,7 +3,6 @@ from .aobject import AnimatedObject
 from .color import Color
 from typing import Union
 
-
 NODE_CONTEXT = None
 ROOT_OBJECT = None
 
@@ -30,11 +29,15 @@ class Node(AnimatedObject):
     def _new_id(self):
         return self._parent._new_id()
     
-    def serialize(self, serializer):
+    def serialize(self, serializer): 
+        from .serializer import serialize_expr       
         result = {"kind": self.kind, "id": self._id}
         attrs = self._attrs
         for name in attrs:
-            result[name] = serializer.add_av(attrs[name])
+            v = attrs[name]
+            if not v.is_single_value():
+                serializer.add_av(attrs[name])
+            result[name] = serialize_expr(v)
         return result
     
     # def build(self, ctx: EvalCtx):

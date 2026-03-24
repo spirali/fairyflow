@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::cell::{Cell, RefCell};
 use anyhow::bail;
 use crate::animdef::AnimationDef;
-use crate::avalue::{AnimatedValue, AnimatedValueKind};
+use crate::avalue::{AnimatedValue};
 use crate::basictypes::{AvId, NodeId};
 use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, Value};
 use crate::FrameId;
@@ -90,11 +90,11 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
 fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64, f64, f64)> {
     match &node.kind {
         NodeKind::Group { position, scale_x, scale_y, rotation, .. } => {
-            let tx = ctx.av_f64(position.x)?;
-            let ty = ctx.av_f64(position.y)?;
-            let sx = ctx.av_f64(*scale_x)?;
-            let sy = ctx.av_f64(*scale_y)?;
-            let r = ctx.av_f64(*rotation)?.to_radians();
+            let tx = position.x.eval_f64(ctx)?;
+            let ty = position.y.eval_f64(ctx)?;
+            let sx = scale_x.eval_f64(ctx)?;
+            let sy = scale_y.eval_f64(ctx)?;
+            let r = rotation.eval_f64(ctx)?.to_radians();
             Ok((tx, ty, sx, sy, r.cos(), r.sin()))
         }
         _ => anyhow::bail!("node {:?} has no group transform (not a group)", node.id),
@@ -174,6 +174,10 @@ impl Expr {
         }
     }
 
+    pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+        self.eval(ctx)?.as_f64()
+    }
+
     pub fn eval_at_frame(&self, ctx: &EvalCtx, frame: FrameId) -> anyhow::Result<Value> {
         match self {
             Expr::Const(v) => Ok(v.clone()),
@@ -193,21 +197,6 @@ impl Expr {
 impl CallExpr {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         match self {
-            CallExpr::Hold { av } => {
-                tracing::trace!(av_id = %av.get_id(), "Call::Hold");
-                let av = ctx.av(av.get_id())?;
-                match &av.kind {
-                    AnimatedValueKind::Const { value } => {
-                        Ok(value.eval(ctx)?)
-                    }
-                    AnimatedValueKind::Animated { values } => {
-                        let (f, v) = values.scan_left(ctx.frame().prev()).unwrap();
-                        let result = v.value.eval_at_frame(ctx, f);
-                        println!("{:?}", result);
-                        result
-                    }
-                }
-            }
             CallExpr::Add(pair) => {
                 tracing::trace!("Call::Add");
                 let va = pair.a.eval(ctx)?.as_f64()?;
@@ -243,41 +232,27 @@ impl CallExpr {
 
 impl Position {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Position> {
-        Ok(renderer::Position { x: ctx.av_f64(self.x)?, y: ctx.av_f64(self.y)? })
+        Ok(renderer::Position { x: self.x.eval_f64(ctx)?, y: self.y.eval_f64(ctx)? })
     }
 }
 
 impl Size {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Size> {
-        Ok(renderer::Size { width: ctx.av_f64(self.width)?, height: ctx.av_f64(self.height)? })
+        Ok(renderer::Size { width: self.width.eval_f64(ctx)?, height: self.height.eval_f64(ctx)? })
     }
 }
 
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Style> {
         Ok(renderer::Style {
-            fill_color: ctx.eval_av(self.fill_color)?.into_color(),
-            stroke_color: ctx.eval_av(self.stroke_color)?.into_color(),
-            stroke_width: ctx.av_f64(self.stroke_width)?,
-            alpha: ctx.av_f64(self.alpha)?,
+            fill_color: self.fill_color.eval(ctx)?.into_color(),
+            stroke_color: self.stroke_color.eval(ctx)?.into_color(),
+            stroke_width: self.stroke_width.eval_f64(ctx)?,
+            alpha: self.alpha.eval_f64(ctx)?,
         })
     }
 }
 
-impl TextStyle {
-    fn eval_span(&self, ctx: &EvalCtx, text: String) -> anyhow::Result<renderer::TextSpan> {
-        let style = self.style.eval(ctx)?;
-        Ok(renderer::TextSpan {
-            text,
-            font_family: ctx.eval_av(self.font())?.into_str()?,
-            fill_color: style.fill_color,
-            stroke_color: style.stroke_color,
-            stroke_width: style.stroke_width,
-            alpha: style.alpha,
-            italic: ctx.eval_av(self.italic())?.as_bool()?,
-        })
-    }
-}
 
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
@@ -289,10 +264,10 @@ impl Node {
                 renderer::NodeKind::Group {
                     position: position.eval(ctx)?,
                     size: size.eval(ctx)?,
-                    alpha: ctx.av_f64(*alpha)?,
-                    rotation: ctx.av_f64(*rotation)?,
-                    scale_x: ctx.av_f64(*scale_x)?,
-                    scale_y: ctx.av_f64(*scale_y)?,
+                    alpha: alpha.eval_f64(ctx)?,
+                    rotation: rotation.eval_f64(ctx)?,
+                    scale_x: scale_x.eval_f64(ctx)?,
+                    scale_y: scale_y.eval_f64(ctx)?,
                     children: children.iter()
                         .map(|&id| ctx.node(id)?.eval(ctx))
                         .collect::<anyhow::Result<Vec<_>>>()?,
@@ -338,10 +313,10 @@ impl Node {
             NodeKind::Cubic { position, c1_x, c1_y, c2_x, c2_y } => Ok(renderer::PathCommand::Cubic {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
-                c1_x: ctx.av_f64(*c1_x)?,
-                c1_y: ctx.av_f64(*c1_y)?,
-                c2_x: ctx.av_f64(*c2_x)?,
-                c2_y: ctx.av_f64(*c2_y)?,
+                c1_x: c1_x.eval_f64(ctx)?,
+                c1_y: c1_y.eval_f64(ctx)?,
+                c2_x: c2_x.eval_f64(ctx)?,
+                c2_y: c2_y.eval_f64(ctx)?,
             }),
             _ => anyhow::bail!("expected path command node, got {:?}", self.id),
         }
@@ -361,8 +336,13 @@ impl Node {
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
         match &self.kind {
             NodeKind::TextSpan { text_style, text } => {
-                let text_str = ctx.eval_av(*text)?.into_str()?;
-                text_style.eval_span(ctx, text_str)
+                let TextStyle { style, font, italic } = text_style;
+                Ok(renderer::TextSpan {
+                    text: text.eval(ctx)?.as_string_ref()?,
+                    style: style.eval(ctx)?,
+                    font_family: font.eval(ctx)?.as_string_ref()?,
+                    italic: italic.eval(ctx)?.as_bool()?,
+                })
             }
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }
@@ -374,13 +354,13 @@ impl Node {
 impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
-        let fill_color = ctx.eval_av(self.fill_color)?.into_color().unwrap_or_default();
+        let fill_color = self.fill_color.eval(ctx)?.into_color().unwrap_or_default();
         let children = self.children.iter()
             .map(|&id| ctx.node(id)?.eval(ctx))
             .collect::<anyhow::Result<Vec<_>>>()?;
         Ok(renderer::Scene {
-            width: ctx.av_f64(self.size.width)?,
-            height: ctx.av_f64(self.size.height)?,
+            width: self.size.width.eval_f64(ctx)?,
+            height: self.size.height.eval_f64(ctx)?,
             fill_color,
             children,
         })

@@ -13,7 +13,10 @@ def serialize_expr(obj):
     if isinstance(obj, Expr):
         return obj.serialize_expr()
     if isinstance(obj, AnimatedValue):
-        return {"av": id(obj)}
+        if obj.is_single_value():
+            return serialize_expr(obj.get_first_value())
+        else:
+            return {"av": id(obj)}
     if isinstance(obj, Node):
         return {"id": obj._id}
     if isinstance(obj, Color):

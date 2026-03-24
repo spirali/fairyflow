@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use serde::Serialize;
 use crate::Color;
 
@@ -27,12 +28,10 @@ pub struct Style {
 /// A single styled text run within a line.
 #[derive(Debug, Clone, Serialize)]
 pub struct TextSpan {
-    pub text: String,
-    pub font_family: String,
-    pub fill_color: Option<Color>,
-    pub stroke_color: Option<Color>,
-    pub stroke_width: f64,
-    pub alpha: f64,
+    pub text: Arc<String>,
+    #[serde(flatten)]
+    pub style: Style,
+    pub font_family: Arc<String>,
     pub italic: bool,
 }
 

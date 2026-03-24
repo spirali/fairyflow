@@ -204,7 +204,7 @@ fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transf
 
         for (range, span_idx) in &ranges {
             let span = &line.spans[*span_idx];
-            builder.push(StyleProperty::FontStack(FontStack::Source((&span.font_family).into())), range.clone());
+            builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
             if span.italic {
                 builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
             }
@@ -226,8 +226,8 @@ fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transf
                     .and_then(|si| ranges.iter().find(|(r, _)| r.contains(&si)).map(|(_, i)| *i))
                     .unwrap_or(0);
                 let span = &line.spans[span_idx.min(line.spans.len().saturating_sub(1))];
-                let fill_color = span.fill_color.as_ref().map(|c| c.to_skia_color());
-                let alpha = parent_alpha * span.alpha as f32;
+                let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());
+                let alpha = parent_alpha * span.style.alpha as f32;
 
                 let run = glyph_run.run();
                 let font = run.font();
@@ -265,13 +265,13 @@ fn render_text(lines: &[TextLine], pixmap: &mut Pixmap, parent_transform: Transf
                         paint.anti_alias = true;
                         pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
                     }
-                    if let Some(ref sc) = span.stroke_color {
+                    if let Some(ref sc) = span.style.stroke_color {
                         let mut color = sc.to_skia_color();
                         color.set_alpha(color.alpha() * alpha);
                         let mut paint = Paint::default();
                         paint.set_color(color);
                         paint.anti_alias = true;
-                        let stroke = Stroke { width: span.stroke_width as f32, ..Default::default() };
+                        let stroke = Stroke { width: span.style.stroke_width as f32, ..Default::default() };
                         pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
                     }
                 }

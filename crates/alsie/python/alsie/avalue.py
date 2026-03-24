@@ -13,10 +13,13 @@ class AnimatedValue:
         self.init_frame = init_frame
         self.values = {init_frame: init_val}
         self.transitions = {}
+        self.single_value = True
 
     def set(self, frame: int, value, transition: Transition):
         self.values[frame] = value
         self.transitions[frame] = transition
+        if frame != self.init_frame:
+            self.single_value = False
 
     def hold(self, frame: int):
         if frame not in self.values:
@@ -33,12 +36,16 @@ class AnimatedValue:
         f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
         self.set(frame, expr_add(self.values[f], delta), transition)
 
+    def is_single_value(self):
+        return self.single_value
+    
+    def get_first_value(self):
+        return self.values[self.init_frame]
+
     def serialize(self):
         from .serializer import serialize_expr       
-        if len(self.values) == 1:
-            return { "kind": "const", "id": id(self), "value": serialize_expr(self.values[self.init_frame])}
         values = [serialize_frame_value(f, self.values[f], self.transitions) for f in self.values]
-        return {"kind": "animated", "id": id(self), "values": values}
+        return {"id": id(self), "values": values}        
     
 
 def serialize_frame_value(frame, obj, transitions):

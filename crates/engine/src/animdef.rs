@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use serde::Deserialize;
 use tracing::debug;
-use crate::avalue::{AnimatedValue, AnimatedValueKind, FrameValue};
+use crate::avalue::{AnimatedValue, FrameValue};
 use crate::basictypes::{AvId, NodeId};
 use crate::defs::{CallExpr, Expr, Node, SceneDef};
 use crate::eval::EvalCtx;
@@ -25,7 +25,6 @@ fn expr_av_refs(expr: &Expr, out: &mut Vec<AvId>) {
         Expr::Const(_) => {}
         Expr::Av(av_ref) => out.push(av_ref.get_id()),
         Expr::Call(call) => match call {
-            CallExpr::Hold { av } => out.push(av.get_id()),
             CallExpr::Add(pair) => {
                 expr_av_refs(&pair.a, out);
                 expr_av_refs(&pair.b, out);

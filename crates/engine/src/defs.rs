@@ -65,9 +65,16 @@ impl Value {
         }
     }
 
-    pub fn into_str(self) -> anyhow::Result<String> {
+    pub fn as_str(&self) -> anyhow::Result<&str> {
         match self {
-            Value::Str(s) => Ok((*s).clone()),
+            Value::Str(s) => Ok(s.as_str()),
+            _ => Err(anyhow::Error::msg("Value is not a string")),
+        }
+    }
+
+    pub fn as_string_ref(&self) -> anyhow::Result<Arc<String>> {
+        match self {
+            Value::Str(s) => Ok(s.clone()),
             _ => Err(anyhow::Error::msg("Value is not a string")),
         }
     }
@@ -132,7 +139,6 @@ pub struct CallParamsNodeTransform  { pub source: NodeRef, pub target: NodeRef, 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "fn", rename_all = "snake_case")]
 pub enum CallExpr {
-    Hold { av: AvRef },
     NodeTransformX(Box<CallParamsNodeTransform>),
     NodeTransformY(Box<CallParamsNodeTransform>),
     #[serde(rename="+")]
@@ -162,53 +168,24 @@ impl Expr {
 /// Mirrors `PositionMixin` in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Position {
-    pub x: AvId,
-    pub y: AvId,
-}
-
-impl Position {
-    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
-        let Position { x, y } = self;
-        f(*x)?;
-        f(*x)?;
-        Ok(())
-    }
+    pub x: Expr,
+    pub y: Expr,
 }
 
 /// Mirrors `SizeMixin` in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Size {
-    pub width: AvId,
-    pub height: AvId,
-}
-
-impl Size {
-    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
-        let Size { width, height } = self;
-        f(*width)?;
-        f(*height)?;
-        Ok(())
-    }
+    pub width: Expr,
+    pub height: Expr,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Style {
-    pub fill_color: AvId,
-    pub stroke_color: AvId,
-    pub stroke_width: AvId,
-    pub alpha: AvId,
-}
-
-impl Style {
-    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
-        let Style { fill_color, stroke_color, stroke_width, alpha } = self;
-        f(*fill_color)?;
-        f(*stroke_color)?;
-        f(*stroke_width)?;
-        f(*alpha)?;
-        Ok(())
-    }
+    pub fill_color: Expr,
+    pub stroke_color: Expr,
+    pub stroke_width: Expr,
+    pub alpha: Expr,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
@@ -216,20 +193,8 @@ impl Style {
 pub struct TextStyle {
     #[serde(flatten)]
     pub style: Style,
-    font: AvId,
-    italic: AvId,
-}
-
-impl TextStyle {
-    pub fn font(&self) -> AvId { self.font }
-    pub fn italic(&self) -> AvId { self.italic }
-
-    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
-        self.style.check_attributes(f)?;
-        f(self.font)?;
-        f(self.italic)?;
-        Ok(())
-    }
+    pub font: Expr,
+    pub italic: Expr,
 }
 
 // ──────────────────────────── Path commands ─────────────────────────────────
@@ -243,10 +208,10 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        alpha: AvId,
-        rotation: AvId,
-        scale_x: AvId,
-        scale_y: AvId,
+        alpha: Expr,
+        rotation: Expr,
+        scale_x: Expr,
+        scale_y: Expr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -298,7 +263,7 @@ pub enum NodeKind {
     TextSpan {
         #[serde(flatten)]
         text_style: TextStyle,
-        text: AvId,
+        text: Expr,
     },
 
     /// Path commands; They always have Path as parent
@@ -313,10 +278,10 @@ pub enum NodeKind {
     Cubic {
         #[serde(flatten)]
         position: Position,
-        c1_x: AvId,
-        c1_y: AvId,
-        c2_x: AvId,
-        c2_y: AvId,
+        c1_x: Expr,
+        c1_y: Expr,
+        c2_x: Expr,
+        c2_y: Expr,
     },
 }
 
@@ -330,48 +295,6 @@ impl NodeKind {
             NodeKind::TextLine { children, .. } => children,
             _ => &[],
         }
-    }
-
-    pub fn check_attributes<F>(&self, f: &mut F) -> anyhow::Result<()> where F: FnMut(AvId) -> anyhow::Result<()> {
-        match self {
-            NodeKind::Group { position, size, alpha, rotation, scale_x, scale_y, children: _ } => {
-                position.check_attributes(f)?;
-                size.check_attributes(f)?;
-                f(*alpha)?;
-                f(*rotation)?;
-                f(*scale_x)?;
-                f(*scale_y)?;
-            }
-            NodeKind::Rect { position, size, style } | NodeKind::Ellipse { position, size, style } => {
-                position.check_attributes(f)?;
-                size.check_attributes(f)?;
-                style.check_attributes(f)?;
-            }
-            NodeKind::Path { style, children: _ } => {
-                style.check_attributes(f)?;
-            }
-            NodeKind::Text { position, text_style, children: _ } => {
-                position.check_attributes(f)?;
-                text_style.check_attributes(f)?;
-            }
-            NodeKind::TextLine { text_style, children: _ } => {
-                text_style.check_attributes(f)?;
-            }
-            NodeKind::TextSpan { text_style, text } => {
-                text_style.check_attributes(f)?;
-                f(*text)?;
-            }
-            NodeKind::Move { position } => position.check_attributes(f)?,
-            NodeKind::Line { position } => position.check_attributes(f)?,
-            NodeKind::Cubic { position, c1_x, c1_y, c2_x, c2_y } => {
-                position.check_attributes(f)?;
-                f(*c1_x)?;
-                f(*c1_y)?;
-                f(*c2_x)?;
-                f(*c2_y)?;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -391,7 +314,7 @@ pub struct SceneDef {
     pub id: NodeId,
     #[serde(flatten)]
     pub size: Size,
-    pub fill_color: AvId,
+    pub fill_color: Expr,
     #[serde(default)]
     pub children: Vec<NodeId>,
 }

@@ -1,9 +1,33 @@
 import { useState } from 'react';
-import type { RawNode, SceneData, TreeNodeData } from '../types';
+import type { RawNode, RawTextChild, SceneData, TreeNodeData } from '../types';
 import { NodeKindIcon } from './Icons';
+
+const KIND_LABELS: Partial<Record<TreeNodeData['kind'], string>> = {
+  t_line:  'Line',
+  t_group: 'TextGroup',
+  t_span:  'TextSpan',
+};
 
 function fmt(v: number | string): number | string {
   return typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(1)) : v;
+}
+
+function shortHex(color: string): string {
+  const m6 = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (m6) {
+    const [, r, g, b] = m6;
+    if (r[0] === r[1] && g[0] === g[1] && b[0] === b[1])
+      return `#${r[0]}${g[0]}${b[0]}`;
+    return color;
+  }
+  const m8 = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (m8) {
+    const [, r, g, b, a] = m8;
+    if (r[0] === r[1] && g[0] === g[1] && b[0] === b[1] && a[0] === a[1])
+      return `#${r[0]}${g[0]}${b[0]}${a[0]}`;
+    return color;
+  }
+  return color;
 }
 
 function Prop({ label, changed }: { label: number | string; changed: boolean }) {
@@ -20,20 +44,24 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
                    'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const;
   const anyChanged = TRACKED.some(ch);
 
+  const spanText = node.text != null
+    ? (node.text.length > 30 ? node.text.slice(0, 28) + '…' : node.text)
+    : null;
+
   return (
     <span className={anyChanged ? 'node-label node-label-changed' : 'node-label'}>
-      <span className="node-type">{node.kind}</span>
+      <span className="node-type">{KIND_LABELS[node.kind] ?? node.kind}</span>
       {node.width     != null && <Prop label={`${fmt(node.width)}×${fmt(node.height ?? 0)}`} changed={ch('width') || ch('height')} />}
       {node.fill_color != null && (
         <span className={ch('fill_color') ? 'prop-chip prop-chip-changed' : 'prop-chip'}>
           <span style={{ display: 'inline-block', width: 10, height: 10, background: node.fill_color, border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
-          {fmt(node.fill_color)}
+          {shortHex(node.fill_color)}
         </span>
       )}
       {node.stroke_color != null && (
         <span className={ch('stroke_color') || ch('stroke_width') ? 'prop-chip prop-chip-changed' : 'prop-chip'}>
           <span style={{ display: 'inline-block', width: 10, height: 10, background: 'transparent', border: `2px solid ${node.stroke_color}`, borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
-          {fmt(node.stroke_color)}{node.stroke_width !== 1 && ` ${fmt(node.stroke_width ?? 1)}px`}
+          {shortHex(node.stroke_color)}{node.stroke_width !== 1 && ` ${fmt(node.stroke_width ?? 1)}px`}
         </span>
       )}
       {node.alpha   != null && node.alpha !== 1 && <Prop label={`α=${fmt(node.alpha)}`}    changed={ch('alpha')} />}
@@ -45,6 +73,10 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
               changed={ch('scale_x') || ch('scale_y')} />
       )}
       {node.rotation != null && node.rotation !== 0 && <Prop label={`r=${fmt(node.rotation)}°`} changed={ch('rotation')} />}
+      {spanText != null && <Prop label={`"${spanText}"`} changed={false} />}
+      {node.font_size != null && <Prop label={`${fmt(node.font_size)}px`} changed={false} />}
+      {node.font_family != null && <Prop label={node.font_family} changed={false} />}
+      {node.italic && <Prop label="italic" changed={false} />}
     </span>
   );
 }
@@ -118,7 +150,7 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
               <span className="prop-chip">{scene.width}×{scene.height}</span>
               <span className="prop-chip">
                 <span style={{ display: 'inline-block', width: 10, height: 10, background: scene.fill_color, border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, verticalAlign: 'middle', marginRight: 3 }} />
-                {scene.fill_color}
+                {shortHex(scene.fill_color)}
               </span>
             </span>
           </div>
@@ -133,10 +165,43 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
   );
 }
 
+// Convert a TextChild to a TreeNodeData with kind 't_line' (direct child of Text)
+// or 't_group'/'t_span' (deeper in the tree).
+function textChildToNode(child: RawTextChild, id: string, isLine: boolean): TreeNodeData {
+  const kind = isLine ? 't_line' : ('Group' in child ? 't_group' : 't_span');
+  if ('Group' in child) {
+    const g = child.Group;
+    return {
+      kind,
+      id,
+      nid: g.id,
+      children: g.children.map((c, j) => textChildToNode(c, `${id}.${j}`, false)),
+    };
+  } else {
+    const s = child.Span;
+    return {
+      kind,
+      id,
+      nid: s.id,
+      text: s.text,
+      fill_color: s.fill_color ?? undefined,
+      stroke_color: s.stroke_color ?? undefined,
+      stroke_width: s.stroke_width,
+      alpha: s.alpha,
+      font_family: s.font_family,
+      font_size: s.font_size,
+      italic: s.italic,
+    };
+  }
+}
+
 export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
-    const { id: nid, children: rawChildren, ...rest } = n;
+    const { id: nid, children: rawChildren, lines, ...rest } = n;
     const id = `${prefix}${i}`;
-    return { ...rest, id, nid, children: addIds(rawChildren, `${id}.`) };
+    const children = n.kind === 'text' && lines != null
+      ? lines.map((child, j) => textChildToNode(child, `${id}.${j}`, true))
+      : addIds(rawChildren, `${id}.`);
+    return { ...rest, id, nid, children };
   });
 }

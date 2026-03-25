@@ -1215,6 +1215,7 @@ dependencies = [
  "serde",
  "skrifa",
  "tiny-skia",
+ "tracing",
 ]
 
 [[package]]

@@ -105,6 +105,30 @@ export function TextIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function TextLineIcon({ size = 16 }: IconProps) {
+  const c = '#7EC832';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="5" y1="22" x2="27" y2="22"/>
+      {/* small T */}
+      <line x1="12" y1="8" x2="20" y2="8"/>
+      <line x1="16" y1="8" x2="16" y2="18"/>
+    </svg>
+  );
+}
+
+export function TextGroupIcon({ size = 16 }: IconProps) {
+  const c = '#7EC832';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <rect x="4" y="5" width="24" height="22" rx="2"/>
+      {/* small T */}
+      <line x1="12" y1="10" x2="20" y2="10"/>
+      <line x1="16" y1="10" x2="16" y2="22"/>
+    </svg>
+  );
+}
+
 const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = {
   scene:   SceneIcon,
   group:   NodeIcon,
@@ -117,6 +141,9 @@ const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = 
   image:   ImageIcon,
   layer:   LayerIcon,
   text:    TextIcon,
+  t_line:  TextLineIcon,
+  t_group: TextGroupIcon,
+  t_span:  TextIcon,
 };
 
 export function NodeKindIcon({ kind, size = 16 }: { kind: string; size?: number }) {

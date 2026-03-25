@@ -556,7 +556,7 @@ export default function App() {
             </div>
 
             {/* Scene tree + canvas */}
-            <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
+            <PanelGroup orientation="vertical">
               <Panel defaultSize={40} minSize={15}>
                 <div className="panel-fill">
                   <TreeView scene={sceneData} prevScene={prevSceneData} selectedNid={selectedNid} onSelect={setSelectedNid} />

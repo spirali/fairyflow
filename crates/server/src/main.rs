@@ -253,6 +253,7 @@ async fn render_anim_to_dir(anim: AnimationDef, output_dir: PathBuf, threads: Op
     })
     .await;
 
+    renderer::prune_text_cache();
     match result {
         Ok(Ok(())) => {
             println!("rendered {frame_count} frame(s) to {output_dir_display}");
@@ -319,7 +320,9 @@ async fn tree_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
-    match anim.build_scene(FrameId::new(n)) {
+    let result = anim.build_scene(FrameId::new(n));
+    renderer::prune_text_cache();
+    match result {
         Ok(scene) => axum::Json(scene).into_response(),
         Err(e) => {
             warn!(frame = n, error = %e, "build_scene failed in tree_handler");
@@ -344,6 +347,7 @@ async fn trees_handler(
             .collect::<Result<Vec<_>, _>>()
     })
     .await;
+    renderer::prune_text_cache();
     match result {
         Ok(Ok(frames)) => axum::Json(frames).into_response(),
         Ok(Err(e)) => {
@@ -372,6 +376,7 @@ async fn node_handler(
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
         }
     };
+    renderer::prune_text_cache();
     match renderer::find_node_bounds(&scene, id) {
         Some(bounds) => axum::Json(bounds).into_response(),
         None => (StatusCode::NOT_FOUND, "node not found or has no bounds").into_response(),
@@ -395,6 +400,7 @@ async fn frame_handler(
         }
     };
     let pixmap = renderer::render_scene(&scene, scale);
+    renderer::prune_text_cache();
     match pixmap.encode_png() {
         Ok(png) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
         Err(e) => {
@@ -428,6 +434,7 @@ async fn frames_handler(
         }).collect::<Vec<_>>()
     })
     .await;
+    renderer::prune_text_cache();
 
     match results {
         Ok(frames) => axum::Json(frames).into_response(),

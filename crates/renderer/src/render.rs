@@ -1,8 +1,10 @@
 use std::cell::RefCell;
+use std::sync::Arc;
 use serde::Serialize;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Point, Rect, Stroke, Transform};
 use parley::{Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem, StyleProperty};
 use skrifa::{GlyphId, MetadataProvider, instance::{LocationRef, NormalizedCoord, Size as SkrifaSize}, outline::{DrawSettings, OutlinePen}, raw::FontRef as ReadFontsRef};
+use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
 use crate::resources::Resources;
 use crate::scene::{NodeKind, PathCommand, Position, Scene, Node, Style, TextChild, TextSpan};
 
@@ -77,92 +79,36 @@ impl Renderer {
         for line in lines {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
+            if spans.is_empty() { continue; }
 
-            let (full_text, ranges) = build_span_text(&spans);
-            if full_text.is_empty() { continue; }
+            let cached = self.get_or_build_line(&spans);
 
-            let mut builder = self.layout_cx.ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
-            builder.push_default(StyleProperty::FontSize(DEFAULT_FONT_SIZE));
-            for (range, span_idx) in &ranges {
-                let span = spans[*span_idx];
-                builder.push(StyleProperty::Brush(*span_idx), range.clone());
-                builder.push(StyleProperty::FontSize(span.font_size as f32), range.clone());
-                builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
-                if span.italic {
-                    builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
+            for glyph in &cached.glyphs {
+                let span = spans[glyph.span_idx];
+                let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());
+                let alpha = parent_alpha * span.style.alpha as f32;
+
+                let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else { continue };
+
+                if let Some(mut color) = fill_color {
+                    color.set_alpha(color.alpha() * alpha);
+                    let mut paint = Paint::default();
+                    paint.set_color(color);
+                    paint.anti_alias = true;
+                    pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
+                }
+                if let Some(ref sc) = span.style.stroke_color {
+                    let mut color = sc.to_skia_color();
+                    color.set_alpha(color.alpha() * alpha);
+                    let mut paint = Paint::default();
+                    paint.set_color(color);
+                    paint.anti_alias = true;
+                    let stroke = Stroke { width: span.style.stroke_width as f32, ..Default::default() };
+                    pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
                 }
             }
 
-            let mut layout = builder.build(&full_text);
-            layout.break_all_lines(None);
-            layout.align(None, Alignment::Start, AlignmentOptions::default());
-
-            let line_height = layout.height();
-
-            for layout_line in layout.lines() {
-                for item in layout_line.items() {
-                    let PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
-
-                    let run = glyph_run.run();
-                    let font = run.font();
-                    let font_size = run.font_size();
-                    let normalized_coords: Vec<NormalizedCoord> = run.normalized_coords().iter()
-                        .map(|c| NormalizedCoord::from_bits(*c))
-                        .collect();
-
-                    let font_ref = ReadFontsRef::from_index(font.data.as_ref(), font.index).unwrap();
-                    let outlines = font_ref.outline_glyphs();
-
-                    let mut run_x = glyph_run.offset();
-                    let run_y = glyph_run.baseline() + y_cursor;
-
-                    for glyph in glyph_run.glyphs() {
-                        // Look up the span per-glyph so each glyph uses its own style,
-                        // even if parley placed multiple spans into one glyph run.
-                        let span_idx = layout.styles()
-                            .get(glyph.style_index())
-                            .map(|s| s.brush)
-                            .unwrap_or(0)
-                            .min(spans.len().saturating_sub(1));
-                        let span = spans[span_idx];
-                        let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());
-                        let alpha = parent_alpha * span.style.alpha as f32;
-
-                        let gx = run_x + glyph.x;
-                        let gy = run_y - glyph.y;
-                        run_x += glyph.advance;
-
-                        let glyph_id = GlyphId::from(glyph.id as u16);
-                        let Some(outline) = outlines.get(glyph_id) else { continue };
-
-                        let settings = DrawSettings::unhinted(
-                            SkrifaSize::new(font_size),
-                            LocationRef::new(&normalized_coords),
-                        );
-                        let mut pen = GlyphPen { x: gx, y: gy, pb: PathBuilder::new() };
-                        let _ = outline.draw(settings, &mut pen);
-                        let Some(path) = pen.pb.finish() else { continue };
-
-                        if let Some(mut color) = fill_color {
-                            color.set_alpha(color.alpha() * alpha);
-                            let mut paint = Paint::default();
-                            paint.set_color(color);
-                            paint.anti_alias = true;
-                            pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
-                        }
-                        if let Some(ref sc) = span.style.stroke_color {
-                            let mut color = sc.to_skia_color();
-                            color.set_alpha(color.alpha() * alpha);
-                            let mut paint = Paint::default();
-                            paint.set_color(color);
-                            paint.anti_alias = true;
-                            let stroke = Stroke { width: span.style.stroke_width as f32, ..Default::default() };
-                            pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
-                        }
-                    }
-                }
-            }
-            y_cursor += line_height;
+            y_cursor += cached.height;
         }
     }
 
@@ -173,31 +119,14 @@ impl Renderer {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
             if spans.is_empty() { continue; }
-
-            let (full_text, ranges) = build_span_text(&spans);
-            if full_text.is_empty() { continue; }
-
-            let mut builder = self.layout_cx.ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
-            builder.push_default(StyleProperty::FontSize(DEFAULT_FONT_SIZE));
-            for (range, span_idx) in &ranges {
-                let span = spans[*span_idx];
-                builder.push(StyleProperty::FontSize(span.font_size as f32), range.clone());
-                builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
-                if span.italic {
-                    builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
-                }
-            }
-            let mut layout = builder.build(&full_text);
-            layout.break_all_lines(None);
-            layout.align(None, Alignment::Start, AlignmentOptions::default());
-
-            total_width = total_width.max(layout.width());
-            total_height += layout.height();
+            let cached = self.get_or_build_line(&spans);
+            total_width = total_width.max(cached.width);
+            total_height += cached.height;
         }
         (total_width, total_height)
     }
 
-    /// Find the top-left position of the first glyph run belonging to `target_id`
+    /// Find the top-left position of the first glyph belonging to `target_id`
     /// within the text block described by `lines`.
     /// Returns `(x, y)` relative to the text node's origin, or `None` if not found.
     fn find_text_node_pos(&mut self, lines: &[TextChild], target_id: u64) -> Option<(f32, f32)> {
@@ -209,51 +138,108 @@ impl Renderer {
             let spans: Vec<&TextSpan> = tagged.iter().map(|(_, s)| *s).collect();
             if spans.is_empty() { continue; }
 
-            let (full_text, ranges) = build_span_text(&spans);
+            let cached = self.get_or_build_line(&spans);
 
-            let mut builder = self.layout_cx.ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
-            builder.push_default(StyleProperty::FontSize(DEFAULT_FONT_SIZE));
-            for (range, span_idx) in &ranges {
-                let span = spans[*span_idx];
-                builder.push(StyleProperty::Brush(*span_idx), range.clone());
-                builder.push(StyleProperty::FontSize(span.font_size as f32), range.clone());
-                builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
-                if span.italic {
-                    builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
-                }
-            }
-            let mut layout = builder.build(&full_text);
-            layout.break_all_lines(None);
-            layout.align(None, Alignment::Start, AlignmentOptions::default());
-
+            // Find which span index corresponds to the target.
             let first_target_idx = tagged.iter().position(|(is_target, _)| *is_target);
             if let Some(target_span_idx) = first_target_idx {
-                // Walk every glyph individually — a single glyph run may contain glyphs
-                // from several spans if parley does not split on brush changes.
-                let mut x = 0.0f32;
-                'search: for layout_line in layout.lines() {
-                    for item in layout_line.items() {
-                        let PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
-                        let mut run_x = glyph_run.offset();
-                        for glyph in glyph_run.glyphs() {
-                            let span_idx = layout.styles()
-                                .get(glyph.style_index())
-                                .map(|s| s.brush)
-                                .unwrap_or(usize::MAX);
-                            if span_idx == target_span_idx {
-                                x = run_x;
-                                break 'search;
-                            }
-                            run_x += glyph.advance;
-                        }
-                    }
+                // Find the first cached glyph that belongs to the target span.
+                if let Some(glyph) = cached.glyphs.iter().find(|g| g.span_idx == target_span_idx) {
+                    return Some((glyph.x, y_offset));
                 }
-                return Some((x, y_offset));
             }
 
-            y_offset += layout.height();
+            y_offset += cached.height;
         }
         None
+    }
+
+    fn get_or_build_line(&mut self, spans: &[&TextSpan]) -> Arc<CachedLine> {
+        let key = make_line_key(spans);
+        if let Some(cached) = glyph_cache::cache_get(&key) {
+            return cached;
+        }
+        self.build_cached_line(spans, key)
+    }
+
+    /// Run parley layout for `spans`, extract glyph outlines into `CachedGlyph`s,
+    /// store in the global cache, and return the entry.
+    fn build_cached_line(&mut self, spans: &[&TextSpan], key: glyph_cache::LineKey) -> Arc<CachedLine> {
+        let (full_text, ranges) = build_span_text(spans);
+        if full_text.is_empty() {
+            // Don't cache empty lines — they're trivial and have no spans to key on.
+            return Arc::new(CachedLine { width: 0.0, height: 0.0, glyphs: vec![] });
+        }
+
+        let mut builder = self.layout_cx.ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
+        builder.push_default(StyleProperty::FontSize(DEFAULT_FONT_SIZE));
+        for (range, span_idx) in &ranges {
+            let span = spans[*span_idx];
+            // Brush carries the span index so we can look it up per-glyph below.
+            builder.push(StyleProperty::Brush(*span_idx), range.clone());
+            builder.push(StyleProperty::FontSize(span.font_size as f32), range.clone());
+            builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
+            if span.italic {
+                builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
+            }
+        }
+        let mut layout = builder.build(&full_text);
+        layout.break_all_lines(None);
+        layout.align(None, Alignment::Start, AlignmentOptions::default());
+
+        let width = layout.width();
+        let height = layout.height();
+        let mut glyphs = Vec::new();
+
+        for layout_line in layout.lines() {
+            for item in layout_line.items() {
+                let PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
+
+                let run = glyph_run.run();
+                let font = run.font();
+                let font_size = run.font_size();
+                let normalized_coords: Vec<NormalizedCoord> = run.normalized_coords().iter()
+                    .map(|c| NormalizedCoord::from_bits(*c))
+                    .collect();
+
+                let font_ref = ReadFontsRef::from_index(font.data.as_ref(), font.index).unwrap();
+                let outlines = font_ref.outline_glyphs();
+
+                let mut run_x = glyph_run.offset();
+                // baseline without y_cursor — y_cursor is added at render time via y_offset
+                let baseline = glyph_run.baseline();
+
+                for glyph in glyph_run.glyphs() {
+                    // Per-glyph span lookup: a single run may span multiple style ranges.
+                    let span_idx = layout.styles()
+                        .get(glyph.style_index())
+                        .map(|s| s.brush)
+                        .unwrap_or(0)
+                        .min(spans.len().saturating_sub(1));
+
+                    let gx = run_x + glyph.x;
+                    let gy = baseline - glyph.y;
+                    run_x += glyph.advance;
+
+                    let glyph_id = GlyphId::from(glyph.id as u16);
+                    let Some(outline) = outlines.get(glyph_id) else { continue };
+
+                    let settings = DrawSettings::unhinted(
+                        SkrifaSize::new(font_size),
+                        LocationRef::new(&normalized_coords),
+                    );
+                    let mut pen = GlyphPen::new(gx, gy);
+                    let _ = outline.draw(settings, &mut pen);
+                    glyphs.push(glyph_cache::CachedGlyph {
+                        span_idx,
+                        x: gx,
+                        path: VectorPath { verbs: pen.verbs },
+                    });
+                }
+            }
+        }
+
+        glyph_cache::cache_store(key, CachedLine { width, height, glyphs })
     }
 }
 
@@ -270,7 +256,7 @@ pub fn measure_text(lines: &[TextChild]) -> (f32, f32) {
 
 /// Find the position `(x, y)` of the first glyph belonging to the node with
 /// `target_id` within the text block.  `y` is the top of the line that contains
-/// the target; `x` is the left edge of its first glyph run.
+/// the target; `x` is the left edge of its first glyph.
 /// Returns `None` if the target id is not found in the tree.
 pub fn measure_text_node_pos(lines: &[TextChild], target_id: u64) -> Option<(f32, f32)> {
     RENDERER.with(|r| r.borrow_mut().find_text_node_pos(lines, target_id))
@@ -406,9 +392,7 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
 const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 /// Concatenates span texts separated by U+200C (ZERO WIDTH NON-JOINER).
-/// The ZWNJ is invisible and zero-width but tells HarfBuzz not to form ligatures
-/// across the boundary — preventing "ff" from two consecutive spans collapsing into
-/// one ligature glyph that hides the second span from the layout.
+/// The ZWNJ tells HarfBuzz not to form ligatures across span boundaries.
 /// Each returned range covers a span's text plus its trailing ZWNJ (if any).
 fn build_span_text(spans: &[&TextSpan]) -> (String, Vec<(std::ops::Range<usize>, usize)>) {
     let mut full_text = String::new();
@@ -449,27 +433,62 @@ fn collect_spans_tagged<'a>(child: &'a TextChild, target_id: u64, in_target: boo
     }
 }
 
+/// Build the normalized cache key for a slice of spans.
+/// Excludes node IDs and colors so identical text from different node IDs shares one entry.
+fn make_line_key(spans: &[&TextSpan]) -> glyph_cache::LineKey {
+    spans.iter().map(|s| glyph_cache::SpanKey {
+        text: s.text.clone(),
+        font_family: s.font_family.clone(),
+        font_size_bits: (s.font_size as f32).to_bits(),
+        italic: s.italic,
+    }).collect::<Vec<_>>().into_boxed_slice()
+}
+
+/// Convert a `VectorPath` to a tiny-skia `Path`, shifting all points down by `y_offset`.
+fn vector_path_to_skia(vp: &VectorPath, y_offset: f32) -> Option<tiny_skia::Path> {
+    let mut pb = PathBuilder::new();
+    for verb in &vp.verbs {
+        match verb {
+            PathVerb::MoveTo(x, y) => pb.move_to(*x, y + y_offset),
+            PathVerb::LineTo(x, y) => pb.line_to(*x, y + y_offset),
+            PathVerb::QuadTo(cx, cy, x, y) => pb.quad_to(*cx, cy + y_offset, *x, y + y_offset),
+            PathVerb::CubicTo(cx0, cy0, cx1, cy1, x, y) => {
+                pb.cubic_to(*cx0, cy0 + y_offset, *cx1, cy1 + y_offset, *x, y + y_offset)
+            }
+            PathVerb::Close => pb.close(),
+        }
+    }
+    pb.finish()
+}
+
+/// Collects glyph outline verbs into a `VectorPath`, positioned at (x, y) in screen space.
 struct GlyphPen {
     x: f32,
     y: f32,
-    pb: PathBuilder,
+    verbs: Vec<PathVerb>,
+}
+
+impl GlyphPen {
+    fn new(x: f32, y: f32) -> Self {
+        Self { x, y, verbs: Vec::new() }
+    }
 }
 
 impl OutlinePen for GlyphPen {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.pb.move_to(self.x + x, self.y - y);
+        self.verbs.push(PathVerb::MoveTo(self.x + x, self.y - y));
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.pb.line_to(self.x + x, self.y - y);
+        self.verbs.push(PathVerb::LineTo(self.x + x, self.y - y));
     }
     fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
-        self.pb.quad_to(self.x + cx0, self.y - cy0, self.x + x, self.y - y);
+        self.verbs.push(PathVerb::QuadTo(self.x + cx0, self.y - cy0, self.x + x, self.y - y));
     }
     fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-        self.pb.cubic_to(self.x + cx0, self.y - cy0, self.x + cx1, self.y - cy1, self.x + x, self.y - y);
+        self.verbs.push(PathVerb::CubicTo(self.x + cx0, self.y - cy0, self.x + cx1, self.y - cy1, self.x + x, self.y - y));
     }
     fn close(&mut self) {
-        self.pb.close();
+        self.verbs.push(PathVerb::Close);
     }
 }
 

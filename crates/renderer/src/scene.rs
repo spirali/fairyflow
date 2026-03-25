@@ -39,8 +39,11 @@ pub struct TextSpan {
 
 /// A node in the text tree — either a nested group or a leaf span.
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind")]
 pub enum TextChild {
+    #[serde(rename = "t_group")]
     Group(TextGroup),
+    #[serde(rename = "t_span")]
     Span(TextSpan),
 }
 
@@ -122,6 +125,7 @@ pub enum NodeKind {
     Text {
         #[serde(flatten)]
         position: Position,
+        #[serde(rename = "children")]
         lines: Vec<TextChild>,
     },
 }

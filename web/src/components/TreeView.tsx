@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import type { RawNode, RawTextChild, SceneData, TreeNodeData } from '../types';
+import type { RawNode, SceneData, TreeNodeData } from '../types';
 import { NodeKindIcon } from './Icons';
 
 const KIND_LABELS: Partial<Record<TreeNodeData['kind'], string>> = {
-  t_line:  'Line',
   t_group: 'TextGroup',
   t_span:  'TextSpan',
 };
@@ -36,7 +35,7 @@ function Prop({ label, changed }: { label: number | string; changed: boolean }) 
     : <span className="prop-chip">{label}</span>;
 }
 
-function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNodeData }) {
+function NodeLabel({ node, prevNode, displayLabel }: { node: TreeNodeData; prevNode?: TreeNodeData; displayLabel: string }) {
   const ch = (key: keyof TreeNodeData): boolean =>
     prevNode != null && prevNode[key] !== node[key];
 
@@ -50,7 +49,7 @@ function NodeLabel({ node, prevNode }: { node: TreeNodeData; prevNode?: TreeNode
 
   return (
     <span className={anyChanged ? 'node-label node-label-changed' : 'node-label'}>
-      <span className="node-type">{KIND_LABELS[node.kind] ?? node.kind}</span>
+      <span className="node-type">{displayLabel}</span>
       {node.width     != null && <Prop label={`${fmt(node.width)}×${fmt(node.height ?? 0)}`} changed={ch('width') || ch('height')} />}
       {node.fill_color != null && (
         <span className={ch('fill_color') ? 'prop-chip prop-chip-changed' : 'prop-chip'}>
@@ -87,15 +86,19 @@ interface TreeNodeProps {
   depth: number;
   selectedNid: number | null;
   onSelect: (nid: number | null) => void;
+  isDirectTextChild?: boolean;
 }
 
-function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProps) {
+function TreeNode({ node, prevNode, depth, selectedNid, onSelect, isDirectTextChild }: TreeNodeProps) {
   const [open, setOpen] = useState(true);
   const hasChildren = (node.children?.length ?? 0) > 0;
 
   const anyChanged = prevNode != null &&
     (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
       'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const).some(k => prevNode[k] !== node[k]);
+
+  const iconKind = isDirectTextChild ? 't_line' : node.kind;
+  const displayLabel = isDirectTextChild ? 'Line' : (KIND_LABELS[node.kind] ?? node.kind);
 
   return (
     <div>
@@ -108,8 +111,8 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProp
           className="tree-node-toggle"
           onClick={hasChildren ? (e) => { e.stopPropagation(); setOpen((o: boolean) => !o); } : undefined}
         >{hasChildren ? (open ? '▾' : '▸') : ''}</span>
-        <span className="tree-node-icon"><NodeKindIcon kind={node.kind} /></span>
-        <NodeLabel node={node} prevNode={prevNode} />
+        <span className="tree-node-icon"><NodeKindIcon kind={iconKind} /></span>
+        <NodeLabel node={node} prevNode={prevNode} displayLabel={displayLabel} />
       </div>
       {open &&
         node.children?.map((child, i) => (
@@ -120,6 +123,7 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect }: TreeNodeProp
             depth={depth + 1}
             selectedNid={selectedNid}
             onSelect={onSelect}
+            isDirectTextChild={node.kind === 'text'}
           />
         ))}
     </div>
@@ -165,43 +169,11 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
   );
 }
 
-// Convert a TextChild to a TreeNodeData with kind 't_line' (direct child of Text)
-// or 't_group'/'t_span' (deeper in the tree).
-function textChildToNode(child: RawTextChild, id: string, isLine: boolean): TreeNodeData {
-  const kind = isLine ? 't_line' : ('Group' in child ? 't_group' : 't_span');
-  if ('Group' in child) {
-    const g = child.Group;
-    return {
-      kind,
-      id,
-      nid: g.id,
-      children: g.children.map((c, j) => textChildToNode(c, `${id}.${j}`, false)),
-    };
-  } else {
-    const s = child.Span;
-    return {
-      kind,
-      id,
-      nid: s.id,
-      text: s.text,
-      fill_color: s.fill_color ?? undefined,
-      stroke_color: s.stroke_color ?? undefined,
-      stroke_width: s.stroke_width,
-      alpha: s.alpha,
-      font_family: s.font_family,
-      font_size: s.font_size,
-      italic: s.italic,
-    };
-  }
-}
-
 export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
-    const { id: nid, children: rawChildren, lines, ...rest } = n;
+    const { id: nid, children: rawChildren, ...rest } = n;
     const id = `${prefix}${i}`;
-    const children = n.kind === 'text' && lines != null
-      ? lines.map((child, j) => textChildToNode(child, `${id}.${j}`, true))
-      : addIds(rawChildren, `${id}.`);
+    const children = addIds(rawChildren, `${id}.`);
     return { ...rest, id, nid, children };
   });
 }

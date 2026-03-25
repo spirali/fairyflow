@@ -162,6 +162,57 @@ fn node_transform(source: NodeId, target: NodeId, x: f64, y: f64, ctx: &EvalCtx)
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
+/// Walk parent links to find the nearest `Text` ancestor of `node_id`.
+fn find_text_ancestor(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<crate::basictypes::NodeId> {
+    let mut current = node_id;
+    loop {
+        let node = ctx.node(current)?;
+        if matches!(node.kind, NodeKind::Text { .. }) {
+            return Ok(current);
+        }
+        current = node.parent.ok_or_else(|| {
+            anyhow::anyhow!("node {:?} has no Text ancestor", node_id)
+        })?;
+    }
+}
+
+/// Returns the position `(x, y)` of a `TextGroup` or `TextSpan` node within its
+/// parent `Text` element.  For all other node kinds returns `(0, 0)`.
+fn text_default_pos(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+    let node = ctx.node(node_id)?;
+    match &node.kind {
+        NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {}
+        _ => return Ok((0.0, 0.0)),
+    }
+    let text_id = find_text_ancestor(node_id, ctx)?;
+    let NodeKind::Text { children, .. } = &ctx.node(text_id)?.kind else { unreachable!() };
+    let lines = children.iter()
+        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(renderer::measure_text_node_pos(&lines, node_id.as_u64()).unwrap_or((0.0, 0.0)))
+}
+
+/// Returns `(width, height)` for the natural (unwrapped) size of a node.
+/// - `Text`: measures all lines.
+/// - `TextGroup` / `TextSpan`: measures the node's own content as a single line.
+/// - All other kinds: returns `(0, 0)`.
+fn text_default_size(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+    let node = ctx.node(node_id)?;
+    match &node.kind {
+        NodeKind::Text { children, .. } => {
+            let lines = children.iter()
+                .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            Ok(renderer::measure_text(&lines))
+        }
+        NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
+            let child = node.eval_as_text_child(ctx)?;
+            Ok(renderer::measure_text(&[child]))
+        }
+        _ => Ok((0.0, 0.0)),
+    }
+}
+
 impl Expr {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         match self {
@@ -223,6 +274,22 @@ impl CallExpr {
                 let yv = params.y.eval(ctx)?.as_f64()?;
                 let (_px, py) = node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
                 Ok(Value::Float(py))
+            }
+            CallExpr::DefaultWidth { node } => {
+                let (w, _h) = text_default_size(node.get_id(), ctx)?;
+                Ok(Value::Float(w as f64))
+            }
+            CallExpr::DefaultHeight { node } => {
+                let (_w, h) = text_default_size(node.get_id(), ctx)?;
+                Ok(Value::Float(h as f64))
+            }
+            CallExpr::DefaultX { node } => {
+                let (x, _y) = text_default_pos(node.get_id(), ctx)?;
+                Ok(Value::Float(x as f64))
+            }
+            CallExpr::DefaultY { node } => {
+                let (_x, y) = text_default_pos(node.get_id(), ctx)?;
+                Ok(Value::Float(y as f64))
             }
         }
     }
@@ -292,7 +359,7 @@ impl Node {
             NodeKind::Text { position, children, .. } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
                 lines: children.iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_line(ctx))
+                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
             _ => anyhow::bail!("path command / text-internal nodes cannot appear as scene tree nodes"),
@@ -322,25 +389,36 @@ impl Node {
         }
     }
 
-    pub fn eval_as_text_line(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextLine> {
+    pub fn eval_as_text_child(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextChild> {
         match &self.kind {
-            NodeKind::TextLine { children, .. } => Ok(renderer::TextLine {
-                spans: children.iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_span(ctx))
+            NodeKind::TextGroup { .. } => Ok(renderer::TextChild::Group(self.eval_as_text_group(ctx)?)),
+            NodeKind::TextSpan { .. } => Ok(renderer::TextChild::Span(self.eval_as_text_span(ctx)?)),
+            _ => anyhow::bail!("expected t_group or t_span node, got {:?}", self.id),
+        }
+    }
+
+    pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextGroup> {
+        match &self.kind {
+            NodeKind::TextGroup { children, .. } => Ok(renderer::TextGroup {
+                id: self.id.as_u64(),
+                children: children.iter()
+                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             }),
-            _ => anyhow::bail!("expected Line node, got {:?}", self.id),
+            _ => anyhow::bail!("expected t_group node, got {:?}", self.id),
         }
     }
 
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
         match &self.kind {
             NodeKind::TextSpan { text_style, text } => {
-                let TextStyle { style, font, italic } = text_style;
+                let TextStyle { style, font, font_size, italic } = text_style;
                 Ok(renderer::TextSpan {
+                    id: self.id.as_u64(),
                     text: text.eval(ctx)?.as_string_ref()?,
                     style: style.eval(ctx)?,
                     font_family: font.eval(ctx)?.as_string_ref()?,
+                    font_size: font_size.eval_f64(ctx)?,
                     italic: italic.eval(ctx)?.as_bool()?,
                 })
             }

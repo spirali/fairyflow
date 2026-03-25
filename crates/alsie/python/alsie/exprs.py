@@ -32,3 +32,11 @@ def expr_add(a, b):
 
 def expr_hold(av):
     return Call("hold", av=av)
+
+
+def expr_default_x(node):
+    return Call("default_x", node=node)
+
+
+def expr_default_y(node):
+    return Call("default_y", node=node)

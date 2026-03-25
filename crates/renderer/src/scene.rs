@@ -25,20 +25,30 @@ pub struct Style {
     pub alpha: f64,
 }
 
-/// A single styled text run within a line.
+/// A single styled text run.
 #[derive(Debug, Clone, Serialize)]
 pub struct TextSpan {
+    pub id: u64,
     pub text: Arc<String>,
     #[serde(flatten)]
     pub style: Style,
     pub font_family: Arc<String>,
+    pub font_size: f64,
     pub italic: bool,
 }
 
-/// A line of text consisting of one or more spans.
+/// A node in the text tree — either a nested group or a leaf span.
 #[derive(Debug, Clone, Serialize)]
-pub struct TextLine {
-    pub spans: Vec<TextSpan>,
+pub enum TextChild {
+    Group(TextGroup),
+    Span(TextSpan),
+}
+
+/// A group of text children (other groups or spans).
+#[derive(Debug, Clone, Serialize)]
+pub struct TextGroup {
+    pub id: u64,
+    pub children: Vec<TextChild>,
 }
 
 /// A single command in a path. Mirrors PathMove / PathLine / PathCubic in Python.
@@ -107,11 +117,12 @@ pub enum NodeKind {
         style: Style,
         children: Vec<PathCommand>,
     },
-    /// Python: Text — positioned block of text lines
+    /// Python: Text — positioned block of text lines.
+    /// Each element of `lines` is one line (rendered top-to-bottom).
     Text {
         #[serde(flatten)]
         position: Position,
-        lines: Vec<TextLine>,
+        lines: Vec<TextChild>,
     },
 }
 

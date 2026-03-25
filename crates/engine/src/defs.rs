@@ -143,6 +143,10 @@ pub enum CallExpr {
     NodeTransformY(Box<CallParamsNodeTransform>),
     #[serde(rename="+")]
     Add(Box<CallParamsPair>),
+    DefaultWidth { node: NodeRef },
+    DefaultHeight { node: NodeRef },
+    DefaultX { node: NodeRef },
+    DefaultY { node: NodeRef },
 }
 
 // ─────────────────────────── KeyframeValue ─────────────────────────────────
@@ -194,6 +198,7 @@ pub struct TextStyle {
     #[serde(flatten)]
     pub style: Style,
     pub font: Expr,
+    pub font_size: Expr,
     pub italic: Expr,
 }
 
@@ -250,9 +255,9 @@ pub enum NodeKind {
         #[serde(default)]
         children: Vec<NodeId>,
     },
-    /// A line of text within a Text node, containing Span children
-    #[serde(rename="t_line")]
-    TextLine {
+    /// Group containing instance of other TextGroups or TextSpans.
+    #[serde(rename="t_group")]
+    TextGroup {
         #[serde(flatten)]
         text_style: TextStyle,
         #[serde(default)]
@@ -292,7 +297,7 @@ impl NodeKind {
             NodeKind::Group { children, .. } |
             NodeKind::Path { children, .. } |
             NodeKind::Text { children, .. } |
-            NodeKind::TextLine { children, .. } => children,
+            NodeKind::TextGroup { children, .. } => children,
             _ => &[],
         }
     }

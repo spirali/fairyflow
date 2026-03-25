@@ -1,4 +1,7 @@
 
+from .exprs import expr_default_x, expr_default_y
+from .position import Position
+
 from .items import Node, NodeWithChildren, PositionMixin, StyleMixin, make_node
 
 
@@ -6,6 +9,7 @@ class TextStyleMixin(StyleMixin):
 
     def _init_text_style(self):
         self._add_attr("font", "sans-serif")
+        self._add_attr("font_size", 16)
         self._add_attr("stroke_color", None)
         self._add_attr("italic", False)
         self._init_style()
@@ -16,6 +20,10 @@ class TextStyleMixin(StyleMixin):
 
     def font(self, value: str):
         self._set_attr("font", value)
+        return self
+
+    def font_size(self, value: float):
+        self._set_attr("font_size", value)
         return self
     
 
@@ -31,10 +39,13 @@ class TextSpan(Node, TextStyleMixin):
     def text(self, value: str):
         self._set_attr("text", value)
 
+    def get_pos(self):
+        return Position(self._parent, expr_default_x(self), expr_default_y(self))
 
-class TextLine(NodeWithChildren, TextStyleMixin):
 
-    kind = "t_line"
+class TextGroup(NodeWithChildren, TextStyleMixin):
+
+    kind = "t_group"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
@@ -44,6 +55,11 @@ class TextLine(NodeWithChildren, TextStyleMixin):
         span = TextSpan(self, self._frame, text)
         self._children.append(span)
         return span
+    
+    def group(self):
+        group = TextGroup(self, self._frame)
+        self._children.append(group)
+        return group    
 
 
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin):
@@ -56,10 +72,16 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin):
         self._init_text_style()
 
 
-    def line(self):
-        line = TextLine(self, self._frame)
-        self._children.append(line)
-        return line
+    def group(self):
+        group = TextGroup(self, self._frame)
+        self._children.append(group)
+        return group
+    
+
+    def span(self, text):
+        span = TextSpan(self, self._frame, text)
+        self._children.append(span)
+        return span
 
 
 def text(*, frame=None):

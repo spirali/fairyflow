@@ -20,7 +20,7 @@ struct RawAnimationDef {
     animated_values: Vec<AnimatedValue>,
 }
 
-fn expr_av_refs(expr: &Expr, out: &mut Vec<AvId>) {
+/*fn expr_av_refs(expr: &Expr, out: &mut Vec<AvId>) {
     match expr {
         Expr::Const(_) => {}
         Expr::Av(av_ref) => out.push(av_ref.get_id()),
@@ -35,7 +35,7 @@ fn expr_av_refs(expr: &Expr, out: &mut Vec<AvId>) {
             }
         },
     }
-}
+}*/
 
 /*fn check_no_av_cycles(avs: &HashMap<AvId, AnimatedValue>, refs: &[AvId], visited: &mut HashSet<AvId>, stack: &mut Vec<AvId>) -> anyhow::Result<()> {
     for &av_id in refs {

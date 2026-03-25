@@ -104,6 +104,8 @@ async fn main() {
         )
         .init();
 
+    renderer::Resources::init();
+
     let args = Args::parse();
 
     match args.command {

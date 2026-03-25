@@ -928,11 +928,12 @@
   background: var(--bg-hover);
 }
 .filetree-entry.filetree-active {
-  background: var(--accent);
+  background: #0e639c;
   color: #fff;
+  font-weight: 600;
 }
 .filetree-entry.filetree-active:hover {
-  background: var(--accent);
+  background: #1177bb;
 }
 
 .filetree-chevron {

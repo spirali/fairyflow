@@ -20,12 +20,16 @@ function FolderIcon({ open }: { open: boolean }) {
 }
 
 function ApyFileIcon() {
+  const c = '#8B83F0';
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="1" width="9" height="14" rx="1" fill="#1a7a5a" />
-      <path d="M11 1l3 3v11H5v-1h8V4l-2-3z" fill="#26a87a" />
-      <path d="M11 1v3h3" fill="none" stroke="#5dd4aa" strokeWidth="0.5" />
-      <text x="3" y="10" fontSize="4.5" fill="#ccf5e8" fontWeight="bold" fontFamily="monospace">apy</text>
+    <svg width="16" height="16" viewBox="0 0 32 32" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="9" width="24" height="18" rx="2"/>
+      <line x1="4" y1="14" x2="28" y2="14"/>
+      <line x1="8" y1="9" x2="6" y2="14"/>
+      <line x1="13" y1="9" x2="11" y2="14"/>
+      <line x1="18" y1="9" x2="16" y2="14"/>
+      <line x1="23" y1="9" x2="21" y2="14"/>
+      <path d="M13 18.5L13 24.5L20 21.5Z"/>
     </svg>
   );
 }
@@ -37,6 +41,23 @@ function PythonFileIcon() {
       <path d="M11 1l3 3v11H5v-1h8V4l-2-3z" fill="#3a78d4" />
       <path d="M11 1v3h3" fill="none" stroke="#6aaaf0" strokeWidth="0.5" />
       <text x="4" y="10" fontSize="5" fill="#f0e060" fontWeight="bold" fontFamily="monospace">py</text>
+    </svg>
+  );
+}
+
+function AlsieTomlIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6.5" stroke="#c09040" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="2.2" fill="#c09040" />
+      <circle cx="8" cy="1.5" r="1.2" fill="#c09040" />
+      <circle cx="8" cy="14.5" r="1.2" fill="#c09040" />
+      <circle cx="1.5" cy="8" r="1.2" fill="#c09040" />
+      <circle cx="14.5" cy="8" r="1.2" fill="#c09040" />
+      <circle cx="3.4" cy="3.4" r="1.2" fill="#c09040" />
+      <circle cx="12.6" cy="12.6" r="1.2" fill="#c09040" />
+      <circle cx="12.6" cy="3.4" r="1.2" fill="#c09040" />
+      <circle cx="3.4" cy="12.6" r="1.2" fill="#c09040" />
     </svg>
   );
 }
@@ -53,6 +74,7 @@ function GenericFileIcon() {
 
 function EntryIcon({ entry, open }: { entry: FsEntry; open: boolean }) {
   if (entry.is_dir) return <FolderIcon open={open} />;
+  if (entry.name === 'alsie.toml') return <AlsieTomlIcon />;
   if (entry.name.endsWith('.apy')) return <ApyFileIcon />;
   if (entry.name.endsWith('.py')) return <PythonFileIcon />;
   return <GenericFileIcon />;

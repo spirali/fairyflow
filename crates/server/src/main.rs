@@ -31,13 +31,13 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Run the HTTP server
+    /// Run the HTTP server for a project directory
     Serve {
         #[arg(short, long, default_value_t = 3000)]
         port: u16,
 
-        /// Python file to edit. Created with default content if it does not exist.
-        file: Option<PathBuf>,
+        /// Project directory to serve (must contain alsie.toml)
+        directory: PathBuf,
     },
     /// Render all frames from a JSON animation file to PNG images
     RenderJson {
@@ -59,11 +59,15 @@ enum Cmd {
         /// Directory to write frame{n}.png files into
         output_dir: PathBuf,
     },
+    /// Initialize a new project directory
+    Init {
+        /// Directory to create the project in
+        directory: PathBuf,
+    },
 }
 
 #[derive(Clone)]
 struct AppState {
-    file_path: Option<PathBuf>,
     animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
 }
 
@@ -109,32 +113,53 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Cmd::Serve { port, file } => run_serve(port, file).await,
+        Cmd::Serve { port, directory } => run_serve(port, directory).await,
         Cmd::RenderJson { json_path, output_dir, threads } => run_render_json(json_path, output_dir, threads).await,
         Cmd::RenderPy { py_file, output_dir } => run_render_py(py_file, output_dir).await,
+        Cmd::Init { directory } => run_init(directory).await,
     }
 }
 
-async fn run_serve(port: u16, file: Option<PathBuf>) {
-    if let Some(ref path) = file {
-        if !path.exists() {
-            tokio::fs::write(path, DEFAULT_CONTENT).await.unwrap();
-        }
+async fn run_serve(port: u16, directory: PathBuf) {
+    let toml_path = directory.join("alsie.toml");
+    if !toml_path.exists() {
+        eprintln!(
+            "error: {} does not contain alsie.toml — run `alsie init {}` first",
+            directory.display(),
+            directory.display()
+        );
+        std::process::exit(1);
     }
 
+    let web_dist = match std::fs::canonicalize("web/dist") {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: could not resolve web/dist: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    if let Err(e) = std::env::set_current_dir(&directory) {
+        eprintln!("error: could not enter directory {}: {e}", directory.display());
+        std::process::exit(1);
+    }
+
+    info!(directory = %directory.display(), "serving project");
+
     let state = AppState {
-        file_path: file,
         animation: Arc::new(Mutex::new(None)),
     };
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        .route("/ls", get(ls_handler))
+        .route("/file", get(file_handler).put(file_save_handler))
         .route("/frame/{n}", get(frame_handler))
         .route("/frames", get(frames_handler))
         .route("/tree/{n}", get(tree_handler))
         .route("/trees", get(trees_handler))
         .route("/node/{id}", get(node_handler))
-        .fallback_service(ServeDir::new("web/dist"))
+        .fallback_service(ServeDir::new(web_dist))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -214,6 +239,29 @@ async fn run_render_py(py_file: PathBuf, output_dir: PathBuf) {
     render_anim_to_dir(anim, output_dir, None).await;
 }
 
+async fn run_init(directory: PathBuf) {
+    if let Err(e) = tokio::fs::create_dir_all(&directory).await {
+        eprintln!("error: failed to create directory {}: {e}", directory.display());
+        std::process::exit(1);
+    }
+
+    let files = ["alsie.toml", "scene1.apy", "main.asq"];
+    for name in &files {
+        let path = directory.join(name);
+        if path.exists() {
+            eprintln!("warning: {} already exists, skipping", path.display());
+            continue;
+        }
+        if let Err(e) = tokio::fs::write(&path, "").await {
+            eprintln!("error: failed to create {}: {e}", path.display());
+            std::process::exit(1);
+        }
+        println!("created {}", path.display());
+    }
+
+    println!("initialized project in {}", directory.display());
+}
+
 async fn render_anim_to_dir(anim: AnimationDef, output_dir: PathBuf, threads: Option<usize>) {
     if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
         eprintln!("error: failed to create output directory {}: {e}", output_dir.display());
@@ -267,6 +315,71 @@ async fn render_anim_to_dir(anim: AnimationDef, output_dir: PathBuf, threads: Op
             std::process::exit(1);
         }
     }
+}
+
+#[derive(Serialize)]
+struct FsEntry {
+    name: String,
+    is_dir: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    children: Option<Vec<FsEntry>>,
+}
+
+fn build_dir_tree(path: &std::path::Path, depth: u32) -> Vec<FsEntry> {
+    if depth == 0 {
+        return vec![];
+    }
+    let Ok(rd) = std::fs::read_dir(path) else {
+        return vec![];
+    };
+    let mut entries: Vec<FsEntry> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                return None;
+            }
+            let Ok(ft) = e.file_type() else { return None };
+            let is_dir = ft.is_dir();
+            let children = if is_dir {
+                Some(build_dir_tree(&e.path(), depth - 1))
+            } else {
+                None
+            };
+            Some(FsEntry { name, is_dir, children })
+        })
+        .collect();
+    entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
+    entries
+}
+
+#[derive(Deserialize)]
+struct FileQuery {
+    path: String,
+}
+
+async fn file_save_handler(Query(params): Query<FileQuery>, body: String) -> impl IntoResponse {
+    match tokio::fs::write(&params.path, body).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+async fn file_handler(Query(params): Query<FileQuery>) -> impl IntoResponse {
+    match tokio::fs::read_to_string(&params.path).await {
+        Ok(content) => (StatusCode::OK, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], content).into_response(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (StatusCode::NOT_FOUND, "file not found").into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "could not read file").into_response(),
+    }
+}
+
+async fn ls_handler() -> impl IntoResponse {
+    let entries = tokio::task::spawn_blocking(|| build_dir_tree(std::path::Path::new("."), 6))
+        .await
+        .unwrap_or_default();
+    axum::Json(entries)
 }
 
 fn get_animation(state: &AppState) -> Option<Arc<AnimationDef>> {
@@ -454,13 +567,6 @@ async fn ws_handler(
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
     info!("WebSocket connection established");
-    if let Some(ref path) = state.file_path {
-        let content = tokio::fs::read_to_string(path).await.unwrap_or_default();
-        let msg = serde_json::to_string(&ServerMsg::File { content }).unwrap();
-        if socket.send(Message::Text(msg.into())).await.is_err() {
-            return;
-        }
-    }
 
     let (out_tx, mut out_rx) = mpsc::channel::<ServerMsg>(64);
     let (kill_tx, _) = broadcast::channel::<()>(4);
@@ -473,9 +579,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         match serde_json::from_str::<ClientMsg>(&text) {
                             Ok(ClientMsg::Run { code }) => {
                                 info!(bytes = code.len(), "received Run request");
-                                if let Some(ref path) = state.file_path {
-                                    tokio::fs::write(path, &code).await.ok();
-                                }
                                 let n = kill_tx.send(()).unwrap_or(0);
                                 debug!(killed_receivers = n, "sent kill signal");
                                 let tx = out_tx.clone();

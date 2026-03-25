@@ -22,6 +22,12 @@ class AnimatedObject:
         self._frame = frame
         return self
 
+    def step(self):
+        self.transition("step")
+
+    def linear(self):
+        self.transition("linear")
+
     def transition(self, transition: Transition):
         self._transition = transition
         return self

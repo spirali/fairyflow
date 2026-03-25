@@ -1,6 +1,6 @@
 from .exprs import expr_add, expr_hold
 
-type Transition = Literal["sharp", "linear"]
+type Transition = Literal["step", "linear"]
 
 class Hold():
     pass

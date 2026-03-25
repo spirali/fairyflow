@@ -86,7 +86,7 @@ impl AnimatedValue {
                     return Ok(left_v);
                 };
                 let right_v = match right_fv {
-                    FrameValue::Hold | FrameValue::KeyFrame(KeyFrame { tr: Transition::Sharp, .. }) => {
+                    FrameValue::Hold | FrameValue::KeyFrame(KeyFrame { tr: Transition::Step, .. }) => {
                         tracing::trace!(av_id = %self.id, frame = frame.as_u32(), "sharp or hold, no interpolation");
                         return Ok(left_v);
                     }

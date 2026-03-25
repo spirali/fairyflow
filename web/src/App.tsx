@@ -1,22 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
+import type { PanelSize } from 'react-resizable-panels';
 import Editor from '@monaco-editor/react';
-import type { OnMount } from '@monaco-editor/react';
+import type { OnMount, Monaco } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
+import FileTree from './components/FileTree';
 import type { ConsoleLine, NodeBounds, SceneData, ServerMsg, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
+type ViewState = ReturnType<MonacoEditor['saveViewState']>;
 
-const DEFAULT_CODE = `\
-with node().size(300, 200):
-    rect().size(30, 20).color("green")  # Add node into the root node
-
-    with node():
-        rect()
-        circle().radius(10)
-`;
+interface Tab { path: string; isDirty: boolean }
 
 interface RenderedFrameResponse { n: number; png: string }
 
@@ -50,13 +46,147 @@ export default function App() {
   const [selectedNid, setSelectedNid] = useState<number | null>(null);
   const [nodeBounds, setNodeBounds] = useState<NodeBounds | null>(null);
 
+  // ── tabs ─────────────────────────────────────────────────────────────────
+  const [tabs, setTabsState] = useState<Tab[]>([]);
+  const [activeTab, setActiveTabState] = useState(-1);
+  const tabsRef = useRef<Tab[]>([]);
+  const activeTabRef = useRef(-1);
+  const currentFileRef = useRef<string | null>(null);
+  const modelsRef = useRef<Map<string, ReturnType<Monaco['editor']['createModel']>>>(new Map());
+  const viewStatesRef = useRef<Map<string, ViewState>>(new Map());
+
+  const setTabs = (t: Tab[]) => { tabsRef.current = t; setTabsState(t); };
+  const setActiveTab = (i: number) => {
+    activeTabRef.current = i;
+    currentFileRef.current = tabsRef.current[i]?.path ?? null;
+    setActiveTabState(i);
+  };
+  const currentFile = tabs[activeTab]?.path ?? null;
+
+  // ── file tree panel ───────────────────────────────────────────────────────
+  const fileTreePanelRef = usePanelRef();
+  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
+  const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
+  const sidebarMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleFileTreeResize = (_size: PanelSize) => {
+    setFileTreeCollapsed(fileTreePanelRef.current?.isCollapsed() ?? false);
+  };
+
+  const toggleFileTree = () => {
+    const panel = fileTreePanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) panel.expand();
+    else panel.collapse();
+  };
+
+  const switchToTab = (idx: number) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const curIdx = activeTabRef.current;
+    if (curIdx >= 0 && tabsRef.current[curIdx]) {
+      viewStatesRef.current.set(tabsRef.current[curIdx].path, editor.saveViewState());
+    }
+    const newPath = tabsRef.current[idx]?.path;
+    if (!newPath) return;
+    const model = modelsRef.current.get(newPath);
+    if (model) {
+      editor.setModel(model);
+      const vs = viewStatesRef.current.get(newPath);
+      if (vs) editor.restoreViewState(vs);
+      editor.focus();
+    }
+    setActiveTab(idx);
+  };
+
+  const handleFileClick = (path: string) => {
+    const existing = tabsRef.current.findIndex(t => t.path === path);
+    if (existing !== -1) { switchToTab(existing); return; }
+
+    fetch(`/file?path=${encodeURIComponent(path)}`)
+      .then(r => r.ok ? r.text() : null)
+      .then(content => {
+        if (content === null) return;
+        const monaco = monacoRef.current;
+        const editor = editorRef.current;
+        if (!monaco || !editor) return;
+        const curIdx = activeTabRef.current;
+        if (curIdx >= 0 && tabsRef.current[curIdx]) {
+          viewStatesRef.current.set(tabsRef.current[curIdx].path, editor.saveViewState());
+        }
+        const lang = path.endsWith('.apy') ? 'python' : undefined;
+        const model = monaco.editor.createModel(content, lang, monaco.Uri.file(path));
+        modelsRef.current.set(path, model);
+        const newTabs = [...tabsRef.current, { path, isDirty: false }];
+        setTabs(newTabs);
+        const newIdx = newTabs.length - 1;
+        activeTabRef.current = newIdx;
+        currentFileRef.current = path;
+        setActiveTabState(newIdx);
+        editor.setModel(model);
+        editor.focus();
+      })
+      .catch(() => {});
+  };
+
+  const handleTabClick = (idx: number) => {
+    if (idx !== activeTabRef.current) switchToTab(idx);
+  };
+
+  const handleCloseTab = (idx: number) => {
+    const tab = tabsRef.current[idx];
+    modelsRef.current.get(tab.path)?.dispose();
+    modelsRef.current.delete(tab.path);
+    viewStatesRef.current.delete(tab.path);
+    const newTabs = tabsRef.current.filter((_, i) => i !== idx);
+    tabsRef.current = newTabs;
+    setTabsState(newTabs);
+    if (newTabs.length === 0) {
+      activeTabRef.current = -1;
+      currentFileRef.current = null;
+      setActiveTabState(-1);
+    } else {
+      const newIdx = Math.min(idx, newTabs.length - 1);
+      const newPath = newTabs[newIdx].path;
+      activeTabRef.current = newIdx;
+      currentFileRef.current = newPath;
+      setActiveTabState(newIdx);
+      const editor = editorRef.current;
+      if (editor) {
+        const model = modelsRef.current.get(newPath);
+        if (model) {
+          editor.setModel(model);
+          const vs = viewStatesRef.current.get(newPath);
+          if (vs) editor.restoreViewState(vs);
+        }
+      }
+    }
+  };
+
+  const markActiveTabClean = () => {
+    const idx = activeTabRef.current;
+    if (idx < 0) return;
+    setTabs(tabsRef.current.map((t, i) => i === idx ? { ...t, isDirty: false } : t));
+  };
+
+  useEffect(() => {
+    if (!sidebarMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (sidebarMenuRef.current && !sidebarMenuRef.current.contains(e.target as Node)) {
+        setSidebarMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [sidebarMenuOpen]);
+
   // ── editor / console ─────────────────────────────────────────────────────
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [running, setRunning] = useState(false);
   const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
   const editorRef = useRef<MonacoEditor | null>(null);
-  const pendingFileContent = useRef<string | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const reconnectCount = useRef(0);
 
@@ -87,10 +217,7 @@ export default function App() {
 
       ws.onmessage = (e: MessageEvent<string>) => {
         const msg = JSON.parse(e.data) as ServerMsg;
-        if (msg.type === 'file') {
-          if (editorRef.current) editorRef.current.setValue(msg.content);
-          else pendingFileContent.current = msg.content;
-        } else if (msg.type === 'output') {
+        if (msg.type === 'output') {
           setLines((prev) => [...prev, { kind: 'out', text: msg.text }]);
         } else if (msg.type === 'error') {
           setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
@@ -217,16 +344,60 @@ export default function App() {
   // ── editor ────────────────────────────────────────────────────────────────
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
-    if (pendingFileContent.current !== null) {
-      editor.setValue(pendingFileContent.current);
-      pendingFileContent.current = null;
-    }
+    monacoRef.current = monaco;
+
+    monaco.languages.register({ id: 'toml', extensions: ['.toml'] });
+    monaco.languages.setMonarchTokensProvider('toml', {
+      tokenizer: {
+        root: [
+          [/#.*$/, 'comment'],
+          [/^\s*\[{1,2}[^\]]*\]{1,2}/, 'keyword.section'],
+          [/"(?:[^"\\]|\\.)*"/, 'string'],
+          [/'[^']*'/, 'string'],
+          [/"""[\s\S]*?"""/, 'string'],
+          [/'''[\s\S]*?'''/, 'string'],
+          [/\b(true|false)\b/, 'keyword'],
+          [/[+-]?0x[0-9a-fA-F_]+/, 'number.hex'],
+          [/[+-]?(?:inf|nan)\b/, 'number'],
+          [/[+-]?\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?[\d_]+)?/, 'number'],
+          [/\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?/, 'string.date'],
+          [/[a-zA-Z_][a-zA-Z0-9_.-]*(?=\s*=)/, 'variable'],
+          [/=/, 'operator'],
+          [/[,\[\]{}]/, 'delimiter'],
+        ],
+      },
+    });
+
+    editor.onDidChangeModelContent(() => {
+      const idx = activeTabRef.current;
+      if (idx < 0 || tabsRef.current[idx]?.isDirty) return;
+      setTabs(tabsRef.current.map((t, i) => i === idx ? { ...t, isDirty: true } : t));
+    });
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      const path = currentFileRef.current;
+      if (!path?.endsWith('.apy')) return;
       const code = editorRef.current?.getValue();
       if (!code || !wsRef.current) return;
+      fetch(`/file?path=${encodeURIComponent(path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: code,
+      }).then(() => markActiveTabClean()).catch(() => {});
       setLines([]);
       setRunning(true);
       wsRef.current.send(JSON.stringify({ type: 'run', code }));
+    });
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      const path = currentFileRef.current;
+      if (!path) return;
+      const content = editorRef.current?.getValue() ?? '';
+      fetch(`/file?path=${encodeURIComponent(path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: content,
+      }).then(() => markActiveTabClean()).catch(() => {});
     });
   };
 
@@ -450,27 +621,107 @@ export default function App() {
         </div>
       )}
 
-      <PanelGroup orientation="horizontal" className="main-content">
+      <div className="app-body">
+        {/* ── Permanent sidebar strip ── */}
+        <div className="sidebar-strip">
+          <div className="sidebar-menu-anchor" ref={sidebarMenuRef}>
+            <button
+              className="sidebar-icon-btn"
+              onClick={() => setSidebarMenuOpen(v => !v)}
+              title="Main Menu"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="2" y="4" width="12" height="1.5" rx="0.75" />
+                <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" />
+                <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" />
+              </svg>
+            </button>
+            {sidebarMenuOpen && (
+              <div className="sidebar-menu">
+                {(['New File', 'New Folder', null, 'Open in Terminal', 'Reveal in File Manager', null, 'Preferences'] as (string | null)[]).map((item, i) =>
+                  item === null
+                    ? <div key={i} className="sidebar-menu-sep" />
+                    : <button key={item} className="sidebar-menu-item" onClick={() => setSidebarMenuOpen(false)}>{item}</button>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            className={`sidebar-icon-btn${fileTreeCollapsed ? '' : ' sidebar-icon-btn-active'}`}
+            onClick={toggleFileTree}
+            title={fileTreeCollapsed ? 'Show Explorer' : 'Hide Explorer'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="2" y="2" width="5" height="12" rx="1" opacity="0.5" />
+              <rect x="8" y="2" width="6" height="3" rx="1" />
+              <rect x="8" y="7" width="6" height="3" rx="1" />
+              <rect x="8" y="12" width="4" height="2" rx="1" />
+            </svg>
+          </button>
+        </div>
+
+        <PanelGroup orientation="horizontal" className="main-content">
+        {/* ── File tree ── */}
+        <Panel
+          panelRef={fileTreePanelRef}
+          defaultSize={10}
+          minSize={12}
+          collapsible
+          collapsedSize={0}
+          onResize={handleFileTreeResize}
+        >
+          <FileTree activeFile={currentFile} onFileClick={handleFileClick} />
+        </Panel>
+
+        <PanelResizeHandle className="resize-handle horizontal" />
+
         {/* ── Left: editor + console ── */}
-        <Panel defaultSize={50} minSize={20}>
+        <Panel defaultSize={40} minSize={20}>
           <PanelGroup orientation="vertical">
             <Panel defaultSize={80} minSize={20}>
-              <div className="panel-fill">
-                <Editor
-                  height="100%"
-                  defaultLanguage="python"
-                  defaultValue={DEFAULT_CODE}
-                  theme="vs-dark"
-                  onMount={handleEditorMount}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineHeight: 20,
-                    scrollBeyondLastLine: false,
-                    renderLineHighlight: 'line',
-                    padding: { top: 10 },
-                  }}
-                />
+              <div className="editor-with-tabs">
+                {tabs.length > 0 && (
+                  <div className="tab-bar">
+                    {tabs.map((tab, idx) => {
+                      const name = tab.path.split('/').pop() ?? tab.path;
+                      return (
+                        <div
+                          key={tab.path}
+                          className={`tab${idx === activeTab ? ' tab-active' : ''}`}
+                          onClick={() => handleTabClick(idx)}
+                        >
+                          <span className="tab-name">{name}</span>
+                          {tab.isDirty && <span className="tab-dirty">●</span>}
+                          <button
+                            className="tab-close-btn"
+                            onClick={e => { e.stopPropagation(); handleCloseTab(idx); }}
+                            title="Close"
+                          >×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="panel-fill" style={{ position: 'relative' }}>
+                  <Editor
+                    height="100%"
+                    theme="vs-dark"
+                    onMount={handleEditorMount}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      lineHeight: 20,
+                      scrollBeyondLastLine: false,
+                      renderLineHighlight: 'line',
+                      padding: { top: 10 },
+                    }}
+                  />
+                  {tabs.length === 0 && (
+                    <div className="editor-placeholder">
+                      <span>Open a file from the explorer</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </Panel>
 
@@ -614,7 +865,8 @@ export default function App() {
             </PanelGroup>
           </div>
         </Panel>
-      </PanelGroup>
+        </PanelGroup>
+      </div>
     </div>
   );
 }

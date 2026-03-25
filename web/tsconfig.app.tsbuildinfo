@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/types.ts","./src/components/Icons.tsx","./src/components/MenuBar.tsx","./src/components/TreeView.tsx"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/types.ts","./src/components/FileTree.tsx","./src/components/Icons.tsx","./src/components/MenuBar.tsx","./src/components/TreeView.tsx"],"version":"5.9.3"}

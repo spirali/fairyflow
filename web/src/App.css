@@ -5,10 +5,94 @@
   height: 100%;
 }
 
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .main-content {
   flex: 1;
   overflow: hidden;
   min-height: 0;
+}
+
+/* ── Permanent sidebar strip ─────────────────────────────────────────────── */
+.sidebar-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  width: 36px;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-menu-anchor {
+  position: relative;
+}
+
+.sidebar-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+}
+.sidebar-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.sidebar-icon-btn-active {
+  color: var(--accent);
+}
+.sidebar-icon-btn-active:hover {
+  color: var(--accent);
+}
+
+.sidebar-menu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 4px);
+  z-index: 100;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-width: 200px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.sidebar-menu-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.sidebar-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
 }
 
 /* ── Resize handles ──────────────────────────────────────────────────────── */
@@ -34,6 +118,104 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* ── Editor with tabs ────────────────────────────────────────────────────── */
+.editor-with-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  height: 40px;
+  min-width: 120px;
+  max-width: 220px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 15px;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+}
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tab.tab-active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-top: 1px solid var(--accent);
+}
+
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-dirty {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tab-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s, color 0.1s;
+}
+.tab:hover .tab-close-btn,
+.tab.tab-active .tab-close-btn {
+  opacity: 1;
+}
+.tab-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.editor-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: #1e1e1e;
+}
+.editor-placeholder span {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* ── Menu bar ────────────────────────────────────────────────────────────── */
@@ -682,4 +864,93 @@
 }
 .ws-error-reload:hover {
   opacity: 0.85;
+}
+
+/* ── File tree panel ─────────────────────────────────────────────────────── */
+.filetree-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  user-select: none;
+}
+
+
+.filetree-header {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 4px 0 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.filetree-header-title {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+
+
+.filetree-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+
+.filetree-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding-right: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  border-radius: 0;
+}
+.filetree-entry.filetree-dir,
+.filetree-entry.filetree-file {
+  cursor: pointer;
+}
+.filetree-entry:hover {
+  background: var(--bg-hover);
+}
+.filetree-entry.filetree-active {
+  background: var(--accent);
+  color: #fff;
+}
+.filetree-entry.filetree-active:hover {
+  background: var(--accent);
+}
+
+.filetree-chevron {
+  width: 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.filetree-entry-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.filetree-entry-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

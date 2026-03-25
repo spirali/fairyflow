@@ -8,7 +8,7 @@ use crate::basictypes::{AvId, FrameId, NodeId};
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Transition {
-    Sharp,
+    Step,
     Linear,
 }
 

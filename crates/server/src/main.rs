@@ -27,6 +27,7 @@ use crate::service::start_service;
 mod service;
 mod lancher;
 mod render;
+mod config;
 
 #[derive(Parser)]
 struct Args {

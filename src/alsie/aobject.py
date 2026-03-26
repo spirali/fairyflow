@@ -6,7 +6,7 @@ class AnimatedObject:
     def __init__(self, frame: int):
         self._frame = frame
         self._start = frame
-        self._transition = "sharp"
+        self._transition = "step"
         self._attrs = {}
 
     def _add_attr(self, name, value):
@@ -24,9 +24,11 @@ class AnimatedObject:
 
     def step(self):
         self.transition("step")
+        return self
 
     def linear(self):
         self.transition("linear")
+        return self
 
     def transition(self, transition: Transition):
         self._transition = transition

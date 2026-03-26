@@ -252,15 +252,14 @@ async fn frame_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
-    let result: Result<anyhow::Result<RenderedFrame>, _> = tokio::task::spawn_blocking(move || {
+    let result: Result<anyhow::Result<Vec<u8>>, _> = tokio::task::spawn_blocking(move || {
         let scene = anim.build_scene(FrameId::new(n))?;
         let pixmap = renderer::render_scene(&scene, scale);
         renderer::prune_text_cache();
-        let png = pixmap.encode_png()?;
-        Ok(RenderedFrame { n, png: B64.encode(&png) })
+        Ok(pixmap.encode_png()?)
     }).await;
     match result {
-        Ok(Ok(frame)) => axum::Json(frame).into_response(),
+        Ok(Ok(png)) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
         Ok(Err(e)) => {
             warn!("rending failed: {e}");
             (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()

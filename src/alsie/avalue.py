@@ -42,8 +42,7 @@ class AnimatedValue:
     def get_first_value(self):
         return self.values[self.init_frame]
 
-    def serialize(self):
-        from .serializer import serialize_expr       
+    def serialize(self): 
         values = [serialize_frame_value(f, self.values[f], self.transitions) for f in self.values]
         return {"id": id(self), "values": values}        
     

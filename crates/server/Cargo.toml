@@ -12,6 +12,7 @@ axum = { version = "0.8.8", features = ["ws"] }
 clap = { version = "4", features = ["derive"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+anyhow = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs"] }
 tracing = "0.1"

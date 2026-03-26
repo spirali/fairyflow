@@ -1,8 +1,3 @@
-# from ._alsie import Color
-
-# __all__ = ["Color"]
-
-
 class Color:
 
     def __init__(self, value):

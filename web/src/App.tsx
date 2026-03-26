@@ -386,7 +386,7 @@ export default function App() {
       }).then(() => markActiveTabClean()).catch(() => {});
       setLines([]);
       setRunning(true);
-      wsRef.current.send(JSON.stringify({ type: 'run', code }));
+      wsRef.current.send(JSON.stringify({ type: 'run', path }));
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -397,7 +397,14 @@ export default function App() {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         body: content,
-      }).then(() => markActiveTabClean()).catch(() => {});
+      }).then(async (r) => {
+        if (r.ok) {
+          markActiveTabClean();
+        } else {
+          const msg = await r.text();
+          setLines((prev) => [...prev, { kind: 'err', text: `Config error: ${msg}` }]);
+        }
+      }).catch(() => {});
     });
   };
 

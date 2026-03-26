@@ -4,7 +4,6 @@ import asyncio
 import json
 
 import pytest
-import websockets
 
 WS_TIMEOUT = 15  # seconds — any single test must finish within this time
 

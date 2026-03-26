@@ -21,27 +21,24 @@ pub enum BuildProcessMsg {
 }
 
 pub async fn run_python(
-    code: String,
+    source_path: String,
+    prologue: Option<std::path::PathBuf>,
     tx: mpsc::Sender<BuildProcessMsg>,
     mut kill_rx: broadcast::Receiver<()>,
     animation_cache: Arc<Mutex<Option<Arc<AnimationDef>>>>,
 ) {
     let id = RUN_ID.fetch_add(1, Ordering::Relaxed);
-    info!(run_id = id, "run_python started");
-    let tmp = std::env::temp_dir().join(format!("alsie_{id}.py"));
+    info!(run_id = id, path = source_path, "run_python started");
     let tree_path = std::env::temp_dir().join(format!("alsie_{id}_tree.json"));
 
-    if let Err(e) = tokio::fs::write(&tmp, &code).await {
-        warn!(run_id = id, error = %e, "failed to write temp script");
-        tx.send(BuildProcessMsg::Error { text: e.to_string() }).await.ok();
-        tx.send(BuildProcessMsg::Done { exit_code: None }).await.ok();
-        return;
+    let mut cmd = Command::new("python3");
+    cmd.args(["-m", "alsie"]);
+    if let Some(p) = &prologue {
+        cmd.arg("--prologue").arg(p);
     }
+    cmd.arg(&source_path).arg(&tree_path);
 
-    let mut child = match Command::new("python3")
-        .args(["-m", "alsie"])
-        .arg(&tmp)
-        .arg(&tree_path)
+    let mut child = match cmd
         .env("PYTHONPATH", "crates/alsie/python")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -126,7 +123,6 @@ pub async fn run_python(
     info!(run_id = id, exit_code = ?exit_code, "sending Done message");
     tx.send(BuildProcessMsg::Done { exit_code }).await.ok();
 
-    tokio::fs::remove_file(&tmp).await.ok();
     tokio::fs::remove_file(&tree_path).await.ok();
     info!(run_id = id, "run_python finished");
 }

@@ -67,11 +67,6 @@ impl AnimatedValue {
         result
     }
 
-    pub fn eval_at_frame(&self, ctx: &EvalCtx, frame_id: FrameId) -> anyhow::Result<Value> {
-        let new_ctx = ctx.clone_at_frame(frame_id);
-        self.eval(&new_ctx)
-    }
-
     fn eval_inner(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
 
                 let frame = ctx.frame();
@@ -137,13 +132,5 @@ impl AnimatedValue {
     /// Look to higher frames and return FrameValue (do not skip "hold")
     pub fn scan_right(&self, frame_id: FrameId) -> Option<(FrameId, &FrameValue)> {
         self.values.range(frame_id..).map(|(frame_id, value)| (*frame_id, value)).next()
-    }
-
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    pub fn get(&self, frame_id: &FrameId) -> Option<&FrameValue> {
-        self.values.get(frame_id)
     }
 }

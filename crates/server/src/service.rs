@@ -15,20 +15,22 @@ use tracing::{debug, info, warn};
 use engine::{AnimationDef, FrameId};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use crate::lancher::{run_python, BuildProcessMsg};
+use crate::config::ProjectConfig;
 
 #[derive(Clone)]
 struct AppState {
     animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
+    config: Arc<Mutex<ProjectConfig>>,
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum ClientMsg {
-    Run { code: String },
+    Run { path: String },
     Terminate,
 }
 
-pub async fn start_service(directory: &std::path::Path, port: u16) {
+pub async fn start_service(directory: &std::path::Path, port: u16, config: ProjectConfig) {
     info!(directory = %directory.display(), "serving project");
 
     let web_dist = match std::fs::canonicalize("../web/dist") {
@@ -41,6 +43,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16) {
 
     let state = AppState {
         animation: Arc::new(Mutex::new(None)),
+        config: Arc::new(Mutex::new(config)),
     };
 
     let app = Router::new()
@@ -105,11 +108,32 @@ struct FileQuery {
     path: String,
 }
 
-async fn file_save_handler(Query(params): Query<FileQuery>, body: String) -> impl IntoResponse {
-    match tokio::fs::write(&params.path, body).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+async fn file_save_handler(
+    Query(params): Query<FileQuery>,
+    State(state): State<AppState>,
+    body: String,
+) -> impl IntoResponse {
+    if let Err(e) = tokio::fs::write(&params.path, &body).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
     }
+
+    let is_config = std::path::Path::new(&params.path)
+        .file_name()
+        .map_or(false, |n| n == "alsie.toml");
+
+    if is_config {
+        match ProjectConfig::load(std::path::Path::new("alsie.toml")) {
+            Ok(new_cfg) => {
+                renderer::Resources::get().load_font_directories(&new_cfg.font_directories);
+                *state.config.lock().unwrap() = new_cfg;
+            }
+            Err(e) => {
+                return (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response();
+            }
+        }
+    }
+
+    StatusCode::NO_CONTENT.into_response()
 }
 
 async fn file_handler(Query(params): Query<FileQuery>) -> impl IntoResponse {
@@ -325,14 +349,17 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMsg>(&text) {
-                            Ok(ClientMsg::Run { code }) => {
-                                info!(bytes = code.len(), "received Run request");
+                            Ok(ClientMsg::Run { path }) => {
+                                info!(path, "received Run request");
                                 let n = kill_tx.send(()).unwrap_or(0);
                                 debug!(killed_receivers = n, "sent kill signal");
                                 let tx = out_tx.clone();
                                 let kill_rx = kill_tx.subscribe();
+                                let prologue = state.config.lock().unwrap()
+                                    .prologue.as_deref()
+                                    .and_then(|p| std::env::current_dir().ok().map(|d| d.join(p)));
                                 debug!("subscribed new kill_rx, spawning run_python");
-                                tokio::spawn(run_python(code, tx, kill_rx, state.animation.clone()));
+                                tokio::spawn(run_python(path, prologue, tx, kill_rx, state.animation.clone()));
                             }
                             Ok(ClientMsg::Terminate) => {
                                 info!("received Terminate request");

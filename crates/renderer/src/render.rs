@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 use serde::Serialize;
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Point, Rect, Stroke, Transform};
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform};
 use parley::{Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem, StyleProperty};
 use skrifa::{GlyphId, MetadataProvider, instance::{LocationRef, NormalizedCoord, Size as SkrifaSize}, outline::{DrawSettings, OutlinePen}, raw::FontRef as ReadFontsRef};
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
@@ -20,7 +20,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(resources: &Resources) -> Renderer {
         Renderer {
-            font_cx: resources.font_cx().clone(),
+            font_cx: resources.font_cx(),
             layout_cx: LayoutContext::new(),
         }
     }
@@ -246,6 +246,26 @@ impl Renderer {
 /// Render a scene using the per-thread `Renderer` (initialised once per thread).
 pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
     RENDERER.with(|r| r.borrow_mut().render_scene(scene, scale))
+}
+
+/// Render `scene` fitted into `target_w × target_h`, preserving aspect ratio.
+/// The scene is scaled to fill as much of the target as possible; any remaining
+/// area is filled with black (letterbox / pillarbox).
+pub fn render_scene_fitted(scene: &Scene, target_w: u32, target_h: u32) -> Pixmap {
+    let scale = (target_w as f32 / scene.width as f32)
+        .min(target_h as f32 / scene.height as f32);
+    let rendered = render_scene(scene, scale);
+    let rw = rendered.width();
+    let rh = rendered.height();
+    if rw == target_w && rh == target_h {
+        return rendered;
+    }
+    let mut canvas = Pixmap::new(target_w, target_h).expect("invalid target resolution");
+    canvas.fill(tiny_skia::Color::BLACK);
+    let x = ((target_w - rw) / 2) as i32;
+    let y = ((target_h - rh) / 2) as i32;
+    canvas.draw_pixmap(x, y, rendered.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+    canvas
 }
 
 /// Measure the natural (unwrapped) dimensions of a text block.

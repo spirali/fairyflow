@@ -21,10 +21,6 @@ impl<'a> EvalCtx<'a> {
         Self { frame, root, depth: Cell::new(0) }
     }
 
-    pub fn clone_at_frame(&self, frame: FrameId) -> Self {
-        Self { frame, root: self.root, depth: self.depth.clone() }
-    }
-
     #[inline]
     pub fn frame(&self) -> FrameId {
         self.frame
@@ -229,20 +225,6 @@ impl Expr {
         self.eval(ctx)?.as_f64()
     }
 
-    pub fn eval_at_frame(&self, ctx: &EvalCtx, frame: FrameId) -> anyhow::Result<Value> {
-        match self {
-            Expr::Const(v) => Ok(v.clone()),
-            Expr::Call(call) => {
-                let new_ctx = ctx.clone_at_frame(frame);
-                call.eval(&new_ctx)
-            },
-            Expr::Av(av_id) => {
-                tracing::trace!(av_id = %av_id.get_id(), "Expr::Av");
-                let new_ctx = ctx.clone_at_frame(frame);
-                new_ctx.eval_av(av_id.get_id())
-            }
-        }
-    }
 }
 
 impl CallExpr {

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 base64 = "0.22"
+toml = "0.8"
 rayon = "1"
 engine = { path = "../engine" }
 renderer = { path = "../renderer" }

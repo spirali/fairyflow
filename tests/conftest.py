@@ -2,6 +2,8 @@ import socket
 import subprocess
 import time
 import sys
+from alsie import scene
+from alsie.serializer import create_export
 
 import pytest
 from pathlib import Path
@@ -66,3 +68,9 @@ def server_uri(server_port):
     return f"ws://localhost:{server_port}/ws"
 
 
+@pytest.fixture(scope="function")
+def test_scene():
+    s = scene(60, 40)
+    yield s
+    print(create_export(s))
+    

@@ -1,3 +1,4 @@
+from .layout import centering_layout
 from .position import Position
 from .aobject import AnimatedObject, get_frame, reset_frame
 from .color import Color
@@ -109,10 +110,19 @@ class PositionMixin:
     def align_x(self, value):
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
-            new_x = expr_mul(expr_sub(parent._get_attr("width"), self._get_attr("width")), value)
+            new_value = expr_mul(expr_sub(parent._get_attr("width"), self._get_attr("width")), value)
         else:
-            new_x = expr_mul(parent._get_attr("width"), value)
-        self._set_attr("x", new_x)
+            new_value = expr_mul(parent._get_attr("width"), value)
+        self._set_attr("x", new_value)
+        return self
+
+    def align_y(self, value):
+        parent = self.parent_group()
+        if isinstance(self, SizeMixin):
+            new_value = expr_mul(expr_sub(parent._get_attr("height"), self._get_attr("height")), value)
+        else:
+            new_value = expr_mul(parent._get_attr("height"), value)
+        self._set_attr("y", new_value)
         return self
 
     def pos(self, position: Position):
@@ -211,6 +221,7 @@ class Group(
         self._add_attr("rotation", 0)
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
+        self._layout = centering_layout
 
     def scale_x(self, value):
         self._set_attr("scale_x", value)

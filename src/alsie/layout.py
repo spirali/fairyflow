@@ -1,8 +1,10 @@
 
 
-# class CenteringLayout:
-#
-#     def get_children_init_position(self, parent, node):
-#
-#
-# centering_layout = CenteringLayout()
+class CenteringLayout:
+
+    def set_layout(self, node):
+        node.align_x(0.5)
+        node.align_y(0.5)
+
+
+centering_layout = CenteringLayout()

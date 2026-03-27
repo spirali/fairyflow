@@ -50,6 +50,7 @@ def write_tree(path):
     from .nodes import ROOT_OBJECT
 
     export = create_export(ROOT_OBJECT)
+    print(export)
     print(json.dumps(export))
     with open(path, "w") as f:
         json.dump(export, f)

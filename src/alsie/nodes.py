@@ -1,6 +1,7 @@
 from .position import Position
 from .aobject import AnimatedObject, get_frame, reset_frame
 from .color import Color
+from .exprs import expr_mul, expr_sub
 from typing import Union
 
 NODE_CONTEXT = None
@@ -24,6 +25,12 @@ class Node(AnimatedObject):
                 result.append(node)
             node = node._parent
         return result
+
+    def parent_group(self):
+        parent = self._parent
+        if isinstance(self._parent, Group) or isinstance(self._parent, Scene) or parent is None:
+            return parent
+        return parent.parent_group()
 
     def _new_id(self):
         return self._parent._new_id()
@@ -97,6 +104,15 @@ class PositionMixin:
     def xy(self, x, y):
         self.x(x)
         self.y(y)
+        return self
+
+    def align_x(self, value):
+        parent = self.parent_group()
+        if isinstance(self, SizeMixin):
+            new_x = expr_mul(expr_sub(parent._get_attr("width"), self._get_attr("width")), value)
+        else:
+            new_x = expr_mul(parent._get_attr("width"), value)
+        self._set_attr("x", new_x)
         return self
 
     def pos(self, position: Position):

@@ -162,6 +162,10 @@ pub enum CallExpr {
     NodeTransformY(Box<CallParamsNodeTransform>),
     #[serde(rename = "+")]
     Add(Box<CallParamsPair>),
+    #[serde(rename = "-")]
+    Sub(Box<CallParamsPair>),
+    #[serde(rename = "*")]
+    Mul(Box<CallParamsPair>),
     DefaultWidth {
         node: NodeRef,
     },

@@ -294,6 +294,20 @@ impl CallExpr {
                 let vb = pair.b.eval(ctx)?.as_f64()?;
                 tracing::trace!(a = va, b = vb, result = va + vb, "Call::Add result");
                 Ok(Value::Float(va + vb))
+            },
+            CallExpr::Sub(pair) => {
+                tracing::trace!("Call::Sub");
+                let va = pair.a.eval(ctx)?.as_f64()?;
+                let vb = pair.b.eval(ctx)?.as_f64()?;
+                tracing::trace!(a = va, b = vb, result = va - vb, "Call::Sub result");
+                Ok(Value::Float(va - vb))
+            },
+            CallExpr::Mul(pair) => {
+                tracing::trace!("Call::Mul");
+                let va = pair.a.eval(ctx)?.as_f64()?;
+                let vb = pair.b.eval(ctx)?.as_f64()?;
+                tracing::trace!(a = va, b = vb, result = va * vb, "Call::Mul result");
+                Ok(Value::Float(va * vb))
             }
             CallExpr::NodeTransformX(params) => {
                 tracing::trace!(

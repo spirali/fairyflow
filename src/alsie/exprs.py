@@ -26,6 +26,11 @@ class Call(Expr):
 def expr_add(a, b):
     return Call("+", a=a, b=b)
 
+def expr_sub(a, b):
+    return Call("-", a=a, b=b)
+
+def expr_mul(a, b):
+    return Call("*", a=a, b=b)
 
 def expr_hold(av):
     return Call("hold", av=av)
@@ -37,3 +42,5 @@ def expr_default_x(node):
 
 def expr_default_y(node):
     return Call("default_y", node=node)
+
+

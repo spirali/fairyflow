@@ -52,4 +52,4 @@ def serialize_frame_value(frame, obj, transitions):
     if obj == HOLD:
         return {"frame": frame, "op": "hold"}
     else:
-        return {"frame": frame, "value": serialize_expr(obj), "tr": transitions.get(frame, "sharp")}
+        return {"frame": frame, "value": serialize_expr(obj), "tr": transitions.get(frame, "step")}

@@ -1,11 +1,14 @@
-use std::collections::HashSet;
-use std::cell::{Cell, RefCell};
-use anyhow::bail;
-use crate::animdef::AnimationDef;
-use crate::avalue::{AnimatedValue};
-use crate::basictypes::{AvId, NodeId};
-use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, Value};
 use crate::FrameId;
+use crate::animdef::AnimationDef;
+use crate::avalue::AnimatedValue;
+use crate::basictypes::{AvId, NodeId};
+use crate::defs::{
+    CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style,
+    TextStyle, Value,
+};
+use anyhow::bail;
+use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 
 const EVAL_DEPTH_MAX: u32 = 64;
 
@@ -16,9 +19,12 @@ pub(crate) struct EvalCtx<'a> {
 }
 
 impl<'a> EvalCtx<'a> {
-
     pub fn new(frame: FrameId, root: &'a AnimationDef) -> Self {
-        Self { frame, root, depth: Cell::new(0) }
+        Self {
+            frame,
+            root,
+            depth: Cell::new(0),
+        }
     }
 
     #[inline]
@@ -27,9 +33,10 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn av(&self, av_id: AvId) -> anyhow::Result<&AnimatedValue> {
-        self.root.animated_values.get(&av_id).ok_or_else(|| {
-            anyhow::anyhow!("Av {} not found", av_id)
-        })
+        self.root
+            .animated_values
+            .get(&av_id)
+            .ok_or_else(|| anyhow::anyhow!("Av {} not found", av_id))
     }
 
     pub(crate) fn begin_eval(&self) -> anyhow::Result<()> {
@@ -56,9 +63,10 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn node(&self, node_id: NodeId) -> anyhow::Result<&'a Node> {
-        self.root.nodes.get(&node_id).ok_or_else(|| {
-            anyhow::anyhow!("node {:?} not found", node_id)
-        })
+        self.root
+            .nodes
+            .get(&node_id)
+            .ok_or_else(|| anyhow::anyhow!("node {:?} not found", node_id))
     }
 }
 
@@ -85,7 +93,13 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
 /// Returns (tx, ty, sx, sy, cos_r, sin_r).
 fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64, f64, f64)> {
     match &node.kind {
-        NodeKind::Group { position, scale_x, scale_y, rotation, .. } => {
+        NodeKind::Group {
+            position,
+            scale_x,
+            scale_y,
+            rotation,
+            ..
+        } => {
             let tx = position.x.eval_f64(ctx)?;
             let ty = position.y.eval_f64(ctx)?;
             let sx = scale_x.eval_f64(ctx)?;
@@ -100,26 +114,58 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64,
 /// Transform (lx, ly) from node n's local space into n's parent space.
 /// parent_x = cos(r)*sx*lx - sin(r)*sy*ly + tx
 /// parent_y = sin(r)*sx*lx + cos(r)*sy*ly + ty
-fn from_node_pos(tx: f64, ty: f64, sx: f64, sy: f64, cos_r: f64, sin_r: f64, lx: f64, ly: f64) -> (f64, f64) {
-    (cos_r * sx * lx - sin_r * sy * ly + tx,
-     sin_r * sx * lx + cos_r * sy * ly + ty)
+fn from_node_pos(
+    tx: f64,
+    ty: f64,
+    sx: f64,
+    sy: f64,
+    cos_r: f64,
+    sin_r: f64,
+    lx: f64,
+    ly: f64,
+) -> (f64, f64) {
+    (
+        cos_r * sx * lx - sin_r * sy * ly + tx,
+        sin_r * sx * lx + cos_r * sy * ly + ty,
+    )
 }
 
 /// Transform (px, py) from parent space into node n's local space.
 /// q = parent_pos - translation;  local_x = (cos(r)*qx + sin(r)*qy) / sx
-fn into_node_pos(tx: f64, ty: f64, sx: f64, sy: f64, cos_r: f64, sin_r: f64, px: f64, py: f64) -> (f64, f64) {
+fn into_node_pos(
+    tx: f64,
+    ty: f64,
+    sx: f64,
+    sy: f64,
+    cos_r: f64,
+    sin_r: f64,
+    px: f64,
+    py: f64,
+) -> (f64, f64) {
     let qx = px - tx;
     let qy = py - ty;
-    ((cos_r * qx + sin_r * qy) / sx,
-     (-sin_r * qx + cos_r * qy) / sy)
+    (
+        (cos_r * qx + sin_r * qy) / sx,
+        (-sin_r * qx + cos_r * qy) / sy,
+    )
 }
 
 /// Transform point (x, y) from source node's local coordinate space into target node's local space.
-fn node_transform(source: NodeId, target: NodeId, x: f64, y: f64, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
+fn node_transform(
+    source: NodeId,
+    target: NodeId,
+    x: f64,
+    y: f64,
+    ctx: &EvalCtx,
+) -> anyhow::Result<(f64, f64)> {
     let _span = tracing::trace_span!(
         "node_transform",
-        source = source.as_u64(), target = target.as_u64(), x, y
-    ).entered();
+        source = source.as_u64(),
+        target = target.as_u64(),
+        x,
+        y
+    )
+    .entered();
     if source == target {
         return Ok((x, y));
     }
@@ -159,30 +205,39 @@ fn node_transform(source: NodeId, target: NodeId, x: f64, y: f64, ctx: &EvalCtx)
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
 /// Walk parent links to find the nearest `Text` ancestor of `node_id`.
-fn find_text_ancestor(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<crate::basictypes::NodeId> {
+fn find_text_ancestor(
+    node_id: crate::basictypes::NodeId,
+    ctx: &EvalCtx,
+) -> anyhow::Result<crate::basictypes::NodeId> {
     let mut current = node_id;
     loop {
         let node = ctx.node(current)?;
         if matches!(node.kind, NodeKind::Text { .. }) {
             return Ok(current);
         }
-        current = node.parent.ok_or_else(|| {
-            anyhow::anyhow!("node {:?} has no Text ancestor", node_id)
-        })?;
+        current = node
+            .parent
+            .ok_or_else(|| anyhow::anyhow!("node {:?} has no Text ancestor", node_id))?;
     }
 }
 
 /// Returns the position `(x, y)` of a `TextGroup` or `TextSpan` node within its
 /// parent `Text` element.  For all other node kinds returns `(0, 0)`.
-fn text_default_pos(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+fn text_default_pos(
+    node_id: crate::basictypes::NodeId,
+    ctx: &EvalCtx,
+) -> anyhow::Result<(f32, f32)> {
     let node = ctx.node(node_id)?;
     match &node.kind {
         NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {}
         _ => return Ok((0.0, 0.0)),
     }
     let text_id = find_text_ancestor(node_id, ctx)?;
-    let NodeKind::Text { children, .. } = &ctx.node(text_id)?.kind else { unreachable!() };
-    let lines = children.iter()
+    let NodeKind::Text { children, .. } = &ctx.node(text_id)?.kind else {
+        unreachable!()
+    };
+    let lines = children
+        .iter()
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(renderer::measure_text_node_pos(&lines, node_id.as_u64()).unwrap_or((0.0, 0.0)))
@@ -192,11 +247,15 @@ fn text_default_pos(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow
 /// - `Text`: measures all lines.
 /// - `TextGroup` / `TextSpan`: measures the node's own content as a single line.
 /// - All other kinds: returns `(0, 0)`.
-fn text_default_size(node_id: crate::basictypes::NodeId, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+fn text_default_size(
+    node_id: crate::basictypes::NodeId,
+    ctx: &EvalCtx,
+) -> anyhow::Result<(f32, f32)> {
     let node = ctx.node(node_id)?;
     match &node.kind {
         NodeKind::Text { children, .. } => {
-            let lines = children.iter()
+            let lines = children
+                .iter()
                 .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                 .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(renderer::measure_text(&lines))
@@ -224,7 +283,6 @@ impl Expr {
     pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         self.eval(ctx)?.as_f64()
     }
-
 }
 
 impl CallExpr {
@@ -239,22 +297,26 @@ impl CallExpr {
             }
             CallExpr::NodeTransformX(params) => {
                 tracing::trace!(
-                    source = params.source.get_id().as_u64(), target = params.target.get_id().as_u64(),
+                    source = params.source.get_id().as_u64(),
+                    target = params.target.get_id().as_u64(),
                     "Call::NodeTransformX"
                 );
                 let xv = params.x.eval(ctx)?.as_f64()?;
                 let yv = params.y.eval(ctx)?.as_f64()?;
-                let (px, _py) = node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
+                let (px, _py) =
+                    node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
                 Ok(Value::Float(px))
             }
             CallExpr::NodeTransformY(params) => {
                 tracing::trace!(
-                    source = params.source.get_id().as_u64(), target = params.target.get_id().as_u64(),
+                    source = params.source.get_id().as_u64(),
+                    target = params.target.get_id().as_u64(),
                     "Call::NodeTransformY"
                 );
                 let xv = params.x.eval(ctx)?.as_f64()?;
                 let yv = params.y.eval(ctx)?.as_f64()?;
-                let (_px, py) = node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
+                let (_px, py) =
+                    node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
                 Ok(Value::Float(py))
             }
             CallExpr::DefaultWidth { node } => {
@@ -281,13 +343,19 @@ impl CallExpr {
 
 impl Position {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Position> {
-        Ok(renderer::Position { x: self.x.eval_f64(ctx)?, y: self.y.eval_f64(ctx)? })
+        Ok(renderer::Position {
+            x: self.x.eval_f64(ctx)?,
+            y: self.y.eval_f64(ctx)?,
+        })
     }
 }
 
 impl Size {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Size> {
-        Ok(renderer::Size { width: self.width.eval_f64(ctx)?, height: self.height.eval_f64(ctx)? })
+        Ok(renderer::Size {
+            width: self.width.eval_f64(ctx)?,
+            height: self.height.eval_f64(ctx)?,
+        })
     }
 }
 
@@ -302,51 +370,74 @@ impl Style {
     }
 }
 
-
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Node> {
         let _span = tracing::trace_span!("node.eval", node_id = self.id.as_u64()).entered();
         let kind = match &self.kind {
-            NodeKind::Group { position, size, alpha, rotation, scale_x, scale_y, children } => {
-                renderer::NodeKind::Group {
-                    position: position.eval(ctx)?,
-                    size: size.eval(ctx)?,
-                    alpha: alpha.eval_f64(ctx)?,
-                    rotation: rotation.eval_f64(ctx)?,
-                    scale_x: scale_x.eval_f64(ctx)?,
-                    scale_y: scale_y.eval_f64(ctx)?,
-                    children: children.iter()
-                        .map(|&id| ctx.node(id)?.eval(ctx))
-                        .collect::<anyhow::Result<Vec<_>>>()?,
-                }
-            }
-            NodeKind::Rect { position, size, style } => renderer::NodeKind::Rect {
+            NodeKind::Group {
+                position,
+                size,
+                alpha,
+                rotation,
+                scale_x,
+                scale_y,
+                children,
+            } => renderer::NodeKind::Group {
+                position: position.eval(ctx)?,
+                size: size.eval(ctx)?,
+                alpha: alpha.eval_f64(ctx)?,
+                rotation: rotation.eval_f64(ctx)?,
+                scale_x: scale_x.eval_f64(ctx)?,
+                scale_y: scale_y.eval_f64(ctx)?,
+                children: children
+                    .iter()
+                    .map(|&id| ctx.node(id)?.eval(ctx))
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+            },
+            NodeKind::Rect {
+                position,
+                size,
+                style,
+            } => renderer::NodeKind::Rect {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
             },
-            NodeKind::Ellipse { position, size, style } => renderer::NodeKind::Ellipse {
+            NodeKind::Ellipse {
+                position,
+                size,
+                style,
+            } => renderer::NodeKind::Ellipse {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
             },
             NodeKind::Path { style, children } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
-                children: children.iter()
+                children: children
+                    .iter()
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
-            NodeKind::Text { position, children, .. } => renderer::NodeKind::Text {
+            NodeKind::Text {
+                position, children, ..
+            } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
-                lines: children.iter()
+                lines: children
+                    .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
-            _ => anyhow::bail!("path command / text-internal nodes cannot appear as scene tree nodes"),
+            _ => anyhow::bail!(
+                "path command / text-internal nodes cannot appear as scene tree nodes"
+            ),
         };
-        Ok(renderer::Node { id: self.id.as_u64(), kind })
+        Ok(renderer::Node {
+            id: self.id.as_u64(),
+            kind,
+        })
     }
 
     pub fn eval_as_path_cmd(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::PathCommand> {
@@ -359,7 +450,13 @@ impl Node {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
             }),
-            NodeKind::Cubic { position, c1_x, c1_y, c2_x, c2_y } => Ok(renderer::PathCommand::Cubic {
+            NodeKind::Cubic {
+                position,
+                c1_x,
+                c1_y,
+                c2_x,
+                c2_y,
+            } => Ok(renderer::PathCommand::Cubic {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
                 c1_x: c1_x.eval_f64(ctx)?,
@@ -373,8 +470,12 @@ impl Node {
 
     pub fn eval_as_text_child(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextChild> {
         match &self.kind {
-            NodeKind::TextGroup { .. } => Ok(renderer::TextChild::Group(self.eval_as_text_group(ctx)?)),
-            NodeKind::TextSpan { .. } => Ok(renderer::TextChild::Span(self.eval_as_text_span(ctx)?)),
+            NodeKind::TextGroup { .. } => {
+                Ok(renderer::TextChild::Group(self.eval_as_text_group(ctx)?))
+            }
+            NodeKind::TextSpan { .. } => {
+                Ok(renderer::TextChild::Span(self.eval_as_text_span(ctx)?))
+            }
             _ => anyhow::bail!("expected t_group or t_span node, got {:?}", self.id),
         }
     }
@@ -383,7 +484,8 @@ impl Node {
         match &self.kind {
             NodeKind::TextGroup { children, .. } => Ok(renderer::TextGroup {
                 id: self.id.as_u64(),
-                children: children.iter()
+                children: children
+                    .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             }),
@@ -394,7 +496,12 @@ impl Node {
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
         match &self.kind {
             NodeKind::TextSpan { text_style, text } => {
-                let TextStyle { style, font, font_size, italic } = text_style;
+                let TextStyle {
+                    style,
+                    font,
+                    font_size,
+                    italic,
+                } = text_style;
                 Ok(renderer::TextSpan {
                     id: self.id.as_u64(),
                     text: text.eval(ctx)?.as_string_ref()?,
@@ -415,7 +522,9 @@ impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
         let fill_color = self.fill_color.eval(ctx)?.into_color().unwrap_or_default();
-        let children = self.children.iter()
+        let children = self
+            .children
+            .iter()
             .map(|&id| ctx.node(id)?.eval(ctx))
             .collect::<anyhow::Result<Vec<_>>>()?;
         Ok(renderer::Scene {

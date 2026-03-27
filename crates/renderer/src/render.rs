@@ -1,12 +1,22 @@
-use std::cell::RefCell;
-use std::sync::Arc;
-use serde::Serialize;
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform};
-use parley::{Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem, StyleProperty};
-use skrifa::{GlyphId, MetadataProvider, instance::{LocationRef, NormalizedCoord, Size as SkrifaSize}, outline::{DrawSettings, OutlinePen}, raw::FontRef as ReadFontsRef};
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
 use crate::resources::Resources;
-use crate::scene::{NodeKind, PathCommand, Position, Scene, Node, Style, TextChild, TextSpan};
+use crate::scene::{Node, NodeKind, PathCommand, Position, Scene, Style, TextChild, TextSpan};
+use parley::{
+    Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem,
+    StyleProperty,
+};
+use serde::Serialize;
+use skrifa::{
+    GlyphId, MetadataProvider,
+    instance::{LocationRef, NormalizedCoord, Size as SkrifaSize},
+    outline::{DrawSettings, OutlinePen},
+    raw::FontRef as ReadFontsRef,
+};
+use std::cell::RefCell;
+use std::sync::Arc;
+use tiny_skia::{
+    FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform,
+};
 
 thread_local! {
     static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::new(Resources::get()));
@@ -28,37 +38,80 @@ impl Renderer {
     pub fn render_scene(&mut self, scene: &Scene, scale: f32) -> Pixmap {
         let width = (scene.width as f32 * scale).round() as u32;
         let height = (scene.height as f32 * scale).round() as u32;
-        let mut pixmap = Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
+        let mut pixmap =
+            Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
         pixmap.fill(scene.fill_color.to_skia_color());
-        self.render_children(&scene.children, &mut pixmap, Transform::from_scale(scale, scale), 1.0);
+        self.render_children(
+            &scene.children,
+            &mut pixmap,
+            Transform::from_scale(scale, scale),
+            1.0,
+        );
         pixmap
     }
 
-    fn render_children(&mut self, nodes: &[Node], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
+    fn render_children(
+        &mut self,
+        nodes: &[Node],
+        pixmap: &mut Pixmap,
+        parent_transform: Transform,
+        parent_alpha: f32,
+    ) {
         for node in nodes {
             self.render_node(node, pixmap, parent_transform, parent_alpha);
         }
     }
 
-    fn render_node(&mut self, node: &Node, pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
+    fn render_node(
+        &mut self,
+        node: &Node,
+        pixmap: &mut Pixmap,
+        parent_transform: Transform,
+        parent_alpha: f32,
+    ) {
         match &node.kind {
-            NodeKind::Group { position, size: _, alpha, scale_x, scale_y, rotation, children } => {
-                let transform = positional_transform(position, *scale_x, *scale_y, *rotation, parent_transform);
+            NodeKind::Group {
+                position,
+                size: _,
+                alpha,
+                scale_x,
+                scale_y,
+                rotation,
+                children,
+            } => {
+                let transform =
+                    positional_transform(position, *scale_x, *scale_y, *rotation, parent_transform);
                 let alpha = parent_alpha * *alpha as f32;
                 // Clone to avoid holding a borrow on node.kind while calling self methods.
                 let children = children.clone();
                 self.render_children(&children, pixmap, transform, alpha);
             }
-            NodeKind::Rect { position, size, style } => {
+            NodeKind::Rect {
+                position,
+                size,
+                style,
+            } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
-                let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
+                let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
+                else {
+                    return;
+                };
                 let path = PathBuilder::from_rect(rect);
                 fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
             }
-            NodeKind::Ellipse { position, size, style } => {
+            NodeKind::Ellipse {
+                position,
+                size,
+                style,
+            } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
-                let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32) else { return };
-                let Some(path) = PathBuilder::from_oval(oval) else { return };
+                let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
+                else {
+                    return;
+                };
+                let Some(path) = PathBuilder::from_oval(oval) else {
+                    return;
+                };
                 fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
             }
             NodeKind::Path { style, children } => {
@@ -74,12 +127,20 @@ impl Renderer {
         }
     }
 
-    fn render_text_lines(&mut self, lines: &[TextChild], pixmap: &mut Pixmap, parent_transform: Transform, parent_alpha: f32) {
+    fn render_text_lines(
+        &mut self,
+        lines: &[TextChild],
+        pixmap: &mut Pixmap,
+        parent_transform: Transform,
+        parent_alpha: f32,
+    ) {
         let mut y_cursor = 0.0f32;
         for line in lines {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
-            if spans.is_empty() { continue; }
+            if spans.is_empty() {
+                continue;
+            }
 
             let cached = self.get_or_build_line(&spans);
 
@@ -88,7 +149,9 @@ impl Renderer {
                 let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());
                 let alpha = parent_alpha * span.style.alpha as f32;
 
-                let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else { continue };
+                let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
+                    continue;
+                };
 
                 if let Some(mut color) = fill_color {
                     color.set_alpha(color.alpha() * alpha);
@@ -103,7 +166,10 @@ impl Renderer {
                     let mut paint = Paint::default();
                     paint.set_color(color);
                     paint.anti_alias = true;
-                    let stroke = Stroke { width: span.style.stroke_width as f32, ..Default::default() };
+                    let stroke = Stroke {
+                        width: span.style.stroke_width as f32,
+                        ..Default::default()
+                    };
                     pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
                 }
             }
@@ -118,7 +184,9 @@ impl Renderer {
         for line in lines {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
-            if spans.is_empty() { continue; }
+            if spans.is_empty() {
+                continue;
+            }
             let cached = self.get_or_build_line(&spans);
             total_width = total_width.max(cached.width);
             total_height += cached.height;
@@ -136,7 +204,9 @@ impl Renderer {
             collect_spans_tagged(line, target_id, false, &mut tagged);
 
             let spans: Vec<&TextSpan> = tagged.iter().map(|(_, s)| *s).collect();
-            if spans.is_empty() { continue; }
+            if spans.is_empty() {
+                continue;
+            }
 
             let cached = self.get_or_build_line(&spans);
 
@@ -164,23 +234,42 @@ impl Renderer {
 
     /// Run parley layout for `spans`, extract glyph outlines into `CachedGlyph`s,
     /// store in the global cache, and return the entry.
-    fn build_cached_line(&mut self, spans: &[&TextSpan], key: glyph_cache::LineKey) -> Arc<CachedLine> {
+    fn build_cached_line(
+        &mut self,
+        spans: &[&TextSpan],
+        key: glyph_cache::LineKey,
+    ) -> Arc<CachedLine> {
         let (full_text, ranges) = build_span_text(spans);
         if full_text.is_empty() {
             // Don't cache empty lines — they're trivial and have no spans to key on.
-            return Arc::new(CachedLine { width: 0.0, height: 0.0, glyphs: vec![] });
+            return Arc::new(CachedLine {
+                width: 0.0,
+                height: 0.0,
+                glyphs: vec![],
+            });
         }
 
-        let mut builder = self.layout_cx.ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
+        let mut builder = self
+            .layout_cx
+            .ranged_builder(&mut self.font_cx, &full_text, 1.0, true);
         builder.push_default(StyleProperty::FontSize(DEFAULT_FONT_SIZE));
         for (range, span_idx) in &ranges {
             let span = spans[*span_idx];
             // Brush carries the span index so we can look it up per-glyph below.
             builder.push(StyleProperty::Brush(*span_idx), range.clone());
-            builder.push(StyleProperty::FontSize(span.font_size as f32), range.clone());
-            builder.push(StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())), range.clone());
+            builder.push(
+                StyleProperty::FontSize(span.font_size as f32),
+                range.clone(),
+            );
+            builder.push(
+                StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())),
+                range.clone(),
+            );
             if span.italic {
-                builder.push(StyleProperty::FontStyle(parley::FontStyle::Italic), range.clone());
+                builder.push(
+                    StyleProperty::FontStyle(parley::FontStyle::Italic),
+                    range.clone(),
+                );
             }
         }
         let mut layout = builder.build(&full_text);
@@ -193,12 +282,16 @@ impl Renderer {
 
         for layout_line in layout.lines() {
             for item in layout_line.items() {
-                let PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
+                let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
+                    continue;
+                };
 
                 let run = glyph_run.run();
                 let font = run.font();
                 let font_size = run.font_size();
-                let normalized_coords: Vec<NormalizedCoord> = run.normalized_coords().iter()
+                let normalized_coords: Vec<NormalizedCoord> = run
+                    .normalized_coords()
+                    .iter()
                     .map(|c| NormalizedCoord::from_bits(*c))
                     .collect();
 
@@ -211,7 +304,8 @@ impl Renderer {
 
                 for glyph in glyph_run.glyphs() {
                     // Per-glyph span lookup: a single run may span multiple style ranges.
-                    let span_idx = layout.styles()
+                    let span_idx = layout
+                        .styles()
                         .get(glyph.style_index())
                         .map(|s| s.brush)
                         .unwrap_or(0)
@@ -222,7 +316,9 @@ impl Renderer {
                     run_x += glyph.advance;
 
                     let glyph_id = GlyphId::from(glyph.id as u16);
-                    let Some(outline) = outlines.get(glyph_id) else { continue };
+                    let Some(outline) = outlines.get(glyph_id) else {
+                        continue;
+                    };
 
                     let settings = DrawSettings::unhinted(
                         SkrifaSize::new(font_size),
@@ -239,7 +335,14 @@ impl Renderer {
             }
         }
 
-        glyph_cache::cache_store(key, CachedLine { width, height, glyphs })
+        glyph_cache::cache_store(
+            key,
+            CachedLine {
+                width,
+                height,
+                glyphs,
+            },
+        )
     }
 }
 
@@ -252,8 +355,7 @@ pub fn render_scene(scene: &Scene, scale: f32) -> Pixmap {
 /// The scene is scaled to fill as much of the target as possible; any remaining
 /// area is filled with black (letterbox / pillarbox).
 pub fn render_scene_fitted(scene: &Scene, target_w: u32, target_h: u32) -> Pixmap {
-    let scale = (target_w as f32 / scene.width as f32)
-        .min(target_h as f32 / scene.height as f32);
+    let scale = (target_w as f32 / scene.width as f32).min(target_h as f32 / scene.height as f32);
     let rendered = render_scene(scene, scale);
     let rw = rendered.width();
     let rh = rendered.height();
@@ -264,7 +366,14 @@ pub fn render_scene_fitted(scene: &Scene, target_w: u32, target_h: u32) -> Pixma
     canvas.fill(tiny_skia::Color::BLACK);
     let x = ((target_w - rw) / 2) as i32;
     let y = ((target_h - rh) / 2) as i32;
-    canvas.draw_pixmap(x, y, rendered.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+    canvas.draw_pixmap(
+        x,
+        y,
+        rendered.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
+        None,
+    );
     canvas
 }
 
@@ -301,7 +410,15 @@ fn search_children(nodes: &[Node], node_id: u64, parent: Transform) -> Option<No
 
 fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBounds> {
     match &node.kind {
-        NodeKind::Group { position, size, alpha: _, scale_x, scale_y, rotation, children } => {
+        NodeKind::Group {
+            position,
+            size,
+            alpha: _,
+            scale_x,
+            scale_y,
+            rotation,
+            children,
+        } => {
             let t = positional_transform(position, *scale_x, *scale_y, *rotation, parent);
             if node.id == node_id {
                 return Some(aabb(size.width as f32, size.height as f32, t));
@@ -319,7 +436,9 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
             if node.id == node_id {
                 return path_bounds(children, parent);
             }
-            children.iter().find_map(|cmd| search_path_cmd(cmd, node_id, parent))
+            children
+                .iter()
+                .find_map(|cmd| search_path_cmd(cmd, node_id, parent))
         }
         NodeKind::Text { position, .. } => {
             if node.id == node_id {
@@ -340,44 +459,72 @@ fn search_path_cmd(cmd: &PathCommand, node_id: u64, parent: Transform) -> Option
     if *id == node_id {
         let mut pts = [Point::from_xy(pos.x as f32, pos.y as f32)];
         parent.map_points(&mut pts);
-        Some(NodeBounds { x: pts[0].x, y: pts[0].y, width: 0.0, height: 0.0 })
+        Some(NodeBounds {
+            x: pts[0].x,
+            y: pts[0].y,
+            width: 0.0,
+            height: 0.0,
+        })
     } else {
         None
     }
 }
 
 fn path_bounds(cmds: &[PathCommand], t: Transform) -> Option<NodeBounds> {
-    let mut pts: Vec<Point> = cmds.iter().map(|cmd| {
-        let pos = match cmd {
-            PathCommand::Move { position, .. } => position,
-            PathCommand::Line { position, .. } => position,
-            PathCommand::Cubic { position, .. } => position,
-        };
-        Point::from_xy(pos.x as f32, pos.y as f32)
-    }).collect();
-    if pts.is_empty() { return None; }
+    let mut pts: Vec<Point> = cmds
+        .iter()
+        .map(|cmd| {
+            let pos = match cmd {
+                PathCommand::Move { position, .. } => position,
+                PathCommand::Line { position, .. } => position,
+                PathCommand::Cubic { position, .. } => position,
+            };
+            Point::from_xy(pos.x as f32, pos.y as f32)
+        })
+        .collect();
+    if pts.is_empty() {
+        return None;
+    }
     t.map_points(&mut pts);
     let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
     let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
     let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
     let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    Some(NodeBounds { x: min_x, y: min_y, width: max_x - min_x, height: max_y - min_y })
+    Some(NodeBounds {
+        x: min_x,
+        y: min_y,
+        width: max_x - min_x,
+        height: max_y - min_y,
+    })
 }
 
 fn aabb(w: f32, h: f32, t: Transform) -> NodeBounds {
     let mut pts = [
-        Point::from_xy(0.0, 0.0), Point::from_xy(w, 0.0),
-        Point::from_xy(0.0, h),   Point::from_xy(w, h),
+        Point::from_xy(0.0, 0.0),
+        Point::from_xy(w, 0.0),
+        Point::from_xy(0.0, h),
+        Point::from_xy(w, h),
     ];
     t.map_points(&mut pts);
     let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
     let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
     let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
     let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    NodeBounds { x: min_x, y: min_y, width: max_x - min_x, height: max_y - min_y }
+    NodeBounds {
+        x: min_x,
+        y: min_y,
+        width: max_x - min_x,
+        height: max_y - min_y,
+    }
 }
 
-fn positional_transform(position: &Position, scale_x: f64, scale_y: f64, rotation: f64, parent: Transform) -> Transform {
+fn positional_transform(
+    position: &Position,
+    scale_x: f64,
+    scale_y: f64,
+    rotation: f64,
+    parent: Transform,
+) -> Transform {
     Transform::from_scale(scale_x as f32, scale_y as f32)
         .post_rotate(rotation as f32)
         .post_translate(position.x as f32, position.y as f32)
@@ -397,7 +544,14 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
                 cur = (position.x as f32, position.y as f32);
                 pb.line_to(cur.0, cur.1);
             }
-            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y, .. } => {
+            PathCommand::Cubic {
+                position,
+                c1_x,
+                c1_y,
+                c2_x,
+                c2_y,
+                ..
+            } => {
                 let end = (position.x as f32, position.y as f32);
                 let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);
                 let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
@@ -441,7 +595,12 @@ fn collect_spans<'a>(child: &'a TextChild, out: &mut Vec<&'a TextSpan>) {
 
 /// Like `collect_spans`, but tags each span with whether it is inside the subtree
 /// rooted at `target_id` (including the target itself if it is a span).
-fn collect_spans_tagged<'a>(child: &'a TextChild, target_id: u64, in_target: bool, out: &mut Vec<(bool, &'a TextSpan)>) {
+fn collect_spans_tagged<'a>(
+    child: &'a TextChild,
+    target_id: u64,
+    in_target: bool,
+    out: &mut Vec<(bool, &'a TextSpan)>,
+) {
     match child {
         TextChild::Span(s) => out.push((in_target || s.id == target_id, s)),
         TextChild::Group(g) => {
@@ -456,12 +615,16 @@ fn collect_spans_tagged<'a>(child: &'a TextChild, target_id: u64, in_target: boo
 /// Build the normalized cache key for a slice of spans.
 /// Excludes node IDs and colors so identical text from different node IDs shares one entry.
 fn make_line_key(spans: &[&TextSpan]) -> glyph_cache::LineKey {
-    spans.iter().map(|s| glyph_cache::SpanKey {
-        text: s.text.clone(),
-        font_family: s.font_family.clone(),
-        font_size_bits: (s.font_size as f32).to_bits(),
-        italic: s.italic,
-    }).collect::<Vec<_>>().into_boxed_slice()
+    spans
+        .iter()
+        .map(|s| glyph_cache::SpanKey {
+            text: s.text.clone(),
+            font_family: s.font_family.clone(),
+            font_size_bits: (s.font_size as f32).to_bits(),
+            italic: s.italic,
+        })
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 /// Convert a `VectorPath` to a tiny-skia `Path`, shifting all points down by `y_offset`.
@@ -490,7 +653,11 @@ struct GlyphPen {
 
 impl GlyphPen {
     fn new(x: f32, y: f32) -> Self {
-        Self { x, y, verbs: Vec::new() }
+        Self {
+            x,
+            y,
+            verbs: Vec::new(),
+        }
     }
 }
 
@@ -502,17 +669,35 @@ impl OutlinePen for GlyphPen {
         self.verbs.push(PathVerb::LineTo(self.x + x, self.y - y));
     }
     fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
-        self.verbs.push(PathVerb::QuadTo(self.x + cx0, self.y - cy0, self.x + x, self.y - y));
+        self.verbs.push(PathVerb::QuadTo(
+            self.x + cx0,
+            self.y - cy0,
+            self.x + x,
+            self.y - y,
+        ));
     }
     fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-        self.verbs.push(PathVerb::CubicTo(self.x + cx0, self.y - cy0, self.x + cx1, self.y - cy1, self.x + x, self.y - y));
+        self.verbs.push(PathVerb::CubicTo(
+            self.x + cx0,
+            self.y - cy0,
+            self.x + cx1,
+            self.y - cy1,
+            self.x + x,
+            self.y - y,
+        ));
     }
     fn close(&mut self) {
         self.verbs.push(PathVerb::Close);
     }
 }
 
-fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, transform: Transform, parent_alpha: f32) {
+fn fill_and_stroke(
+    path: &tiny_skia::Path,
+    style: &Style,
+    pixmap: &mut Pixmap,
+    transform: Transform,
+    parent_alpha: f32,
+) {
     let alpha = parent_alpha * style.alpha as f32;
     if let Some(ref fc) = style.fill_color {
         let mut color = fc.to_skia_color();
@@ -528,7 +713,10 @@ fn fill_and_stroke(path: &tiny_skia::Path, style: &Style, pixmap: &mut Pixmap, t
         let mut paint = Paint::default();
         paint.set_color(color);
         paint.anti_alias = true;
-        let stroke = Stroke { width: style.stroke_width as f32, ..Default::default() };
+        let stroke = Stroke {
+            width: style.stroke_width as f32,
+            ..Default::default()
+        };
         pixmap.stroke_path(path, &paint, &stroke, transform, None);
     }
 }

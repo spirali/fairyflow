@@ -136,7 +136,7 @@ class StyleMixin(AlphaMixin):
         self._add_attr("stroke_width", 1)
         self._init_alpha()
 
-    def fill_color(self, value: str):
+    def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
         return self
 
@@ -237,7 +237,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
 
-    def fill_color(self, value: str):
+    def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
         return self
 

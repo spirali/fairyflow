@@ -1,11 +1,10 @@
-use std::fmt::Display;
 use serde::Deserialize;
+use std::fmt::Display;
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Deserialize, Hash)]
 pub struct FrameId(u32);
 
 impl FrameId {
-
     #[inline]
     pub fn new(id: u32) -> Self {
         FrameId(id)
@@ -30,9 +29,7 @@ impl Display for FrameId {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Hash)]
 pub(crate) struct NodeId(u32);
 
-
 impl NodeId {
-
     #[inline]
     pub fn new(id: u32) -> Self {
         NodeId(id)

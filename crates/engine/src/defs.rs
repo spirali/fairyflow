@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use renderer::Color as RendererColor;
-use serde::{de, Deserialize, Deserializer};
 use crate::basictypes::{AvId, FrameId, NodeId};
+use renderer::Color as RendererColor;
+use serde::{Deserialize, Deserializer, de};
+use std::sync::Arc;
 
 // ──────────────────────────── Transition ───────────────────────────────────
 
@@ -12,13 +12,16 @@ pub enum Transition {
     Linear,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Color(RendererColor);
 
 impl Color {
     pub fn into_inner(self) -> RendererColor {
         self.0
+    }
+    
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.0.set_alpha(alpha);
     }
 
     pub fn interpolate(a: &Color, b: &Color, t: f64) -> Color {
@@ -29,14 +32,15 @@ impl Color {
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
-        struct Helper { color: String }
+        struct Helper {
+            color: String,
+        }
         let h = Helper::deserialize(d)?;
         RendererColor::from_html(&h.color)
             .map(Color)
             .ok_or_else(|| de::Error::custom(format!("invalid color '{}'", h.color)))
     }
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
@@ -50,8 +54,16 @@ pub enum Value {
 }
 
 impl Value {
+
+    pub fn is_number(&self) -> bool {
+        match self {
+            Value::Int(_) | Value::Float(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn as_f64(&self) -> anyhow::Result<f64> {
-        match  self {
+        match self {
             Value::Int(v) => Ok(*v as f64),
             Value::Float(v) => Ok(*v),
             _ => Err(anyhow::Error::msg("Value is not a number")),
@@ -100,7 +112,9 @@ impl AvRef {
 impl<'de> Deserialize<'de> for AvRef {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
-        struct Helper { av: u64 }
+        struct Helper {
+            av: u64,
+        }
         let h = Helper::deserialize(d)?;
         Ok(AvRef(AvId::new(h.av)))
     }
@@ -119,34 +133,47 @@ impl NodeRef {
 impl<'de> Deserialize<'de> for NodeRef {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
-        struct Helper { id: u32 }
+        struct Helper {
+            id: u32,
+        }
         let h = Helper::deserialize(d)?;
         Ok(NodeRef(NodeId::new(h.id)))
     }
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct CallParamsPair {
     pub a: Expr,
-    pub b: Expr
+    pub b: Expr,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct CallParamsNodeTransform  { pub source: NodeRef, pub target: NodeRef, pub x: Expr, pub y: Expr }
-
+pub struct CallParamsNodeTransform {
+    pub source: NodeRef,
+    pub target: NodeRef,
+    pub x: Expr,
+    pub y: Expr,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "fn", rename_all = "snake_case")]
 pub enum CallExpr {
     NodeTransformX(Box<CallParamsNodeTransform>),
     NodeTransformY(Box<CallParamsNodeTransform>),
-    #[serde(rename="+")]
+    #[serde(rename = "+")]
     Add(Box<CallParamsPair>),
-    DefaultWidth { node: NodeRef },
-    DefaultHeight { node: NodeRef },
-    DefaultX { node: NodeRef },
-    DefaultY { node: NodeRef },
+    DefaultWidth {
+        node: NodeRef,
+    },
+    DefaultHeight {
+        node: NodeRef,
+    },
+    DefaultX {
+        node: NodeRef,
+    },
+    DefaultY {
+        node: NodeRef,
+    },
 }
 
 // ─────────────────────────── KeyframeValue ─────────────────────────────────
@@ -256,7 +283,7 @@ pub enum NodeKind {
         children: Vec<NodeId>,
     },
     /// Group containing instance of other TextGroups or TextSpans.
-    #[serde(rename="t_group")]
+    #[serde(rename = "t_group")]
     TextGroup {
         #[serde(flatten)]
         text_style: TextStyle,
@@ -264,7 +291,7 @@ pub enum NodeKind {
         children: Vec<NodeId>,
     },
     /// A text run with a concrete string value
-    #[serde(rename="t_span")]
+    #[serde(rename = "t_span")]
     TextSpan {
         #[serde(flatten)]
         text_style: TextStyle,
@@ -290,19 +317,17 @@ pub enum NodeKind {
     },
 }
 
-
 impl NodeKind {
     pub fn children(&self) -> &[NodeId] {
         match self {
-            NodeKind::Group { children, .. } |
-            NodeKind::Path { children, .. } |
-            NodeKind::Text { children, .. } |
-            NodeKind::TextGroup { children, .. } => children,
+            NodeKind::Group { children, .. }
+            | NodeKind::Path { children, .. }
+            | NodeKind::Text { children, .. }
+            | NodeKind::TextGroup { children, .. } => children,
             _ => &[],
         }
     }
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Node {

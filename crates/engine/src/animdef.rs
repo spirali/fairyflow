@@ -1,11 +1,11 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
-use serde::Deserialize;
-use tracing::debug;
+use crate::FrameId;
 use crate::avalue::{AnimatedValue, FrameValue};
 use crate::basictypes::{AvId, NodeId};
 use crate::defs::{CallExpr, Expr, Node, SceneDef};
 use crate::eval::EvalCtx;
-use crate::FrameId;
+use serde::Deserialize;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use tracing::debug;
 
 pub struct AnimationDef {
     pub(crate) scene: SceneDef,
@@ -20,40 +20,12 @@ struct RawAnimationDef {
     animated_values: Vec<AnimatedValue>,
 }
 
-/*fn expr_av_refs(expr: &Expr, out: &mut Vec<AvId>) {
-    match expr {
-        Expr::Const(_) => {}
-        Expr::Av(av_ref) => out.push(av_ref.get_id()),
-        Expr::Call(call) => match call {
-            CallExpr::Add(pair) => {
-                expr_av_refs(&pair.a, out);
-                expr_av_refs(&pair.b, out);
-            }
-            CallExpr::NodeTransformX(params) | CallExpr::NodeTransformY(params) => {
-                expr_av_refs(&params.x, out);
-                expr_av_refs(&params.y, out);
-            }
-        },
-    }
-}*/
-
-/*fn check_no_av_cycles(avs: &HashMap<AvId, AnimatedValue>, refs: &[AvId], visited: &mut HashSet<AvId>, stack: &mut Vec<AvId>) -> anyhow::Result<()> {
-    for &av_id in refs {
-        if !visited.insert(av_id) {
-            anyhow::bail!("cycle detected in animated values; path: {:?}", &stack);
-        }
-        stack.push(av_id);
-        if let Some(av) = avs.get(&av_id) {
-            let direct_refs = av_direct_refs(av);
-            check_no_av_cycles(avs, &direct_refs, visited, stack)?;
-        }
-        stack.pop();
-        assert!(visited.remove(&av_id));
-    }
-    Ok(())
-}
-*/
-fn check_no_cycles(nodes: &HashMap<NodeId, Node>, children: &[NodeId], visited: &mut HashSet<NodeId>, stack: &mut Vec<NodeId>) -> anyhow::Result<()> {
+fn check_no_cycles(
+    nodes: &HashMap<NodeId, Node>,
+    children: &[NodeId],
+    visited: &mut HashSet<NodeId>,
+    stack: &mut Vec<NodeId>,
+) -> anyhow::Result<()> {
     for child_id in children {
         if !visited.insert(*child_id) {
             if visited.contains(&child_id) {
@@ -70,7 +42,6 @@ fn check_no_cycles(nodes: &HashMap<NodeId, Node>, children: &[NodeId], visited: 
 }
 
 impl AnimationDef {
-
     pub fn build_scene(&self, frame_id: FrameId) -> anyhow::Result<renderer::Scene> {
         let ctx = EvalCtx::new(frame_id, self);
         self.scene.eval(&ctx)
@@ -108,8 +79,11 @@ impl AnimationDef {
             nodes.get_mut(&node_id).unwrap().parent = Some(parent_id);
         }
 
-        let animated_values: HashMap<AvId, AnimatedValue> =
-            raw.animated_values.into_iter().map(|av| (av.id, av)).collect();
+        let animated_values: HashMap<AvId, AnimatedValue> = raw
+            .animated_values
+            .into_iter()
+            .map(|av| (av.id, av))
+            .collect();
 
         Ok(AnimationDef {
             scene: raw.scene,
@@ -185,10 +159,20 @@ mod tests {
 
         // animated values indexed by id
         let av1 = &anim.animated_values[&AvId::new(1)];
-        assert!(matches!(av1.kind, AnimatedValueKind::Const { value: crate::defs::Expr::Const(Value::Int(200)) }));
+        assert!(matches!(
+            av1.kind,
+            AnimatedValueKind::Const {
+                value: crate::defs::Expr::Const(Value::Int(200))
+            }
+        ));
 
         let av3 = &anim.animated_values[&AvId::new(3)];
-        assert!(matches!(av3.kind, AnimatedValueKind::Const { value: crate::defs::Expr::Const(Value::Color(_)) }));
+        assert!(matches!(
+            av3.kind,
+            AnimatedValueKind::Const {
+                value: crate::defs::Expr::Const(Value::Color(_))
+            }
+        ));
 
         let av10 = &anim.animated_values[&AvId::new(10)];
         assert!(matches!(av10.kind, AnimatedValueKind::Animated { .. }));
@@ -197,9 +181,12 @@ mod tests {
         let av60 = &anim.animated_values[&AvId::new(60)];
         if let AnimatedValueKind::Animated { values } = &av60.kind {
             assert_eq!(values.len(), 3);
-            use crate::basictypes::FrameId;
             use crate::avalue::FrameValue;
-            assert!(matches!(values.get(&FrameId::new(10)), Some(FrameValue::Hold)));
+            use crate::basictypes::FrameId;
+            assert!(matches!(
+                values.get(&FrameId::new(10)),
+                Some(FrameValue::Hold)
+            ));
         } else {
             panic!("expected animated");
         }

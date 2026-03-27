@@ -1,23 +1,32 @@
-use std::process::Stdio;
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
+use engine::AnimationDef;
 use serde::Serialize;
+use std::process::Stdio;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 use tracing::warn;
-use engine::AnimationDef;
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum BuildProcessMsg {
-    Output { text: String },
-    Error { text: String },
-    Done { exit_code: Option<i32> },
-    Tree { key_frames: Vec<u32>, frame_count: u32 },
+    Output {
+        text: String,
+    },
+    Error {
+        text: String,
+    },
+    Done {
+        exit_code: Option<i32>,
+    },
+    Tree {
+        key_frames: Vec<u32>,
+        frame_count: u32,
+    },
 }
 
 pub async fn run_python(
@@ -50,8 +59,14 @@ pub async fn run_python(
         }
         Err(e) => {
             warn!(run_id = id, error = %e, "failed to spawn python3");
-            tx.send(BuildProcessMsg::Error { text: format!("Failed to start python3: {e}") }).await.ok();
-            tx.send(BuildProcessMsg::Done { exit_code: None }).await.ok();
+            tx.send(BuildProcessMsg::Error {
+                text: format!("Failed to start python3: {e}"),
+            })
+            .await
+            .ok();
+            tx.send(BuildProcessMsg::Done { exit_code: None })
+                .await
+                .ok();
             return;
         }
     };
@@ -65,7 +80,11 @@ pub async fn run_python(
     let stdout_task = tokio::spawn(async move {
         let mut lines = stdout.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            if tx_out.send(BuildProcessMsg::Output { text: line }).await.is_err() {
+            if tx_out
+                .send(BuildProcessMsg::Output { text: line })
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -74,7 +93,11 @@ pub async fn run_python(
     let stderr_task = tokio::spawn(async move {
         let mut lines = stderr.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            if tx_err.send(BuildProcessMsg::Error { text: line }).await.is_err() {
+            if tx_err
+                .send(BuildProcessMsg::Error { text: line })
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -100,22 +123,28 @@ pub async fn run_python(
 
     if exit_code == Some(0) {
         match tokio::fs::read_to_string(&tree_path).await {
-            Ok(json_str) => {
-                match AnimationDef::from_str(&json_str) {
-                    Ok(anim) => {
-                        let key_frames: Vec<_> = anim.key_frames()
-                            .iter().map(|f| f.as_u32()).collect();
-                        let frame_count = key_frames.last().copied().unwrap_or(0) + 1;
-                        info!(run_id = id, frame_count, "animation cached");
-                        *animation_cache.lock().unwrap() = Some(Arc::new(anim));
-                        tx.send(BuildProcessMsg::Tree { key_frames, frame_count }).await.ok();
-                    }
-                    Err(e) => {
-                        warn!(run_id = id, error = %e, "failed to parse animation");
-                        tx.send(BuildProcessMsg::Error { text: format!("failed to parse animation: {e}") }).await.ok();
-                    }
+            Ok(json_str) => match AnimationDef::from_str(&json_str) {
+                Ok(anim) => {
+                    let key_frames: Vec<_> = anim.key_frames().iter().map(|f| f.as_u32()).collect();
+                    let frame_count = key_frames.last().copied().unwrap_or(0) + 1;
+                    info!(run_id = id, frame_count, "animation cached");
+                    *animation_cache.lock().unwrap() = Some(Arc::new(anim));
+                    tx.send(BuildProcessMsg::Tree {
+                        key_frames,
+                        frame_count,
+                    })
+                    .await
+                    .ok();
                 }
-            }
+                Err(e) => {
+                    warn!(run_id = id, error = %e, "failed to parse animation");
+                    tx.send(BuildProcessMsg::Error {
+                        text: format!("failed to parse animation: {e}"),
+                    })
+                    .await
+                    .ok();
+                }
+            },
             Err(e) => warn!(run_id = id, error = %e, "failed to read tree file"),
         }
     }

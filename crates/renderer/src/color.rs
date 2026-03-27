@@ -12,6 +12,10 @@ impl Color {
         csscolorparser::Color::from_html(color).ok().map(Color)
     }
 
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.0.a = alpha;
+    }
+
     pub fn interpolate(&self, other: &Color, t: f64) -> Color {
         let t = t as f32;
         let a = &self.0;
@@ -30,4 +34,3 @@ impl Color {
             .unwrap_or(tiny_skia::Color::BLACK)
     }
 }
-

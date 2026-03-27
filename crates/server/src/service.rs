@@ -1,21 +1,21 @@
-use std::net::SocketAddr;
-use std::path::{PathBuf};
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::AtomicU64;
-use axum::extract::{Path, Query, State, WebSocketUpgrade};
-use axum::extract::ws::{Message, WebSocket};
-use axum::http::{header, StatusCode};
-use axum::response::IntoResponse;
+use crate::config::ProjectConfig;
+use crate::lancher::{BuildProcessMsg, run_python};
 use axum::Router;
+use axum::extract::ws::{Message, WebSocket};
+use axum::extract::{Path, Query, State, WebSocketUpgrade};
+use axum::http::{StatusCode, header};
+use axum::response::IntoResponse;
 use axum::routing::get;
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use engine::{AnimationDef, FrameId};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use tower_http::services::ServeDir;
 use tracing::{debug, info, warn};
-use engine::{AnimationDef, FrameId};
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use crate::lancher::{run_python, BuildProcessMsg};
-use crate::config::ProjectConfig;
 
 #[derive(Clone)]
 struct AppState {
@@ -96,7 +96,11 @@ fn build_dir_tree(path: &std::path::Path, depth: u32) -> Vec<FsEntry> {
             } else {
                 None
             };
-            Some(FsEntry { name, is_dir, children })
+            Some(FsEntry {
+                name,
+                is_dir,
+                children,
+            })
         })
         .collect();
     entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
@@ -138,7 +142,12 @@ async fn file_save_handler(
 
 async fn file_handler(Query(params): Query<FileQuery>) -> impl IntoResponse {
     match tokio::fs::read_to_string(&params.path).await {
-        Ok(content) => (StatusCode::OK, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], content).into_response(),
+        Ok(content) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            content,
+        )
+            .into_response(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             (StatusCode::NOT_FOUND, "file not found").into_response()
         }
@@ -189,7 +198,9 @@ struct TreeFrame {
     scene: renderer::Scene,
 }
 
-fn default_scale() -> f32 { 1.0 }
+fn default_scale() -> f32 {
+    1.0
+}
 
 #[derive(Deserialize)]
 struct NodeQuery {
@@ -227,10 +238,13 @@ async fn trees_handler(
     }
     let result = tokio::task::spawn_blocking(move || {
         (params.from..=params.to)
-            .map(|n| anim.build_scene(FrameId::new(n as u32)).map(|scene| TreeFrame { n, scene }))
+            .map(|n| {
+                anim.build_scene(FrameId::new(n as u32))
+                    .map(|scene| TreeFrame { n, scene })
+            })
             .collect::<Result<Vec<_>, _>>()
     })
-        .await;
+    .await;
     renderer::prune_text_cache();
     match result {
         Ok(Ok(frames)) => axum::Json(frames).into_response(),
@@ -281,7 +295,8 @@ async fn frame_handler(
         let pixmap = renderer::render_scene(&scene, scale);
         renderer::prune_text_cache();
         Ok(pixmap.encode_png()?)
-    }).await;
+    })
+    .await;
     match result {
         Ok(Ok(png)) => ([(header::CONTENT_TYPE, "image/png")], png).into_response(),
         Ok(Err(e)) => {
@@ -311,14 +326,20 @@ async fn frames_handler(
 
     let results = tokio::task::spawn_blocking(move || {
         use rayon::prelude::*;
-        (from..=to).into_par_iter().filter_map(|n| {
-            let scene = anim.build_scene(FrameId::new(n as u32)).ok()?;
-            let pixmap = renderer::render_scene(&scene, scale);
-            let png = pixmap.encode_png().ok()?;
-            Some(RenderedFrame { n, png: B64.encode(&png) })
-        }).collect::<Vec<_>>()
+        (from..=to)
+            .into_par_iter()
+            .filter_map(|n| {
+                let scene = anim.build_scene(FrameId::new(n as u32)).ok()?;
+                let pixmap = renderer::render_scene(&scene, scale);
+                let png = pixmap.encode_png().ok()?;
+                Some(RenderedFrame {
+                    n,
+                    png: B64.encode(&png),
+                })
+            })
+            .collect::<Vec<_>>()
     })
-        .await;
+    .await;
     renderer::prune_text_cache();
 
     match results {
@@ -330,10 +351,7 @@ async fn frames_handler(
     }
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 

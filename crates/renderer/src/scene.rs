@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use serde::Serialize;
 use crate::Color;
+use serde::Serialize;
+use std::sync::Arc;
 
 /// Mirrors PositionMixin in Python.
 #[derive(Debug, Clone, Serialize)]

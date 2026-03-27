@@ -66,7 +66,12 @@ struct GlyphCache {
 static CACHE: OnceLock<Mutex<GlyphCache>> = OnceLock::new();
 
 fn cache() -> &'static Mutex<GlyphCache> {
-    CACHE.get_or_init(|| Mutex::new(GlyphCache { entries: HashMap::new(), clock: 0 }))
+    CACHE.get_or_init(|| {
+        Mutex::new(GlyphCache {
+            entries: HashMap::new(),
+            clock: 0,
+        })
+    })
 }
 
 /// Look up a cached line.  Bumps `last_used` on hit.
@@ -91,7 +96,13 @@ pub fn cache_store(key: LineKey, line: CachedLine) -> Arc<CachedLine> {
     let mut guard = cache().lock().unwrap();
     guard.clock += 1;
     let clock = guard.clock;
-    guard.entries.insert(key, CacheEntry { last_used: clock, line: Arc::clone(&line) });
+    guard.entries.insert(
+        key,
+        CacheEntry {
+            last_used: clock,
+            line: Arc::clone(&line),
+        },
+    );
     trace!(cache_size = guard.entries.len(), "glyph cache store");
     line
 }
@@ -110,5 +121,9 @@ pub fn prune_text_cache() {
     ages.sort_unstable();
     let cut_off_age = ages[to_remove - 1];
     guard.entries.retain(|_, e| e.last_used > cut_off_age);
-    debug!(removed = before - guard.entries.len(), remaining = guard.entries.len(), "glyph cache pruned");
+    debug!(
+        removed = before - guard.entries.len(),
+        remaining = guard.entries.len(),
+        "glyph cache pruned"
+    );
 }

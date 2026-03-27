@@ -1,4 +1,4 @@
-from .items import group, rect, path, ellipse, scene
+from .nodes import group, rect, path, ellipse, scene
 from .color import Color
 from .text import text
 

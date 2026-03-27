@@ -21,6 +21,7 @@ CHECK_DIR = ROOT / "tests" / "check"
 
 ALSIE_TEST_CREATE = int(os.environ.get("ALSIE_TEST_CREATE", False))
 
+
 def pytest_sessionstart(session):
     if CURRENT_DIR.is_dir():
         for entry in CURRENT_DIR.iterdir():
@@ -96,7 +97,7 @@ def test_scene(request):
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     def_path = out_dir / "def.json"
-    def_path.write_text(json.dumps(exported))
+    def_path.write_text(json.dumps(exported, indent=2))
 
     cmd = [str(SERVER_BINARY), "render-json", str(def_path), str(frames_dir)]
     if s.select_frames is not None:
@@ -113,7 +114,9 @@ def test_scene(request):
             shutil.copytree(frames_dir, check_frames_dir)
             return
         else:
-            raise Exception(f"Check directory '{check_frames_dir}' not found; run with ALSIE_TEST_CREATE=1 to create the snapshot")
+            raise Exception(
+                f"Check directory '{check_frames_dir}' not found; run with ALSIE_TEST_CREATE=1 to create the snapshot"
+            )
 
     current_frames = sorted(frames_dir.glob("*.png"))
     check_frames = sorted(check_frames_dir.glob("*.png"))
@@ -122,9 +125,7 @@ def test_scene(request):
     check_names = [f.name for f in check_frames]
     if current_names != check_names:
         pytest.fail(
-            f"frame mismatch:\n"
-            f"  current: {current_names}\n"
-            f"  check:   {check_names}"
+            f"frame mismatch:\n  current: {current_names}\n  check:   {check_names}"
         )
 
     for current_png, check_png in zip(current_frames, check_frames):

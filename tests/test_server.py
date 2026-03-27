@@ -91,10 +91,13 @@ async def test_done_message_always_sent(server_uri):
 
 
 async def test_tree_sent_on_success(server_uri):
-    msgs = await _run_code(server_uri, """
+    msgs = await _run_code(
+        server_uri,
+        """
 with scene(100, 100):
     pass
-    """)
+    """,
+    )
     tree_msgs = by_type(msgs, "tree")
     assert len(tree_msgs) == 1
 
@@ -122,14 +125,20 @@ async def test_many_sequential_runs(server_uri):
 async def test_tree_updates_between_runs(server_uri):
     """Each run replaces the previous tree — second run produces a different tree."""
     async with websockets.connect(server_uri) as ws:
-        msgs1 = await _run_code_on_ws(ws, """
+        msgs1 = await _run_code_on_ws(
+            ws,
+            """
 with scene(100, 100):
     rect().width(10)
-""")
-        msgs2 = await _run_code_on_ws(ws, """
+""",
+        )
+        msgs2 = await _run_code_on_ws(
+            ws,
+            """
 with scene(200, 150):
     pass
-""")
+""",
+        )
     tree1 = by_type(msgs1, "tree")[0]
     tree2 = by_type(msgs2, "tree")[0]
     assert tree1["frames"][0]["children"][0]["kind"] == "rect"

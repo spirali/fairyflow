@@ -8,7 +8,6 @@ ROOT_OBJECT = None
 
 
 class Node(AnimatedObject):
-
     def __init__(self, parent: Union[None, "Group"], frame: int):
         super().__init__(frame)
         self._parent = parent
@@ -25,12 +24,13 @@ class Node(AnimatedObject):
                 result.append(node)
             node = node._parent
         return result
-                
+
     def _new_id(self):
         return self._parent._new_id()
-    
-    def serialize(self, serializer): 
-        from .serializer import serialize_expr       
+
+    def serialize(self, serializer):
+        from .serializer import serialize_expr
+
         result = {"kind": self.kind, "id": self._id}
         attrs = self._attrs
         for name in attrs:
@@ -39,18 +39,18 @@ class Node(AnimatedObject):
                 serializer.add_av(attrs[name])
             result[name] = serialize_expr(v)
         return result
-    
+
     # def build(self, ctx: EvalCtx):
     #     result = {"kind": self.kind, "id": self._id}
     #     attrs = self._attrs
     #     for name in attrs:
     #         result[name] = _serialize(ctx.eval_obj(attrs[name]))
     #     return result
-    
+
     def key_frames(self, out):
         for value in self._attrs.values():
             value.key_frames(out)
-    
+
     def _get_parent(self):
         if self._parent is None:
             raise Exception("Node does not have parent")
@@ -61,18 +61,15 @@ class Node(AnimatedObject):
 
 
 class AlphaMixin:
-
     def _init_alpha(self):
         self._add_attr("alpha", 1)
 
-    
     def alpha(self, value):
         self._set_attr("alpha", value)
         return self
 
 
 class SizeMixin:
-
     def _init_size(self, width, height):
         self._add_attr("width", width)
         self._add_attr("height", height)
@@ -80,11 +77,11 @@ class SizeMixin:
     def width(self, value):
         self._set_attr("width", value)
         return self
-    
+
     def height(self, value):
         self._set_attr("height", value)
         return self
-    
+
     def size(self, width, height):
         self.width(width)
         self.height(height)
@@ -92,15 +89,14 @@ class SizeMixin:
 
 
 class PositionMixin:
-
     def _init_position(self, x, y):
         self._add_attr("x", 0)
-        self._add_attr("y", 0)     
+        self._add_attr("y", 0)
 
     def x(self, px):
         self._set_attr("x", px)
         return self
-    
+
     def y(self, px):
         self._set_attr("y", px)
         return self
@@ -127,9 +123,7 @@ class PositionMixin:
         return Position(self._parent, x, y)
 
 
-
 class StyleMixin(AlphaMixin):
-
     def _init_style(self):
         self._add_attr("fill_color", None)
         self._add_attr("stroke_color", None)
@@ -149,9 +143,7 @@ class StyleMixin(AlphaMixin):
         return self
 
 
-
 class NodeWithChildren(Node):
-
     def __init__(self, parent, frame, children=None):
         super().__init__(parent, frame)
         if children is None:
@@ -159,29 +151,30 @@ class NodeWithChildren(Node):
         self._children = children
         self._ctx = None
 
-
     def serialize(self, serializer):
         result = super().serialize(serializer)
         if self._children:
-            result["children"] = [serializer.add_node(child) for child in self._children]
+            result["children"] = [
+                serializer.add_node(child) for child in self._children
+            ]
         return result
-    
+
     # def build(self, ctx):
     #     result = super().build(ctx)
     #     if self._children:
     #         result["children"] = [child.build(ctx) for child in self._children]
     #     return result
-    
+
     # def key_frames(self, out: set):
     #     super().key_frames(out)
     #     for child in self._children:
     #         child.key_frames(out)
 
-class ContextManagerMixin:
 
+class ContextManagerMixin:
     def _init_context_manager(self):
         self._ctx = None
-      
+
     def __enter__(self):
         global NODE_CONTEXT
         assert self._ctx is None
@@ -195,7 +188,9 @@ class ContextManagerMixin:
         self._ctx = None
 
 
-class Group(NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin):
+class Group(
+    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin
+):
     kind = "group"
 
     def __init__(self, parent, frame):
@@ -226,7 +221,6 @@ class Group(NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, Alp
         return self
 
 
-
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
@@ -244,7 +238,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def _new_id(self):
         self._id_counter += 1
         return self._id_counter
-    
+
 
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin):
     kind = "rect"
@@ -268,6 +262,7 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin):
 
 class Path(NodeWithChildren, StyleMixin):
     kind = "path"
+
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._init_style()
@@ -294,8 +289,8 @@ class Path(NodeWithChildren, StyleMixin):
         self._children.append(p)
         return p
 
-class PathMove(Node, PositionMixin):
 
+class PathMove(Node, PositionMixin):
     kind = "move"
 
     def __init__(self, parent, frame, x, y):
@@ -304,7 +299,6 @@ class PathMove(Node, PositionMixin):
 
 
 class PathLine(Node, PositionMixin):
-
     kind = "line"
 
     def __init__(self, parent, frame, x, y):
@@ -313,7 +307,6 @@ class PathLine(Node, PositionMixin):
 
 
 class PathCubic(Node, PositionMixin):
-
     kind = "cubic"
 
     def __init__(self, parent, frame, x, y):
@@ -325,19 +318,19 @@ class PathCubic(Node, PositionMixin):
         self._add_attr("c2_y", 0)
 
     def c1_x(self, px):
-        """ Set x-coordinate of control point 1. It is relative to the start point of the path"""
+        """Set x-coordinate of control point 1. It is relative to the start point of the path"""
         self._set_attr("c1_x", px)
 
     def c1_y(self, px):
-        """ Set y-coordinate of control point 1. It is relative to the start point of the path"""
+        """Set y-coordinate of control point 1. It is relative to the start point of the path"""
         self._set_attr("c1_x", px)
 
     def c2_x(self, px):
-        """ Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        """Set x-coordinate of control point 1. It is relative to the end point of the path"""
         self._set_attr("c2_x", px)
 
     def c2_y(self, px):
-        """ Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        """Set x-coordinate of control point 1. It is relative to the end point of the path"""
         self._set_attr("c2_y", px)
 
     def c1_xy(self, x, y):

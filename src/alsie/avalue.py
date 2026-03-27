@@ -2,13 +2,15 @@ from .exprs import expr_add, expr_hold
 
 type Transition = Literal["step", "linear"]
 
-class Hold():
+
+class Hold:
     pass
+
 
 HOLD = Hold()
 
-class AnimatedValue:
 
+class AnimatedValue:
     def __init__(self, init_val, init_frame):
         self.init_frame = init_frame
         self.values = {init_frame: init_val}
@@ -38,18 +40,26 @@ class AnimatedValue:
 
     def is_single_value(self):
         return self.single_value
-    
+
     def get_first_value(self):
         return self.values[self.init_frame]
 
-    def serialize(self): 
-        values = [serialize_frame_value(f, self.values[f], self.transitions) for f in self.values]
-        return {"id": id(self), "values": values}        
-    
+    def serialize(self):
+        values = [
+            serialize_frame_value(f, self.values[f], self.transitions)
+            for f in self.values
+        ]
+        return {"id": id(self), "values": values}
+
 
 def serialize_frame_value(frame, obj, transitions):
     from .serializer import serialize_expr
+
     if obj == HOLD:
         return {"frame": frame, "op": "hold"}
     else:
-        return {"frame": frame, "value": serialize_expr(obj), "tr": transitions.get(frame, "step")}
+        return {
+            "frame": frame,
+            "value": serialize_expr(obj),
+            "tr": transitions.get(frame, "step"),
+        }

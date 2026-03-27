@@ -1,8 +1,8 @@
 from .avalue import AnimatedValue, Transition
 from .exprs import Call, expr_add, expr_hold
 
-class AnimatedObject:
 
+class AnimatedObject:
     def __init__(self, frame: int):
         self._frame = frame
         self._start = frame

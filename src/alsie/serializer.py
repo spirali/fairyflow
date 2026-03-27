@@ -1,9 +1,7 @@
-
-
 from .exprs import Expr
 from .avalue import AnimatedValue
 from .color import Color
-from .items import Node
+from .nodes import Node
 
 import json as json
 import os as os
@@ -25,7 +23,6 @@ def serialize_expr(obj):
 
 
 class Serializer:
-
     def __init__(self):
         self.animated_values = []
         self.nodes = []
@@ -37,7 +34,7 @@ class Serializer:
     def add_node(self, node):
         self.nodes.append(node.serialize(self))
         return node._id
-    
+
 
 def create_export(scene):
     serializer = Serializer()
@@ -45,13 +42,14 @@ def create_export(scene):
     return {
         "scene": serialized_scene,
         "animated_values": serializer.animated_values,
-        "nodes": serializer.nodes
+        "nodes": serializer.nodes,
     }
 
+
 def write_tree(path):
-    from .items import ROOT_OBJECT    
+    from .nodes import ROOT_OBJECT
+
     export = create_export(ROOT_OBJECT)
     print(json.dumps(export))
     with open(path, "w") as f:
         json.dump(export, f)
-

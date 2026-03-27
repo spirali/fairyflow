@@ -334,8 +334,24 @@ pub struct Node {
     pub id: NodeId,
     #[serde(skip)]
     pub parent: Option<NodeId>,
+    #[serde(default)]
+    pub start: FrameId,
+    #[serde(default)]
+    pub end: Option<FrameId>,
     #[serde(flatten)]
     pub kind: NodeKind,
+}
+
+impl Node {
+    pub fn is_active(&self, frame: FrameId) -> bool {
+        if frame < self.start {
+            return false;
+        }
+        if let Some(e) = self.end && frame >= e {
+            return false;
+        }
+        true
+    }
 }
 
 /// Root of the scene definition. Mirrors `Scene(SizeMixin)` in Python.

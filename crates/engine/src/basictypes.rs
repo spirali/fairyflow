@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::fmt::Display;
 
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Deserialize, Hash)]
+#[derive(Default, Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Deserialize, Hash)]
 pub struct FrameId(u32);
 
 impl FrameId {

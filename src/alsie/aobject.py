@@ -1,43 +1,61 @@
 from .avalue import AnimatedValue, Transition
 from .exprs import Call, expr_add, expr_hold
 
+import contextvars
+
+FRAME = contextvars.ContextVar[int]("frame", default=0)
+TRANSITION = contextvars.ContextVar[Transition]("transition", default="step")
+
+def reset_frame():
+    frame(0)
+    step()
+
+def frame(frame: int):
+    FRAME.set(frame)
+
+
+def transition(transition: Transition):
+    TRANSITION.set(transition)
+
+
+def step():
+    transition("step")
+
+
+def linear():
+    transition("linear")
+
+
+def get_frame() -> int:
+    return FRAME.get()
+
+
+def get_transition() -> Transition:
+    return TRANSITION.get()
+
 
 class AnimatedObject:
     def __init__(self, frame: int):
-        self._frame = frame
         self._start = frame
-        self._transition = "step"
+        self._end = None
         self._attrs = {}
 
     def _add_attr(self, name, value):
         self._attrs[name] = AnimatedValue(value, self._start)
 
     def _set_attr(self, name, value):
-        self._attrs[name].set(self._frame, value, self._transition)
+        self._attrs[name].set(get_frame(), value, get_transition())
 
     def _get_attr(self, name):
         return self._attrs[name]
 
-    def frame(self, frame: int):
-        self._frame = frame
-        return self
-
-    def step(self):
-        self.transition("step")
-        return self
-
-    def linear(self):
-        self.transition("linear")
-        return self
-
-    def transition(self, transition: Transition):
-        self._transition = transition
-        return self
+    def remove(self):
+        self._end = get_frame()
 
     def hold(self):
         for v in self._attrs.values():
-            v.hold(self._frame)
+            v.hold(get_frame())
         return self
 
     def _move_attr(self, name, delta):
-        self._attrs[name].move(self._frame, delta, self._transition)
+        self._attrs[name].move(get_frame(), delta, get_transition())

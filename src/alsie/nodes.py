@@ -1,5 +1,5 @@
 from .position import Position
-from .aobject import AnimatedObject
+from .aobject import AnimatedObject, get_frame, reset_frame
 from .color import Color
 from typing import Union
 
@@ -32,6 +32,10 @@ class Node(AnimatedObject):
         from .serializer import serialize_expr
 
         result = {"kind": self.kind, "id": self._id}
+        if self._start > 0:
+            result["start"] = self._start
+        if self._end is not None:
+            result["end"] = self._end
         attrs = self._attrs
         for name in attrs:
             v = attrs[name]
@@ -39,17 +43,6 @@ class Node(AnimatedObject):
                 serializer.add_av(attrs[name])
             result[name] = serialize_expr(v)
         return result
-
-    # def build(self, ctx: EvalCtx):
-    #     result = {"kind": self.kind, "id": self._id}
-    #     attrs = self._attrs
-    #     for name in attrs:
-    #         result[name] = _serialize(ctx.eval_obj(attrs[name]))
-    #     return result
-
-    def key_frames(self, out):
-        for value in self._attrs.values():
-            value.key_frames(out)
 
     def _get_parent(self):
         if self._parent is None:
@@ -231,6 +224,10 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
 
+    def __enter__(self):
+        reset_frame()
+        super().__enter__()
+
     def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
         return self
@@ -275,17 +272,17 @@ class Path(NodeWithChildren, StyleMixin):
             return (0, 0)
 
     def move(self):
-        p = PathMove(self, self._frame, *self._prev_coords())
+        p = PathMove(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
 
     def line(self):
-        p = PathLine(self, self._frame, *self._prev_coords())
+        p = PathLine(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
 
     def cubic(self):
-        p = PathCubic(self, self._frame, *self._prev_coords())
+        p = PathCubic(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
 
@@ -344,12 +341,10 @@ class PathCubic(Node, PositionMixin):
         return self
 
 
-def make_node(cls, frame):
+def make_node(cls):
     if NODE_CONTEXT is None:
         raise Exception("Element created out of context of a parent ndoe")
-    if frame is None:
-        frame = NODE_CONTEXT._start
-    item = cls(NODE_CONTEXT, frame)
+    item = cls(NODE_CONTEXT, get_frame())
     NODE_CONTEXT._children.append(item)
     return item
 
@@ -361,17 +356,17 @@ def scene(width: int, height: int):
     return scene
 
 
-def group(*, frame=None):
-    return make_node(Group, frame)
+def group():
+    return make_node(Group)
 
 
-def rect(*, frame=None):
-    return make_node(Rect, frame)
+def rect():
+    return make_node(Rect)
 
 
-def ellipse(*, frame=None):
-    return make_node(Ellipse, frame)
+def ellipse():
+    return make_node(Ellipse)
 
 
-def path(*, frame=None):
-    return make_node(Path, frame)
+def path():
+    return make_node(Path)

@@ -52,6 +52,13 @@ impl AnimationDef {
         for av in self.animated_values.values() {
             av.collect_key_frames(&mut frames);
         }
+        for node in self.nodes.values() {
+            frames.insert(node.start);
+            if let Some(end) = node.end {
+                frames.insert(end);
+            }
+        }
+        frames.insert(FrameId::new(0));
         let mut result: Vec<FrameId> = frames.into_iter().collect();
         result.sort_unstable();
         result

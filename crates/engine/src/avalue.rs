@@ -69,7 +69,11 @@ impl AnimatedValue {
 
     fn eval_inner(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         let frame = ctx.frame();
-        let (left_f, left_fv) = self.scan_left(frame).unwrap();
+        let Some((left_f, left_fv)) = self.scan_left(frame) else {
+            dbg!(&frame);
+            dbg!(&self.values);
+            panic!();
+        };
         let left_v = left_fv.value.eval(ctx)?;
         if left_f == frame {
             tracing::trace!(av_id = %self.id, frame = frame.as_u32(), "exact keyframe");

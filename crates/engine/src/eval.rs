@@ -391,10 +391,16 @@ impl Node {
                 rotation: rotation.eval_f64(ctx)?,
                 scale_x: scale_x.eval_f64(ctx)?,
                 scale_y: scale_y.eval_f64(ctx)?,
-                children: children
-                    .iter()
-                    .map(|&id| ctx.node(id)?.eval(ctx))
-                    .collect::<anyhow::Result<Vec<_>>>()?,
+                children: {
+                    let mut result = Vec::new();
+                    for &id in children {
+                        let node = ctx.node(id)?;
+                        if node.is_active(ctx.frame()) {
+                            result.push(node.eval(ctx)?);
+                        }
+                    }
+                    result
+                },
             },
             NodeKind::Rect {
                 position,
@@ -522,11 +528,13 @@ impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
         let fill_color = self.fill_color.eval(ctx)?.into_color().unwrap_or_default();
-        let children = self
-            .children
-            .iter()
-            .map(|&id| ctx.node(id)?.eval(ctx))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+        let mut children = Vec::with_capacity(self.children.len());
+        for &id in &self.children {
+            let node = ctx.node(id)?;
+            if node.is_active(ctx.frame()) {
+                children.push(node.eval(ctx)?);
+            }
+        }
         Ok(renderer::Scene {
             width: self.size.width.eval_f64(ctx)?,
             height: self.size.height.eval_f64(ctx)?,

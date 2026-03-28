@@ -9,6 +9,7 @@ pub async fn render_anim_to_dir(
     threads: Option<usize>,
     frames: Option<Vec<u32>>,
     target_resolution: Option<(u32, u32)>,
+    write_tree: bool,
 ) {
     if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
         eprintln!(
@@ -45,6 +46,12 @@ pub async fn render_anim_to_dir(
                     let path = output_dir.join(format!("frame{n}.png"));
                     std::fs::write(&path, &png).map_err(|e| e.to_string())?;
                     info!(frame = n, "wrote {}", path.display());
+                    if write_tree {
+                        let json = serde_json::to_string(&scene).map_err(|e| e.to_string())?;
+                        let tree_path = output_dir.join(format!("frame{n}.json"));
+                        std::fs::write(&tree_path, &json).map_err(|e| e.to_string())?;
+                        info!(frame = n, "wrote {}", tree_path.display());
+                    }
                     Ok(())
                 })
         };

@@ -99,7 +99,7 @@ def test_scene(request):
     def_path = out_dir / "def.json"
     def_path.write_text(json.dumps(exported, indent=2))
 
-    cmd = [str(SERVER_BINARY), "render-json", str(def_path), str(frames_dir)]
+    cmd = [str(SERVER_BINARY), "render-json", str(def_path), str(frames_dir), "--write-tree"]
     if s.select_frames is not None:
         cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
     if s.target_resolution is not None:
@@ -112,6 +112,9 @@ def test_scene(request):
     if not check_frames_dir.is_dir():
         if ALSIE_TEST_CREATE:
             shutil.copytree(frames_dir, check_frames_dir)
+            pngs = list(check_frames_dir.glob("*.png"))
+            if pngs:
+                subprocess.run(["oxipng", "--"] + [str(p) for p in pngs], check=True)
             return
         else:
             raise Exception(
@@ -136,8 +139,17 @@ def test_scene(request):
                 f"{current_png.name}: resolution mismatch: "
                 f"{current_img.size} (current) vs {check_img.size} (check)"
             )
-        current_arr = np.asarray(current_img)
-        check_arr = np.asarray(check_img)
+        current_arr = np.asarray(current_img.convert("RGBA"))
+        check_arr = np.asarray(check_img.convert("RGBA"))
         diff_count = int(np.any(current_arr != check_arr, axis=-1).sum())
         if diff_count:
             pytest.fail(f"{current_png.name}: {diff_count} pixel(s) differ")
+
+        stem = current_png.stem  # e.g. "frame0"
+        current_json = frames_dir / f"{stem}.json"
+        check_json = check_frames_dir / f"{stem}.json"
+        if not check_json.exists():
+            pytest.fail(f"{stem}.json missing from check directory")
+        current_json = json.loads(current_json.read_text())
+        check_json = json.loads(check_json.read_text())
+        assert current_json == check_json

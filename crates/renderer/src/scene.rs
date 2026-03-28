@@ -23,6 +23,12 @@ impl<T: Debug + Clone> Inheritable<T> {
         matches!(self, Inheritable::Inherited(_))
     }
 
+    pub fn value(&self) -> &T {
+        match self {
+            Inheritable::Own(v) | Inheritable::Inherited(v) => v,
+        }
+    }
+
     pub fn map<S: Debug + Clone, E>(&self, f: impl FnOnce(&T) -> Result<S, E>) -> Result<Inheritable<S>, E> {
         Ok(match self {
             Inheritable::Own(v) => Inheritable::Own(f(v)?),

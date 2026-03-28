@@ -57,8 +57,14 @@ impl Renderer {
         parent_transform: Transform,
         parent_alpha: f32,
     ) {
-        for node in nodes {
-            self.render_node(node, pixmap, parent_transform, parent_alpha);
+        let mut order: Vec<usize> = (0..nodes.len()).collect();
+        order.sort_by(|&a, &b| {
+            node_z_level(&nodes[a])
+                .partial_cmp(&node_z_level(&nodes[b]))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for i in order {
+            self.render_node(&nodes[i], pixmap, parent_transform, parent_alpha);
         }
     }
 
@@ -692,6 +698,16 @@ impl OutlinePen for GlyphPen {
     }
     fn close(&mut self) {
         self.verbs.push(PathVerb::Close);
+    }
+}
+
+fn node_z_level(node: &Node) -> f64 {
+    match &node.kind {
+        NodeKind::Group { z_level, .. }
+        | NodeKind::Rect { z_level, .. }
+        | NodeKind::Ellipse { z_level, .. }
+        | NodeKind::Path { z_level, .. }
+        | NodeKind::Text { z_level, .. } => *z_level.value(),
     }
 }
 

@@ -68,6 +68,10 @@ enum Cmd {
         /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
         #[arg(long = "target-resolution", value_parser = parse_resolution)]
         target_resolution: Option<(u32, u32)>,
+
+        /// Also write frame{n}.json with the evaluated scene tree for each rendered frame
+        #[arg(long)]
+        write_tree: bool,
     },
     /// Initialize a new project directory
     Init {
@@ -98,6 +102,7 @@ async fn main() {
             frames,
             font_dirs,
             target_resolution,
+            write_tree,
         } => {
             run_render_json(
                 json_path,
@@ -106,6 +111,7 @@ async fn main() {
                 frames,
                 font_dirs,
                 target_resolution,
+                write_tree,
             )
             .await
         }
@@ -169,6 +175,7 @@ async fn run_render_json(
     frames: Option<Vec<u32>>,
     font_dirs: Vec<PathBuf>,
     target_resolution: Option<(u32, u32)>,
+    write_tree: bool,
 ) {
     let json_str = match tokio::fs::read_to_string(&json_path).await {
         Ok(s) => s,
@@ -190,7 +197,7 @@ async fn run_render_json(
         renderer::Resources::get().load_font_directories(&font_dirs);
     }
 
-    render_anim_to_dir(anim, output_dir, threads, frames, target_resolution).await;
+    render_anim_to_dir(anim, output_dir, threads, frames, target_resolution, write_tree).await;
 }
 
 async fn run_init(directory: PathBuf) {

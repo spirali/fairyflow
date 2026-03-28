@@ -1,12 +1,11 @@
-from .layout import centering_layout
-from .position import Position
-from .aobject import AnimatedObject, get_frame, reset_frame
-from .color import Color
-from .exprs import expr_mul, expr_sub
 from typing import Union
 
-NODE_CONTEXT = None
-ROOT_OBJECT = None
+from .layout import centering_layout
+from .position import Position
+from .aobject import AnimatedObject, get_frame
+from .color import Color
+from .exprs import expr_mul, expr_sub
+from .ctxvars import get_current_node, store_ctx, restore_ctx, ROOT_OBJECT, set_current_node
 
 
 class Node(AnimatedObject):
@@ -68,6 +67,15 @@ class AlphaMixin:
     def alpha(self, value):
         self._set_attr("alpha", value)
         return self
+    
+
+class ZLevelMixin:
+
+    def _init_z(self, parent):
+        self._add_from_parent("z_level", parent, 0)
+
+    def z_level(self, value):
+        self._set_attr("z_level", value)
 
 
 class SizeMixin:
@@ -195,20 +203,18 @@ class ContextManagerMixin:
         self._ctx = None
 
     def __enter__(self):
-        global NODE_CONTEXT
         assert self._ctx is None
-        self._ctx = NODE_CONTEXT
-        NODE_CONTEXT = self
+        self._ctx = store_ctx()
+        set_current_node(self)
         return self
 
     def __exit__(self, *args):
-        global NODE_CONTEXT
-        NODE_CONTEXT = self._ctx
+        restore_ctx(self._ctx)
         self._ctx = None
 
 
 class Group(
-    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin
+    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin, ZLevelMixin
 ):
     kind = "group"
 
@@ -218,6 +224,7 @@ class Group(
         self._init_position(0, 0)
         self._init_size(0, 0)
         self._init_alpha()
+        self._init_z(parent)
         self._add_attr("rotation", 0)
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
@@ -252,7 +259,6 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._id_counter = 0
 
     def __enter__(self):
-        reset_frame()
         super().__enter__()
 
     def color(self, value: str):
@@ -264,7 +270,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         return self._id_counter
 
 
-class Rect(Node, PositionMixin, SizeMixin, StyleMixin):
+class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "rect"
 
     def __init__(self, parent, frame):
@@ -272,9 +278,10 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin):
         self._init_position(0, 0)
         self._init_size(0, 0)
         self._init_style()
+        self._init_z(parent)
 
 
-class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin):
+class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "ellipse"
 
     def __init__(self, parent, frame):
@@ -282,14 +289,16 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin):
         self._init_position(0, 0)
         self._init_size(0, 0)
         self._init_style()
+        self._init_z(parent)
 
 
-class Path(NodeWithChildren, StyleMixin):
+class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     kind = "path"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._init_style()
+        self._init_z(parent)
 
     def _prev_coords(self):
         if self._children:
@@ -369,17 +378,17 @@ class PathCubic(Node, PositionMixin):
 
 
 def make_node(cls):
-    if NODE_CONTEXT is None:
+    current_node = get_current_node()
+    if current_node is None:
         raise Exception("Element created out of context of a parent ndoe")
-    item = cls(NODE_CONTEXT, get_frame())
-    NODE_CONTEXT._children.append(item)
+    item = cls(current_node, get_frame())
+    current_node._children.append(item)
     return item
 
 
 def scene(width: int, height: int):
-    global ROOT_OBJECT
     scene = Scene(width, height)
-    ROOT_OBJECT = scene
+    ROOT_OBJECT.set(scene)
     return scene
 
 

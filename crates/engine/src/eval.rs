@@ -9,6 +9,7 @@ use crate::defs::{
 use anyhow::bail;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use renderer::Inheritable;
 
 const EVAL_DEPTH_MAX: u32 = 64;
 
@@ -52,14 +53,6 @@ impl<'a> EvalCtx<'a> {
         let new_depth = self.depth.get();
         assert!(new_depth > 0);
         self.depth.set(new_depth - 1);
-    }
-
-    pub fn eval_av(&self, av_id: AvId) -> anyhow::Result<Value> {
-        self.av(av_id)?.eval(self)
-    }
-
-    pub fn av_f64(&self, av_id: AvId) -> anyhow::Result<f64> {
-        self.eval_av(av_id)?.as_f64()
     }
 
     pub fn node(&self, node_id: NodeId) -> anyhow::Result<&'a Node> {
@@ -275,11 +268,20 @@ impl Expr {
             Expr::Call(call) => call.eval(ctx),
             Expr::Av(av_id) => {
                 tracing::trace!(av_id = %av_id.get_id(), "Expr::Av");
-                ctx.eval_av(av_id.get_id())
-            }
+                ctx.av(av_id.get_id())?.eval(ctx)
+            },
+            Expr::Inherited(e) => e.eval(ctx),
         }
     }
 
+    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
+        Ok(match self {
+            Expr::Inherited(e) => Inheritable::Inherited(e.eval(ctx)?),
+            e => Inheritable::Own(e.eval(ctx)?)
+        })
+    }
+
+    /// Shortcut for the most used eval
     pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         self.eval(ctx)?.as_f64()
     }
@@ -398,6 +400,7 @@ impl Node {
                 scale_x,
                 scale_y,
                 children,
+                z_level
             } => renderer::NodeKind::Group {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
@@ -405,6 +408,7 @@ impl Node {
                 rotation: rotation.eval_f64(ctx)?,
                 scale_x: scale_x.eval_f64(ctx)?,
                 scale_y: scale_y.eval_f64(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 children: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -420,31 +424,37 @@ impl Node {
                 position,
                 size,
                 style,
+                z_level,
             } => renderer::NodeKind::Rect {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
             },
             NodeKind::Ellipse {
                 position,
                 size,
                 style,
+                z_level
             } => renderer::NodeKind::Ellipse {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
             },
-            NodeKind::Path { style, children } => renderer::NodeKind::Path {
+            NodeKind::Path { style, z_level, children } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
             NodeKind::Text {
-                position, children, ..
+                position, z_level, children, ..
             } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 lines: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))

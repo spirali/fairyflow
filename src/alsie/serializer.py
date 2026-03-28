@@ -46,11 +46,8 @@ def create_export(scene):
     }
 
 
-def write_tree(path):
-    from .nodes import ROOT_OBJECT
-
-    export = create_export(ROOT_OBJECT)
-    print(export)
+def write_tree(obj, path):
+    export = create_export(obj)
     print(json.dumps(export))
     with open(path, "w") as f:
         json.dump(export, f)

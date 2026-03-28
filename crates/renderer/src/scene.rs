@@ -1,6 +1,23 @@
+use std::fmt::Debug;
 use crate::Color;
 use serde::Serialize;
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(bound(serialize = "T: Serialize"))]
+pub enum Inheritable<T: Debug + Clone> {
+    Own(T),
+    Inherited(T)
+}
+
+impl<T: Debug + Clone> Inheritable<T> {
+    pub fn map<S: Debug + Clone, E>(&self, f: impl FnOnce(&T) -> Result<S, E>) -> Result<Inheritable<S>, E> {
+        Ok(match self {
+            Inheritable::Own(v) => Inheritable::Inherited(f(v)?),
+            Inheritable::Inherited(v) => Inheritable::Inherited(f(v)?),
+        })
+    }
+}
 
 /// Mirrors PositionMixin in Python.
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +111,7 @@ pub enum NodeKind {
         scale_x: f64,
         scale_y: f64,
         rotation: f64,
+        z_level: Inheritable<f64>,
         children: Vec<Node>,
     },
     /// Python: Rect(PositionMixin, SizeMixin, StyleMixin)
@@ -104,6 +122,7 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        z_level: Inheritable<f64>,
     },
     /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin)
     Ellipse {
@@ -113,11 +132,13 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        z_level: Inheritable<f64>,
     },
     /// Python: Path(StyleMixin)
     Path {
         #[serde(flatten)]
         style: Style,
+        z_level: Inheritable<f64>,
         children: Vec<PathCommand>,
     },
     /// Python: Text — positioned block of text lines.
@@ -127,6 +148,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
+        z_level: Inheritable<f64>,
     },
 }
 

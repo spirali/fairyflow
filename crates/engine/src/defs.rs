@@ -190,12 +190,7 @@ pub enum Expr {
     Const(Value),
     Call(CallExpr),
     Av(AvRef),
-}
-
-impl Expr {
-    pub fn check_refs(&self) -> anyhow::Result<()> {
-        todo!()
-    }
+    Inherited(Box<Expr>)
 }
 
 // ──────────────────────────────── Mixins ───────────────────────────────────
@@ -248,6 +243,7 @@ pub enum NodeKind {
         rotation: Expr,
         scale_x: Expr,
         scale_y: Expr,
+        z_level: Expr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -257,6 +253,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
+        z_level: Expr,
         #[serde(flatten)]
         style: Style,
     },
@@ -266,6 +263,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
+        z_level: Expr,
         #[serde(flatten)]
         style: Style,
     },
@@ -273,6 +271,7 @@ pub enum NodeKind {
     Path {
         #[serde(flatten)]
         style: Style,
+        z_level: Expr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -283,6 +282,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         text_style: TextStyle,
+        z_level: Expr,
         #[serde(default)]
         children: Vec<NodeId>,
     },

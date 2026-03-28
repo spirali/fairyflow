@@ -1,37 +1,6 @@
 from .avalue import AnimatedValue, Transition
-from .exprs import Call, expr_add, expr_hold
-
-import contextvars
-
-FRAME = contextvars.ContextVar[int]("frame", default=0)
-TRANSITION = contextvars.ContextVar[Transition]("transition", default="step")
-
-def reset_frame():
-    frame(0)
-    step()
-
-def frame(frame: int):
-    FRAME.set(frame)
-
-
-def transition(transition: Transition):
-    TRANSITION.set(transition)
-
-
-def step():
-    transition("step")
-
-
-def linear():
-    transition("linear")
-
-
-def get_frame() -> int:
-    return FRAME.get()
-
-
-def get_transition() -> Transition:
-    return TRANSITION.get()
+from .exprs import Call, InheritedExprs, expr_add, expr_hold
+from .ctxvars import get_frame, get_transition
 
 
 class AnimatedObject:
@@ -42,6 +11,12 @@ class AnimatedObject:
 
     def _add_attr(self, name, value):
         self._attrs[name] = AnimatedValue(value, self._start)
+
+    def _add_from_parent(self, name, parent, default=None):
+        if name in parent._attrs:
+            self._add_attr(name, InheritedExprs(parent._get_attr(name)))
+        else:
+            self._add_attr(name, InheritedExprs(default))
 
     def _set_attr(self, name, value):
         self._attrs[name].set(get_frame(), value, get_transition())

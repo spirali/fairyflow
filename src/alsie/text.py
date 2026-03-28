@@ -1,7 +1,7 @@
 from .exprs import expr_default_x, expr_default_y
 from .position import Position
 
-from .nodes import Node, NodeWithChildren, PositionMixin, StyleMixin, make_node
+from .nodes import Node, NodeWithChildren, PositionMixin, StyleMixin, ZLevelMixin, make_node
 
 
 class TextStyleMixin(StyleMixin):
@@ -58,13 +58,14 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
         return group
 
 
-class Text(NodeWithChildren, PositionMixin, TextStyleMixin):
+class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._init_position(0, 0)
         self._init_text_style()
+        self._init_z(parent)
 
     def group(self):
         group = TextGroup(self, self._frame)

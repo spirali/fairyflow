@@ -23,6 +23,16 @@ class Call(Expr):
         return f"<Call {self.name} {self.args}>"
 
 
+class InheritedExprs(Expr):
+    
+    def __init__(self, expr):
+        self.expr = expr
+
+    def serialize_expr(self):
+        from .serializer import serialize_expr
+        return {"kind": "inherited", "expr": serialize_expr(self.expr)}
+    
+
 def expr_add(a, b):
     return Call("+", a=a, b=b)
 

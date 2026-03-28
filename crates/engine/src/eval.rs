@@ -270,13 +270,13 @@ impl Expr {
                 tracing::trace!(av_id = %av_id.get_id(), "Expr::Av");
                 ctx.av(av_id.get_id())?.eval(ctx)
             },
-            Expr::Inherited(e) => e.eval(ctx),
+            Expr::Inherited { expr } => expr.eval(ctx),
         }
     }
 
     pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
         Ok(match self {
-            Expr::Inherited(e) => Inheritable::Inherited(e.eval(ctx)?),
+            Expr::Inherited { expr } => Inheritable::Inherited(expr.eval(ctx)?),
             e => Inheritable::Own(e.eval(ctx)?)
         })
     }

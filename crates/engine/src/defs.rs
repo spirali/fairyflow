@@ -190,7 +190,7 @@ pub enum Expr {
     Const(Value),
     Call(CallExpr),
     Av(AvRef),
-    Inherited(Box<Expr>)
+    Inherited { expr: Box<Expr> },
 }
 
 // ──────────────────────────────── Mixins ───────────────────────────────────

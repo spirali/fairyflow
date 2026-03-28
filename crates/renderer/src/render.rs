@@ -97,7 +97,7 @@ impl Renderer {
                 position,
                 size,
                 style,
-                z_level
+                z_level,
             } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
                 let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -111,7 +111,7 @@ impl Renderer {
                 position,
                 size,
                 style,
-                z_level
+                z_level,
             } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
                 let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -123,12 +123,20 @@ impl Renderer {
                 };
                 fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
             }
-            NodeKind::Path { style, children, z_level } => {
+            NodeKind::Path {
+                style,
+                children,
+                z_level,
+            } => {
                 if let Some(path) = build_path(children) {
                     fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha);
                 }
             }
-            NodeKind::Text { position, lines, z_level } => {
+            NodeKind::Text {
+                position,
+                lines,
+                z_level,
+            } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
                 let lines = lines.clone();
                 self.render_text_lines(&lines, pixmap, transform, parent_alpha);

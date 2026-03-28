@@ -7,9 +7,9 @@ use crate::defs::{
     TextStyle, Value,
 };
 use anyhow::bail;
+use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
-use renderer::Inheritable;
 
 const EVAL_DEPTH_MAX: u32 = 64;
 
@@ -236,31 +236,6 @@ fn text_default_pos(
     Ok(renderer::measure_text_node_pos(&lines, node_id.as_u64()).unwrap_or((0.0, 0.0)))
 }
 
-/// Returns `(width, height)` for the natural (unwrapped) size of a node.
-/// - `Text`: measures all lines.
-/// - `TextGroup` / `TextSpan`: measures the node's own content as a single line.
-/// - All other kinds: returns `(0, 0)`.
-fn text_default_size(
-    node_id: crate::basictypes::NodeId,
-    ctx: &EvalCtx,
-) -> anyhow::Result<(f32, f32)> {
-    let node = ctx.node(node_id)?;
-    match &node.kind {
-        NodeKind::Text { children, .. } => {
-            let lines = children
-                .iter()
-                .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
-                .collect::<anyhow::Result<Vec<_>>>()?;
-            Ok(renderer::measure_text(&lines))
-        }
-        NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
-            let child = node.eval_as_text_child(ctx)?;
-            Ok(renderer::measure_text(&[child]))
-        }
-        _ => Ok((0.0, 0.0)),
-    }
-}
-
 impl Expr {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         match self {
@@ -269,7 +244,7 @@ impl Expr {
             Expr::Av(av_id) => {
                 tracing::trace!(av_id = %av_id.get_id(), "Expr::Av");
                 ctx.av(av_id.get_id())?.eval(ctx)
-            },
+            }
             Expr::Inherited { expr } => expr.eval(ctx),
         }
     }
@@ -277,7 +252,7 @@ impl Expr {
     pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
         Ok(match self {
             Expr::Inherited { expr } => Inheritable::Inherited(expr.eval(ctx)?),
-            e => Inheritable::Own(e.eval(ctx)?)
+            e => Inheritable::Own(e.eval(ctx)?),
         })
     }
 
@@ -296,14 +271,14 @@ impl CallExpr {
                 let vb = pair.b.eval(ctx)?.as_f64()?;
                 tracing::trace!(a = va, b = vb, result = va + vb, "Call::Add result");
                 Ok(Value::Float(va + vb))
-            },
+            }
             CallExpr::Sub(pair) => {
                 tracing::trace!("Call::Sub");
                 let va = pair.a.eval(ctx)?.as_f64()?;
                 let vb = pair.b.eval(ctx)?.as_f64()?;
                 tracing::trace!(a = va, b = vb, result = va - vb, "Call::Sub result");
                 Ok(Value::Float(va - vb))
-            },
+            }
             CallExpr::Mul(pair) => {
                 tracing::trace!("Call::Mul");
                 let va = pair.a.eval(ctx)?.as_f64()?;
@@ -336,12 +311,12 @@ impl CallExpr {
                 Ok(Value::Float(py))
             }
             CallExpr::DefaultWidth { node } => {
-                let (w, _h) = text_default_size(node.get_id(), ctx)?;
-                Ok(Value::Float(w as f64))
+                let node = ctx.node(node.get_id())?;
+                Ok(Value::Float(node.default_width(ctx)?))
             }
             CallExpr::DefaultHeight { node } => {
-                let (_w, h) = text_default_size(node.get_id(), ctx)?;
-                Ok(Value::Float(h as f64))
+                let node = ctx.node(node.get_id())?;
+                Ok(Value::Float(node.default_height(ctx)?))
             }
             CallExpr::DefaultX { node } => {
                 let (x, _y) = text_default_pos(node.get_id(), ctx)?;
@@ -400,7 +375,7 @@ impl Node {
                 scale_x,
                 scale_y,
                 children,
-                z_level
+                z_level,
             } => renderer::NodeKind::Group {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
@@ -435,14 +410,18 @@ impl Node {
                 position,
                 size,
                 style,
-                z_level
+                z_level,
             } => renderer::NodeKind::Ellipse {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
             },
-            NodeKind::Path { style, z_level, children } => renderer::NodeKind::Path {
+            NodeKind::Path {
+                style,
+                z_level,
+                children,
+            } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 children: children
@@ -451,7 +430,10 @@ impl Node {
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
             NodeKind::Text {
-                position, z_level, children, ..
+                position,
+                z_level,
+                children,
+                ..
             } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,

@@ -54,3 +54,10 @@ def expr_default_y(node):
     return Call("default_y", node=node)
 
 
+def expr_default_width(node):
+    return Call("default_width", node=node)
+
+
+def expr_default_height(node):
+    return Call("default_height", node=node)
+

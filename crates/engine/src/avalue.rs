@@ -1,9 +1,9 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
 use crate::defs::{Expr, Node, Transition, Value};
 use crate::eval::EvalCtx;
+use anyhow::bail;
 use serde::{Deserialize, Deserializer};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use anyhow::bail;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KeyFrame {
@@ -106,7 +106,7 @@ impl AnimatedValue {
                 let mut lc = rc.clone();
                 lc.set_alpha(0.0);
                 Ok(Value::Color(crate::defs::Color::interpolate(&lc, &rc, t)))
-            },
+            }
             (Value::Color(lc), Value::None) => {
                 let mut rc = lc.clone();
                 rc.set_alpha(0.0);
@@ -116,7 +116,7 @@ impl AnimatedValue {
                 let lf = lv.as_f64()?;
                 let rf = rv.as_f64()?;
                 Ok(Value::Float(lf + t * (rf - lf)))
-            },
+            }
             (lv, rc) => {
                 bail!("Invalid interpolation of {lv:?} and {rc:?}");
             }

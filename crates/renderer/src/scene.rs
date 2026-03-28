@@ -1,6 +1,6 @@
-use std::fmt::Debug;
 use crate::Color;
 use serde::{Serialize, Serializer};
+use std::fmt::Debug;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,9 @@ impl<T: Debug + Clone + Serialize> Serialize for Inheritable<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Inheritable::Own(v) => v.serialize(serializer),
-            Inheritable::Inherited(_) => unreachable!("Inherited fields must be skipped via skip_serializing_if"),
+            Inheritable::Inherited(_) => {
+                unreachable!("Inherited fields must be skipped via skip_serializing_if")
+            }
         }
     }
 }
@@ -29,7 +31,10 @@ impl<T: Debug + Clone> Inheritable<T> {
         }
     }
 
-    pub fn map<S: Debug + Clone, E>(&self, f: impl FnOnce(&T) -> Result<S, E>) -> Result<Inheritable<S>, E> {
+    pub fn map<S: Debug + Clone, E>(
+        &self,
+        f: impl FnOnce(&T) -> Result<S, E>,
+    ) -> Result<Inheritable<S>, E> {
         Ok(match self {
             Inheritable::Own(v) => Inheritable::Own(f(v)?),
             Inheritable::Inherited(v) => Inheritable::Inherited(f(v)?),

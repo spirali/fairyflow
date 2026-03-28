@@ -197,7 +197,15 @@ async fn run_render_json(
         renderer::Resources::get().load_font_directories(&font_dirs);
     }
 
-    render_anim_to_dir(anim, output_dir, threads, frames, target_resolution, write_tree).await;
+    render_anim_to_dir(
+        anim,
+        output_dir,
+        threads,
+        frames,
+        target_resolution,
+        write_tree,
+    )
+    .await;
 }
 
 async fn run_init(directory: PathBuf) {

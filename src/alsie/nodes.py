@@ -4,7 +4,7 @@ from .layout import centering_layout
 from .position import Position
 from .aobject import AnimatedObject, get_frame
 from .color import Color
-from .exprs import expr_mul, expr_sub
+from .exprs import expr_default_height, expr_default_width, expr_mul, expr_sub
 from .ctxvars import get_current_node, store_ctx, restore_ctx, ROOT_OBJECT, set_current_node
 
 
@@ -55,6 +55,9 @@ class Node(AnimatedObject):
         if self._parent is None:
             raise Exception("Node does not have parent")
         return self._parent
+    
+    def _get_layout(self):
+        return self._parent._get_layout()
 
     def __repr__(self):
         return f"<{self.kind} id={self._id}>"
@@ -84,6 +87,9 @@ class SizeMixin:
         self._add_attr("width", width)
         self._add_attr("height", height)
 
+    def _init_default_size(self, node):
+        self._init_size(expr_default_width(node), expr_default_height(node))
+
     def width(self, value):
         self._set_attr("width", value)
         return self
@@ -100,8 +106,8 @@ class SizeMixin:
 
 class PositionMixin:
     def _init_position(self, x, y):
-        self._add_attr("x", 0)
-        self._add_attr("y", 0)
+        self._add_attr("x", x)
+        self._add_attr("y", y)
 
     def x(self, px):
         self._set_attr("x", px)
@@ -223,7 +229,7 @@ class Group(
         super().__init__(parent, frame)
         self._init_context_manager()
         self._init_position(0, 0)
-        self._init_size(0, 0)
+        self._init_default_size(self)
         self._init_alpha()
         self._init_z(parent)
         self._add_attr("rotation", 0)
@@ -248,6 +254,9 @@ class Group(
         self._set_attr("rotation", value)
         return self
 
+    def _get_layout(self):
+        return self._layout
+
 
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
@@ -258,6 +267,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._init_size(width, height)
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
+        self._layout = centering_layout
 
     def __enter__(self):
         super().__enter__()
@@ -265,6 +275,9 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
         return self
+    
+    def _get_layout(self):
+        return self._layout
 
     def _new_id(self):
         self._id_counter += 1

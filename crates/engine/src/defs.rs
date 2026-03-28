@@ -19,7 +19,7 @@ impl Color {
     pub fn into_inner(self) -> RendererColor {
         self.0
     }
-    
+
     pub fn set_alpha(&mut self, alpha: f32) {
         self.0.set_alpha(alpha);
     }
@@ -54,7 +54,6 @@ pub enum Value {
 }
 
 impl Value {
-
     pub fn is_number(&self) -> bool {
         match self {
             Value::Int(_) | Value::Float(_) => true,
@@ -351,7 +350,9 @@ impl Node {
         if frame < self.start {
             return false;
         }
-        if let Some(e) = self.end && frame >= e {
+        if let Some(e) = self.end
+            && frame >= e
+        {
             return false;
         }
         true

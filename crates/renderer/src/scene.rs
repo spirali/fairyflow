@@ -1,19 +1,31 @@
 use std::fmt::Debug;
 use crate::Color;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(bound(serialize = "T: Serialize"))]
+#[derive(Debug, Clone)]
 pub enum Inheritable<T: Debug + Clone> {
     Own(T),
-    Inherited(T)
+    Inherited(T),
+}
+
+impl<T: Debug + Clone + Serialize> Serialize for Inheritable<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Inheritable::Own(v) => v.serialize(serializer),
+            Inheritable::Inherited(_) => unreachable!("Inherited fields must be skipped via skip_serializing_if"),
+        }
+    }
 }
 
 impl<T: Debug + Clone> Inheritable<T> {
+    pub fn is_inherited(&self) -> bool {
+        matches!(self, Inheritable::Inherited(_))
+    }
+
     pub fn map<S: Debug + Clone, E>(&self, f: impl FnOnce(&T) -> Result<S, E>) -> Result<Inheritable<S>, E> {
         Ok(match self {
-            Inheritable::Own(v) => Inheritable::Inherited(f(v)?),
+            Inheritable::Own(v) => Inheritable::Own(f(v)?),
             Inheritable::Inherited(v) => Inheritable::Inherited(f(v)?),
         })
     }
@@ -111,6 +123,7 @@ pub enum NodeKind {
         scale_x: f64,
         scale_y: f64,
         rotation: f64,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         children: Vec<Node>,
     },
@@ -122,6 +135,7 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
     /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin)
@@ -132,12 +146,14 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
     /// Python: Path(StyleMixin)
     Path {
         #[serde(flatten)]
         style: Style,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         children: Vec<PathCommand>,
     },
@@ -148,6 +164,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
 }

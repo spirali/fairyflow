@@ -76,6 +76,7 @@ class ZLevelMixin:
 
     def z_level(self, value):
         self._set_attr("z_level", value)
+        return self
 
 
 class SizeMixin:

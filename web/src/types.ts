@@ -26,6 +26,8 @@ export interface RawNode {
   c1_y?: number;
   c2_x?: number;
   c2_y?: number;
+  // z-level (group, rect, ellipse, path, text) — absent when inherited
+  z_level?: number;
   // children (group, t_group, text lines)
   children?: RawNode[];
   // t_span fields

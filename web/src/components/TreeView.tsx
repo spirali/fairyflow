@@ -40,7 +40,8 @@ function NodeLabel({ node, prevNode, displayLabel }: { node: TreeNodeData; prevN
     prevNode != null && prevNode[key] !== node[key];
 
   const TRACKED = ['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
-                   'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const;
+                   'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y',
+                   'z_level'] as const;
   const anyChanged = TRACKED.some(ch);
 
   const spanText = node.text != null
@@ -76,6 +77,7 @@ function NodeLabel({ node, prevNode, displayLabel }: { node: TreeNodeData; prevN
       {node.font_size != null && <Prop label={`${fmt(node.font_size)}px`} changed={false} />}
       {node.font_family != null && <Prop label={node.font_family} changed={false} />}
       {node.italic && <Prop label="italic" changed={false} />}
+      {node.z_level != null && <Prop label={`z=${fmt(node.z_level)}`} changed={ch('z_level')} />}
     </span>
   );
 }
@@ -95,7 +97,8 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect, isDirectTextCh
 
   const anyChanged = prevNode != null &&
     (['width', 'height', 'fill_color', 'stroke_color', 'stroke_width', 'alpha',
-      'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y'] as const).some(k => prevNode[k] !== node[k]);
+      'x', 'y', 'scale_x', 'scale_y', 'rotation', 'c1_x', 'c1_y', 'c2_x', 'c2_y',
+      'z_level'] as const).some(k => prevNode[k] !== node[k]);
 
   const iconKind = isDirectTextChild ? 't_line' : node.kind;
   const displayLabel = isDirectTextChild ? 'Line' : (KIND_LABELS[node.kind] ?? node.kind);

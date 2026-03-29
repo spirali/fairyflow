@@ -20,6 +20,7 @@ CURRENT_DIR = ROOT / "tests" / "current"
 CHECK_DIR = ROOT / "tests" / "check"
 
 ALSIE_TEST_CREATE = int(os.environ.get("ALSIE_TEST_CREATE", False))
+ALSIE_TEST_UPDATE = int(os.environ.get("ALSIE_TEST_UPDATE", False))
 
 
 def pytest_sessionstart(session):
@@ -109,8 +110,10 @@ def test_scene(request):
     subprocess.run(cmd, check=True, cwd=ROOT)
 
     check_frames_dir = CHECK_DIR / request.node.name / "frames"
+    if ALSIE_TEST_UPDATE and check_frames_dir.is_dir():
+        shutil.rmtree(check_frames_dir)
     if not check_frames_dir.is_dir():
-        if ALSIE_TEST_CREATE:
+        if ALSIE_TEST_CREATE or ALSIE_TEST_UPDATE:
             shutil.copytree(frames_dir, check_frames_dir)
             pngs = list(check_frames_dir.glob("*.png"))
             if pngs:

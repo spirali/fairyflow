@@ -1,6 +1,6 @@
 from typing import Union
 
-from .layout import centering_layout
+from .layout import CENTERING_LAYOUT
 from .position import Position
 from .aobject import AnimatedObject, get_frame
 from .color import Color
@@ -237,7 +237,12 @@ class Group(
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
         self._init_position_from_layout(self._parent._layout)
-        self._layout = centering_layout
+        self._layout = CENTERING_LAYOUT
+
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        result["layout"] = self._layout.serialize(serializer)
+        return result
 
     def scale_x(self, value):
         self._set_attr("scale_x", value)
@@ -266,7 +271,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._init_size(width, height)
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
-        self._layout = centering_layout
+        self._layout = CENTERING_LAYOUT
 
     def __enter__(self):
         super().__enter__()

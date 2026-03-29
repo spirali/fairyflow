@@ -39,6 +39,55 @@ impl BBox {
 }
 
 impl Node {
+    /// Returns the axis-aligned bounding box of this node in its parent's coordinate space.
+    /// For Group nodes, rotation and scaling are applied to the four corners.
+    fn bbox_of_group(&self, ctx: &EvalCtx) -> anyhow::Result<BBox> {
+        match &self.kind {
+            NodeKind::Group {
+                position,
+                size,
+                scale_x,
+                scale_y,
+                rotation,
+                ..
+            } => {
+                let tx = position.x.eval_f64(ctx)?;
+                let ty = position.y.eval_f64(ctx)?;
+                let w = size.width.eval_f64(ctx)?;
+                let h = size.height.eval_f64(ctx)?;
+                let sx = scale_x.eval_f64(ctx)?;
+                let sy = scale_y.eval_f64(ctx)?;
+                let r = rotation.eval_f64(ctx)?.to_radians();
+                let cos_r = r.cos();
+                let sin_r = r.sin();
+
+                // Transform the four corners of the group's local bounding box to parent space.
+                // parent = (cos_r*sx*lx - sin_r*sy*ly + tx, sin_r*sx*lx + cos_r*sy*ly + ty)
+                let corners = [(0.0f64, 0.0f64), (w, 0.0), (w, h), (0.0, h)];
+                let mut min_x = f64::INFINITY;
+                let mut max_x = f64::NEG_INFINITY;
+                let mut min_y = f64::INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+                for (lx, ly) in corners {
+                    let px = cos_r * sx * lx - sin_r * sy * ly + tx;
+                    let py = sin_r * sx * lx + cos_r * sy * ly + ty;
+                    min_x = min_x.min(px);
+                    max_x = max_x.max(px);
+                    min_y = min_y.min(py);
+                    max_y = max_y.max(py);
+                }
+                Ok(BBox::new(min_x, min_y, max_x - min_x, max_y - min_y))
+            }
+            _ => {
+                let x = self.get_x(ctx)?;
+                let y = self.get_y(ctx)?;
+                let w = self.get_width(ctx)?;
+                let h = self.get_height(ctx)?;
+                Ok(BBox::new(x, y, w, h))
+            }
+        }
+    }
+
     pub fn get_position(&self) -> Option<&Position> {
         match &self.kind {
             NodeKind::Group { position, .. }
@@ -98,12 +147,13 @@ impl Node {
     pub fn default_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
             NodeKind::Group { children, .. } => {
-                let mut width: f64 = 0.0;
+                let mut max_x: f64 = 0.0;
                 for child in children {
                     let node = ctx.node(*child)?;
-                    width = width.max(node.get_x(ctx)? + node.get_width(ctx)?)
+                    let bbox = node.bbox_of_group(ctx)?;
+                    max_x = max_x.max(bbox.x + bbox.width);
                 }
-                width
+                max_x
             }
             NodeKind::Text { children, .. } => {
                 let lines = children
@@ -123,12 +173,13 @@ impl Node {
     pub fn default_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
             NodeKind::Group { children, .. } => {
-                let mut height: f64 = 0.0;
+                let mut max_y: f64 = 0.0;
                 for child in children {
                     let node = ctx.node(*child)?;
-                    height = height.max(node.get_y(ctx)? + node.get_height(ctx)?)
+                    let bbox = node.bbox_of_group(ctx)?;
+                    max_y = max_y.max(bbox.y + bbox.height);
                 }
-                height
+                max_y
             }
             NodeKind::Text { children, .. } => {
                 let lines = children

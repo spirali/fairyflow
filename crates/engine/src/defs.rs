@@ -51,6 +51,7 @@ pub enum Value {
     Str(Arc<String>),
     Color(Color),
     None,
+    Recursive,
 }
 
 impl Value {
@@ -65,6 +66,7 @@ impl Value {
         match self {
             Value::Int(v) => Ok(*v as f64),
             Value::Float(v) => Ok(*v),
+            Value::Recursive => Ok(0.0),
             _ => Err(anyhow::Error::msg("Value is not a number")),
         }
     }
@@ -192,29 +194,45 @@ pub enum Expr {
     Inherited { expr: Box<Expr> },
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct TopLevelExpr(Expr);
+
+impl TopLevelExpr {
+    pub fn new(expr: Expr) -> Self {
+        TopLevelExpr(expr)
+    }
+
+    #[inline]
+    pub fn get_expr(&self) -> &Expr {
+        &self.0
+    }
+}
+
+
 // ──────────────────────────────── Mixins ───────────────────────────────────
 
 /// Mirrors `PositionMixin` in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Position {
-    pub x: Expr,
-    pub y: Expr,
+    pub x: TopLevelExpr,
+    pub y: TopLevelExpr,
 }
 
 /// Mirrors `SizeMixin` in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Size {
-    pub width: Expr,
-    pub height: Expr,
+    pub width: TopLevelExpr,
+    pub height: TopLevelExpr,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Style {
-    pub fill_color: Expr,
-    pub stroke_color: Expr,
-    pub stroke_width: Expr,
-    pub alpha: Expr,
+    pub fill_color: TopLevelExpr,
+    pub stroke_color: TopLevelExpr,
+    pub stroke_width: TopLevelExpr,
+    pub alpha: TopLevelExpr,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
@@ -222,9 +240,9 @@ pub struct Style {
 pub struct TextStyle {
     #[serde(flatten)]
     pub style: Style,
-    pub font: Expr,
-    pub font_size: Expr,
-    pub italic: Expr,
+    pub font: TopLevelExpr,
+    pub font_size: TopLevelExpr,
+    pub italic: TopLevelExpr,
 }
 
 // ──────────────────────────── Path commands ─────────────────────────────────
@@ -238,11 +256,11 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        alpha: Expr,
+        alpha: TopLevelExpr,
         rotation: Expr,
-        scale_x: Expr,
-        scale_y: Expr,
-        z_level: Expr,
+        scale_x: TopLevelExpr,
+        scale_y: TopLevelExpr,
+        z_level: TopLevelExpr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -252,7 +270,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: Expr,
+        z_level: TopLevelExpr,
         #[serde(flatten)]
         style: Style,
     },
@@ -262,7 +280,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: Expr,
+        z_level: TopLevelExpr,
         #[serde(flatten)]
         style: Style,
     },
@@ -270,7 +288,7 @@ pub enum NodeKind {
     Path {
         #[serde(flatten)]
         style: Style,
-        z_level: Expr,
+        z_level: TopLevelExpr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -281,7 +299,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         text_style: TextStyle,
-        z_level: Expr,
+        z_level: TopLevelExpr,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -298,7 +316,7 @@ pub enum NodeKind {
     TextSpan {
         #[serde(flatten)]
         text_style: TextStyle,
-        text: Expr,
+        text: TopLevelExpr,
     },
 
     /// Path commands; They always have Path as parent
@@ -313,10 +331,10 @@ pub enum NodeKind {
     Cubic {
         #[serde(flatten)]
         position: Position,
-        c1_x: Expr,
-        c1_y: Expr,
-        c2_x: Expr,
-        c2_y: Expr,
+        c1_x: TopLevelExpr,
+        c1_y: TopLevelExpr,
+        c2_x: TopLevelExpr,
+        c2_y: TopLevelExpr,
     },
 }
 
@@ -365,7 +383,7 @@ pub struct SceneDef {
     pub id: NodeId,
     #[serde(flatten)]
     pub size: Size,
-    pub fill_color: Expr,
+    pub fill_color: TopLevelExpr,
     #[serde(default)]
     pub children: Vec<NodeId>,
 }

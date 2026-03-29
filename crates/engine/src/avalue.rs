@@ -1,5 +1,5 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
-use crate::defs::{Expr, Node, Transition, Value};
+use crate::defs::{Expr, Node, TopLevelExpr, Transition, Value};
 use crate::eval::EvalCtx;
 use anyhow::bail;
 use serde::{Deserialize, Deserializer};
@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KeyFrame {
-    pub value: Expr,
+    pub value: TopLevelExpr,
     pub tr: Transition,
 }
 
@@ -34,7 +34,7 @@ where
     struct RawKeyFrame {
         frame: FrameId,
         #[serde(default)]
-        value: Option<Expr>,
+        value: Option<TopLevelExpr>,
         #[serde(default)]
         tr: Option<Transition>,
         #[serde(default)]
@@ -47,7 +47,7 @@ where
             let fv = if kf.op.as_deref() == Some("hold") {
                 FrameValue::Hold
             } else {
-                let expr = kf.value.unwrap_or(Expr::Const(Value::None));
+                let expr = kf.value.unwrap_or(TopLevelExpr::new(Expr::Const(Value::None)));
                 let tr = kf
                     .tr
                     .ok_or_else(|| D::Error::custom("keyframe missing `tr`"))?;
@@ -59,15 +59,8 @@ where
 }
 
 impl AnimatedValue {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
+    pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
         let _span = tracing::trace_span!("av.eval", av_id = %self.id).entered();
-        ctx.begin_eval()?;
-        let result = self.eval_inner(ctx);
-        ctx.end_eval();
-        result
-    }
-
-    fn eval_inner(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         let frame = ctx.frame();
         let Some((left_f, left_fv)) = self.scan_left(frame) else {
             dbg!(&frame);

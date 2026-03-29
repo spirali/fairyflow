@@ -10,3 +10,4 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 renderer = { path = "../renderer" }
+by_address = "1.2.1"

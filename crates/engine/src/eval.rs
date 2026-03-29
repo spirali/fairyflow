@@ -2,21 +2,20 @@ use crate::FrameId;
 use crate::animdef::AnimationDef;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::defs::{
-    CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style,
-    TextStyle, Value,
-};
+use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr, Value};
 use anyhow::bail;
 use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use by_address::ByAddress;
 
 const EVAL_DEPTH_MAX: u32 = 64;
+
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
     root: &'a AnimationDef,
-    depth: Cell<u32>,
+    evaluating_exprs: RefCell::<HashSet<*const Expr>>
 }
 
 impl<'a> EvalCtx<'a> {
@@ -24,7 +23,7 @@ impl<'a> EvalCtx<'a> {
         Self {
             frame,
             root,
-            depth: Cell::new(0),
+            evaluating_exprs: RefCell::new(HashSet::new())
         }
     }
 
@@ -40,19 +39,13 @@ impl<'a> EvalCtx<'a> {
             .ok_or_else(|| anyhow::anyhow!("Av {} not found", av_id))
     }
 
-    pub(crate) fn begin_eval(&self) -> anyhow::Result<()> {
-        let new_depth = self.depth.get() + 1;
-        if new_depth > EVAL_DEPTH_MAX {
-            bail!("Evaluation depth reached");
-        }
-        self.depth.set(new_depth);
-        Ok(())
+    #[must_use]
+    pub(crate) fn begin_eval(&self, expr: &'a Expr) -> bool {
+        self.evaluating_exprs.borrow_mut().insert(expr)
     }
 
-    pub(crate) fn end_eval(&self) {
-        let new_depth = self.depth.get();
-        assert!(new_depth > 0);
-        self.depth.set(new_depth - 1);
+    pub(crate) fn end_eval(&self, expr: &'a Expr) {
+        assert!(self.evaluating_exprs.borrow_mut().remove(&(expr as *const Expr)))
     }
 
     pub fn node(&self, node_id: NodeId) -> anyhow::Result<&'a Node> {
@@ -236,6 +229,30 @@ fn text_default_pos(
     Ok(renderer::measure_text_node_pos(&lines, node_id.as_u64()).unwrap_or((0.0, 0.0)))
 }
 
+impl TopLevelExpr {
+
+    pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
+        let expr = self.get_expr();
+        if !ctx.begin_eval(expr) {
+            return Ok(Value::Recursive)
+        }
+        let result = expr.eval(ctx);
+        ctx.end_eval(expr);
+        result
+    }
+
+    pub fn eval_f64<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<f64> {
+        self.eval(ctx)?.as_f64()
+    }
+
+    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
+        Ok(match self.get_expr() {
+            Expr::Inherited { .. } => Inheritable::Inherited(self.eval(ctx)?),
+            _ => Inheritable::Own(self.eval(ctx)?),
+        })
+    }
+}
+
 impl Expr {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         match self {
@@ -247,13 +264,6 @@ impl Expr {
             }
             Expr::Inherited { expr } => expr.eval(ctx),
         }
-    }
-
-    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
-        Ok(match self {
-            Expr::Inherited { expr } => Inheritable::Inherited(expr.eval(ctx)?),
-            e => Inheritable::Own(e.eval(ctx)?),
-        })
     }
 
     /// Shortcut for the most used eval

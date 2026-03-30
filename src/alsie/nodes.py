@@ -1,10 +1,10 @@
-from typing import Union
+from typing import Union, Literal
 
-from .layout import CENTERING_LAYOUT
+from .layout import CENTERING_LAYOUT, ColumnLayout, LayoutBase, RowLayout
 from .position import Position
 from .aobject import AnimatedObject, get_frame
 from .color import Color
-from .exprs import expr_default_height, expr_default_width, expr_mul, expr_sub
+from .exprs import expr_default_height, expr_default_width, expr_default_x, expr_default_y, expr_mul, expr_sub
 from .ctxvars import get_current_node, store_ctx, restore_ctx, ROOT_OBJECT, set_current_node
 
 
@@ -102,14 +102,13 @@ class SizeMixin:
 
 
 class PositionMixin:
-    def _init_position(self, x, y):
+    def _init_position_xy(self, x, y):
         self._add_attr("x", x)
         self._add_attr("y", y)
 
-    def _init_position_from_layout(self, layout):
-        self._add_attr("x", None)
-        self._add_attr("y", None)
-        layout.set_node_position(self)
+    def _init_position(self):
+        self._add_attr("x", expr_default_x(self))
+        self._add_attr("y", expr_default_y(self))
 
     def x(self, px):
         self._set_attr("x", px)
@@ -236,8 +235,16 @@ class Group(
         self._add_attr("rotation", 0)
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
-        self._init_position_from_layout(self._parent._layout)
+        self._init_position()
         self._layout = CENTERING_LAYOUT
+
+    def column(self, gap=0, align=0.5):
+        self._layout = ColumnLayout(get_frame(), gap, align)
+        return self        
+    
+    def row(self, gap=0, align=0.5):
+        self._layout = RowLayout(get_frame(), gap, align)
+        return self            
 
     def serialize(self, serializer):
         result = super().serialize(serializer)
@@ -293,7 +300,7 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
         self._init_size(0, 0)
         self._init_style()
         self._init_z(parent)
-        self._init_position_from_layout(self._parent._layout)
+        self._init_position()
 
 
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
@@ -304,7 +311,7 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
         self._init_size(0, 0)
         self._init_style()
         self._init_z(parent)
-        self._init_position_from_layout(self._parent._layout)
+        self._init_position()
 
 
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
@@ -343,7 +350,7 @@ class PathMove(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position(x, y)
+        self._init_position_xy(x, y)
 
 
 class PathLine(Node, PositionMixin):
@@ -351,7 +358,7 @@ class PathLine(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position(x, y)
+        self._init_position_xy(x, y)
 
 
 class PathCubic(Node, PositionMixin):
@@ -359,7 +366,7 @@ class PathCubic(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position(x, y)
+        self._init_position_xy(x, y)
         self._add_attr("c1_x", 0)
         self._add_attr("c1_y", 0)
         self._add_attr("c2_x", 0)

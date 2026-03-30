@@ -47,7 +47,9 @@ where
             let fv = if kf.op.as_deref() == Some("hold") {
                 FrameValue::Hold
             } else {
-                let expr = kf.value.unwrap_or(TopLevelExpr::new(Expr::Const(Value::None)));
+                let expr = kf
+                    .value
+                    .unwrap_or(TopLevelExpr::new(Expr::Const(Value::None)));
                 let tr = kf
                     .tr
                     .ok_or_else(|| D::Error::custom("keyframe missing `tr`"))?;

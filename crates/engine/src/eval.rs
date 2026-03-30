@@ -2,20 +2,22 @@ use crate::FrameId;
 use crate::animdef::AnimationDef;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::defs::{CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr, Value};
+use crate::defs::{
+    CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style,
+    TextStyle, TopLevelExpr, Value,
+};
 use anyhow::bail;
+use by_address::ByAddress;
 use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
-use by_address::ByAddress;
 
 const EVAL_DEPTH_MAX: u32 = 64;
-
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
     root: &'a AnimationDef,
-    evaluating_exprs: RefCell::<HashSet<*const Expr>>
+    evaluating_exprs: RefCell<HashSet<*const Expr>>,
 }
 
 impl<'a> EvalCtx<'a> {
@@ -23,8 +25,16 @@ impl<'a> EvalCtx<'a> {
         Self {
             frame,
             root,
-            evaluating_exprs: RefCell::new(HashSet::new())
+            evaluating_exprs: RefCell::new(HashSet::new()),
         }
+    }
+
+    pub fn scene_width(&self) -> anyhow::Result<f64> {
+        self.root.scene.size.width.eval_f64(self)
+    }
+
+    pub fn scene_height(&self) -> anyhow::Result<f64> {
+        self.root.scene.size.height.eval_f64(self)
     }
 
     #[inline]
@@ -45,7 +55,11 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub(crate) fn end_eval(&self, expr: &'a Expr) {
-        assert!(self.evaluating_exprs.borrow_mut().remove(&(expr as *const Expr)))
+        assert!(
+            self.evaluating_exprs
+                .borrow_mut()
+                .remove(&(expr as *const Expr))
+        )
     }
 
     pub fn node(&self, node_id: NodeId) -> anyhow::Result<&'a Node> {
@@ -190,51 +204,11 @@ fn node_transform(
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
-/// Walk parent links to find the nearest `Text` ancestor of `node_id`.
-fn find_text_ancestor(
-    node_id: crate::basictypes::NodeId,
-    ctx: &EvalCtx,
-) -> anyhow::Result<crate::basictypes::NodeId> {
-    let mut current = node_id;
-    loop {
-        let node = ctx.node(current)?;
-        if matches!(node.kind, NodeKind::Text { .. }) {
-            return Ok(current);
-        }
-        current = node
-            .parent
-            .ok_or_else(|| anyhow::anyhow!("node {:?} has no Text ancestor", node_id))?;
-    }
-}
-
-/// Returns the position `(x, y)` of a `TextGroup` or `TextSpan` node within its
-/// parent `Text` element.  For all other node kinds returns `(0, 0)`.
-fn text_default_pos(
-    node_id: crate::basictypes::NodeId,
-    ctx: &EvalCtx,
-) -> anyhow::Result<(f32, f32)> {
-    let node = ctx.node(node_id)?;
-    match &node.kind {
-        NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {}
-        _ => return Ok((0.0, 0.0)),
-    }
-    let text_id = find_text_ancestor(node_id, ctx)?;
-    let NodeKind::Text { children, .. } = &ctx.node(text_id)?.kind else {
-        unreachable!()
-    };
-    let lines = children
-        .iter()
-        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(renderer::measure_text_node_pos(&lines, node_id.as_u64()).unwrap_or((0.0, 0.0)))
-}
-
 impl TopLevelExpr {
-
     pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
         let expr = self.get_expr();
         if !ctx.begin_eval(expr) {
-            return Ok(Value::Recursive)
+            return Ok(Value::Recursive);
         }
         let result = expr.eval(ctx);
         ctx.end_eval(expr);
@@ -329,12 +303,12 @@ impl CallExpr {
                 Ok(Value::Float(node.default_height(ctx)?))
             }
             CallExpr::DefaultX { node } => {
-                let (x, _y) = text_default_pos(node.get_id(), ctx)?;
-                Ok(Value::Float(x as f64))
+                let node = ctx.node(node.get_id())?;
+                Ok(Value::Float(node.default_x(ctx)?))
             }
             CallExpr::DefaultY { node } => {
-                let (_x, y) = text_default_pos(node.get_id(), ctx)?;
-                Ok(Value::Float(y as f64))
+                let node = ctx.node(node.get_id())?;
+                Ok(Value::Float(node.default_y(ctx)?))
             }
         }
     }
@@ -384,6 +358,7 @@ impl Node {
                 rotation,
                 scale_x,
                 scale_y,
+                layout,
                 children,
                 z_level,
             } => renderer::NodeKind::Group {

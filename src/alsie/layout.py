@@ -4,26 +4,37 @@ from .exprs import Call
 from .avalue import AnimatedValue
 
 
-class CenteringLayout:
+class LayoutBase:
+    pass
 
-    def set_node_position(self, node):
-        node.align_x(0.5)
-        node.align_y(0.5)
+
+class CenteringLayout(LayoutBase):
 
     def serialize(self, serializer):
-        return "center"
+        return {"kind": "center"}
 
-# As centering layour is not parametrizable, lets us create a singleton
+# Singleton; centering layout is not parametrizable
 CENTERING_LAYOUT = CenteringLayout()
 
 
-class VerticalLayout:
+class ColumnLayout(LayoutBase):
 
-    def __init__(self, frame, gap, x_align):
+    def __init__(self, frame, gap, align):
         self.gap = AnimatedValue(gap, frame)
-        self.x_align = AnimatedValue(x_align, frame)
+        self.align = AnimatedValue(align, frame)
+      
+    def serialize(self, serializer):
+        from .serializer import serialize_expr
+        return {"kind": "column", "gap": serialize_expr(self.gap), "align": serialize_expr(self.align)}
 
-    def set_node_position(self, node):
-        node.align_x(self.x_align)
-        node._set_attr("y", Call("vlayout", node=node))
-        
+
+
+class RowLayout(LayoutBase):
+
+    def __init__(self, frame, gap, align):
+        self.gap = AnimatedValue(gap, frame)
+        self.align = AnimatedValue(align, frame)
+      
+    def serialize(self, serializer):
+        from .serializer import serialize_expr
+        return {"kind": "row", "gap": serialize_expr(self.gap), "align": serialize_expr(self.align)}

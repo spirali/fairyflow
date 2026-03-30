@@ -1,8 +1,8 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
+use crate::eval::EvalCtx;
 use renderer::Color as RendererColor;
 use serde::{Deserialize, Deserializer, de};
 use std::sync::Arc;
-
 // ──────────────────────────── Transition ───────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -209,7 +209,6 @@ impl TopLevelExpr {
     }
 }
 
-
 // ──────────────────────────────── Mixins ───────────────────────────────────
 
 /// Mirrors `PositionMixin` in Python.
@@ -245,7 +244,19 @@ pub struct TextStyle {
     pub italic: TopLevelExpr,
 }
 
-// ──────────────────────────── Path commands ─────────────────────────────────
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Layout {
+    Center,
+    Column {
+        gap: TopLevelExpr,
+        align: TopLevelExpr,
+    },
+    Row {
+        gap: TopLevelExpr,
+        align: TopLevelExpr,
+    },
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -257,10 +268,11 @@ pub enum NodeKind {
         #[serde(flatten)]
         size: Size,
         alpha: TopLevelExpr,
-        rotation: Expr,
+        rotation: TopLevelExpr,
         scale_x: TopLevelExpr,
         scale_y: TopLevelExpr,
         z_level: TopLevelExpr,
+        layout: Layout,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -374,6 +386,21 @@ impl Node {
             return false;
         }
         true
+    }
+
+    /// Walk parent links to find the nearest `Text` ancestor of `node_id`.
+    pub fn text_ancestor<'a>(&self, ctx: &'a EvalCtx) -> anyhow::Result<&'a Node> {
+        let mut current = self.parent;
+        loop {
+            let Some(node_id) = current else {
+                anyhow::bail!("node {:?} has no Text ancestor", self.id)
+            };
+            let node = ctx.node(node_id)?;
+            if matches!(node.kind, NodeKind::Text { .. }) {
+                return Ok(node);
+            }
+            current = node.parent;
+        }
     }
 }
 

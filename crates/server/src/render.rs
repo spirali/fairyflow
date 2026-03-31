@@ -30,6 +30,7 @@ pub async fn render_anim_to_dir(
     let render_count = frames_to_render.len();
 
     let result = tokio::task::spawn_blocking(move || {
+        renderer::clear_image_cache();
         use rayon::prelude::*;
         let render = || {
             frames_to_render

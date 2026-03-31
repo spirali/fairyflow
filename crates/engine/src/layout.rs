@@ -1,5 +1,5 @@
 use crate::basictypes::NodeId;
-use crate::defs::{Layout, Node, NodeKind, Position, Size};
+use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::eval::EvalCtx;
 
 struct BBox {
@@ -47,6 +47,7 @@ impl Node {
             | NodeKind::Move { position, .. }
             | NodeKind::Line { position, .. }
             | NodeKind::Text { position, .. }
+            | NodeKind::Image { position, .. }
             | NodeKind::Cubic { position, .. } => Some(&position),
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } | NodeKind::Path { .. } => None,
         }
@@ -56,7 +57,8 @@ impl Node {
         match &self.kind {
             NodeKind::Group { size, .. }
             | NodeKind::Rect { size, .. }
-            | NodeKind::Ellipse { size, .. } => Some(&size),
+            | NodeKind::Ellipse { size, .. }
+            | NodeKind::Image { size, .. } => Some(&size),
             NodeKind::Text { .. }
             | NodeKind::Move { .. }
             | NodeKind::Line { .. }
@@ -132,7 +134,8 @@ impl Node {
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }
-            | NodeKind::Text { .. } => {
+            | NodeKind::Text { .. }
+            | NodeKind::Image { .. } => {
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_w = self.get_parent_width(ctx)?;
@@ -179,7 +182,8 @@ impl Node {
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }
-            | NodeKind::Text { .. } => {
+            | NodeKind::Text { .. }
+            | NodeKind::Image { .. } => {
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_h = self.get_parent_height(ctx)?;
@@ -261,6 +265,9 @@ impl Node {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer::measure_text(&[child]).0 as f64
             }
+            NodeKind::Image { path, .. } => {
+                renderer::measure_image(path.eval(ctx)?.as_str()?).map(|(w, _)| w as f64).unwrap_or(0.0)
+            }
             _ => 0.0,
         })
     }
@@ -304,6 +311,9 @@ impl Node {
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer::measure_text(&[child]).1 as f64
+            }
+            NodeKind::Image { path, .. } => {
+                renderer::measure_image(path.eval(ctx)?.as_str()?).map(|(_, h)| h as f64).unwrap_or(0.0)
             }
             _ => 0.0,
         })

@@ -178,6 +178,18 @@ pub enum NodeKind {
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
+    /// An image node (SVG for now).
+    Image {
+        #[serde(flatten)]
+        position: Position,
+        #[serde(flatten)]
+        size: Size,
+        alpha: f64,
+        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+        z_level: Inheritable<f64>,
+        path: Arc<String>,
+        keep_aspect: bool,
+    },
 }
 
 /// A node in the scene tree. Only carries the id;

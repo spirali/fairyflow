@@ -1,5 +1,5 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
-use crate::defs::{Expr, Node, TopLevelExpr, Transition, Value};
+use crate::nodes::{Expr, Node, TopLevelExpr, Transition, Value};
 use crate::eval::EvalCtx;
 use anyhow::bail;
 use serde::{Deserialize, Deserializer};
@@ -95,17 +95,17 @@ impl AnimatedValue {
         tracing::trace!(av_id = %self.id, frame = frame.as_u32(), left_f = start_frame, right_f = end_frame, t, "interpolating");
         match (left_v, right_v) {
             (Value::Color(lc), Value::Color(rc)) => {
-                Ok(Value::Color(crate::defs::Color::interpolate(&lc, &rc, t)))
+                Ok(Value::Color(crate::nodes::Color::interpolate(&lc, &rc, t)))
             }
             (Value::None, Value::Color(rc)) => {
                 let mut lc = rc.clone();
                 lc.set_alpha(0.0);
-                Ok(Value::Color(crate::defs::Color::interpolate(&lc, &rc, t)))
+                Ok(Value::Color(crate::nodes::Color::interpolate(&lc, &rc, t)))
             }
             (Value::Color(lc), Value::None) => {
                 let mut rc = lc.clone();
                 rc.set_alpha(0.0);
-                Ok(Value::Color(crate::defs::Color::interpolate(&lc, &rc, t)))
+                Ok(Value::Color(crate::nodes::Color::interpolate(&lc, &rc, t)))
             }
             (lv, rv) if lv.is_number() && rv.is_number() => {
                 let lf = lv.as_f64()?;

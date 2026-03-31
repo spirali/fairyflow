@@ -2,7 +2,7 @@ use crate::FrameId;
 use crate::animdef::AnimationDef;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::defs::{
+use crate::nodes::{
     CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style,
     TextStyle, TopLevelExpr, Value,
 };
@@ -426,6 +426,21 @@ impl Node {
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
+            },
+            NodeKind::Image {
+                position,
+                size,
+                z_level,
+                alpha,
+                path,
+                keep_aspect,
+            } => renderer::NodeKind::Image {
+                position: position.eval(ctx)?,
+                size: size.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                alpha: alpha.eval_f64(ctx)?,
+                path: path.eval(ctx)?.as_string_ref()?,
+                keep_aspect: keep_aspect.eval(ctx)?.as_bool()?,
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"

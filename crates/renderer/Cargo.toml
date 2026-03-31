@@ -10,3 +10,5 @@ csscolorparser = { workspace = true }
 parley = "0.7.0"
 skrifa = "0.37.0"
 tracing = { workspace = true }
+resvg = "0.44"
+usvg = "0.44"

@@ -1,6 +1,7 @@
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
+use crate::image_cache;
 use crate::resources::Resources;
-use crate::scene::{Node, NodeKind, PathCommand, Position, Scene, Style, TextChild, TextSpan};
+use crate::scene::{Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild, TextSpan};
 use parley::{
     Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem,
     StyleProperty,
@@ -140,6 +141,25 @@ impl Renderer {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
                 let lines = lines.clone();
                 self.render_text_lines(&lines, pixmap, transform, parent_alpha);
+            }
+            NodeKind::Image {
+                position,
+                size,
+                alpha,
+                path,
+                keep_aspect,
+                z_level,
+            } => {
+                let effective_alpha = parent_alpha * *alpha as f32;
+                render_svg_image(
+                    path,
+                    size,
+                    *keep_aspect,
+                    pixmap,
+                    parent_transform,
+                    position,
+                    effective_alpha,
+                );
             }
         }
     }
@@ -443,7 +463,9 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
             }
             search_children(children, node_id, t)
         }
-        NodeKind::Rect { position, size, .. } | NodeKind::Ellipse { position, size, .. } => {
+        NodeKind::Rect { position, size, .. }
+        | NodeKind::Ellipse { position, size, .. }
+        | NodeKind::Image { position, size, .. } => {
             if node.id == node_id {
                 let t = positional_transform(position, 1.0, 1.0, 0.0, parent);
                 return Some(aabb(size.width as f32, size.height as f32, t));
@@ -709,13 +731,95 @@ impl OutlinePen for GlyphPen {
     }
 }
 
+/// Load an SVG from the cache or parse it from disk.
+fn load_svg(path: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
+    if let Some(cached) = image_cache::cache_get(path) {
+        return Some(cached);
+    }
+    let data = std::fs::read(path).ok()?;
+    let opt = usvg::Options::default();
+    let tree = usvg::Tree::from_data(&data, &opt).ok()?;
+    let svg_size = tree.size();
+    let cached = image_cache::CachedImage {
+        tree,
+        width: svg_size.width(),
+        height: svg_size.height(),
+    };
+    Some(image_cache::cache_store(path.to_string(), cached))
+}
+
+/// Render an SVG image node into `pixmap`.
+///
+/// For alpha = 1.0 the SVG is rendered directly into the main pixmap at full
+/// vector quality.  For alpha < 1.0 an intermediate raster pixmap (in scene
+/// units) is used so the opacity can be applied via `PixmapPaint`.
+fn render_svg_image(
+    path: &str,
+    size: &Size,
+    keep_aspect: bool,
+    pixmap: &mut Pixmap,
+    parent_transform: Transform,
+    position: &Position,
+    effective_alpha: f32,
+) {
+    let Some(cached) = load_svg(path) else { return };
+    let dest_w = size.width as f32;
+    let dest_h = size.height as f32;
+    if dest_w <= 0.0 || dest_h <= 0.0 || cached.width <= 0.0 || cached.height <= 0.0 {
+        return;
+    }
+
+    // When keep_aspect is true, scale uniformly so the image fits within
+    // dest_w × dest_h, then centre it inside the node box.
+    let (sx, sy, offset_x, offset_y) = if keep_aspect {
+        let s = (dest_w / cached.width).min(dest_h / cached.height);
+        let actual_w = cached.width * s;
+        let actual_h = cached.height * s;
+        (s, s, (dest_w - actual_w) / 2.0, (dest_h - actual_h) / 2.0)
+    } else {
+        (dest_w / cached.width, dest_h / cached.height, 0.0, 0.0)
+    };
+
+    let node_transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
+
+    if (effective_alpha - 1.0).abs() < 1e-6 {
+        // Render directly into the main pixmap for full vector quality.
+        let svg_transform = Transform::from_scale(sx, sy)
+            .post_translate(offset_x, offset_y)
+            .post_concat(node_transform);
+        resvg::render(&cached.tree, svg_transform, &mut pixmap.as_mut());
+    } else {
+        // Render to an intermediate pixmap so we can apply opacity.
+        let w_u32 = dest_w.ceil() as u32;
+        let h_u32 = dest_h.ceil() as u32;
+        let Some(mut img_pixmap) = Pixmap::new(w_u32.max(1), h_u32.max(1)) else {
+            return;
+        };
+        let svg_transform =
+            Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
+        resvg::render(&cached.tree, svg_transform, &mut img_pixmap.as_mut());
+        let mut paint = PixmapPaint::default();
+        paint.opacity = effective_alpha.clamp(0.0, 1.0);
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, node_transform, None);
+    }
+}
+
+/// Return the natural (intrinsic) pixel size of an SVG image, or `None` if the
+/// file cannot be read or parsed.  Results are cached for the lifetime of the
+/// current request.
+pub fn measure_image(path: &str) -> Option<(f32, f32)> {
+    let cached = load_svg(path)?;
+    Some((cached.width, cached.height))
+}
+
 fn node_z_level(node: &Node) -> f64 {
     match &node.kind {
         NodeKind::Group { z_level, .. }
         | NodeKind::Rect { z_level, .. }
         | NodeKind::Ellipse { z_level, .. }
         | NodeKind::Path { z_level, .. }
-        | NodeKind::Text { z_level, .. } => *z_level.value(),
+        | NodeKind::Text { z_level, .. }
+        | NodeKind::Image { z_level, .. } => *z_level.value(),
     }
 }
 

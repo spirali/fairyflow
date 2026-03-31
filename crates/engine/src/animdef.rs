@@ -1,7 +1,7 @@
 use crate::FrameId;
 use crate::avalue::{AnimatedValue, FrameValue};
 use crate::basictypes::{AvId, NodeId};
-use crate::defs::{CallExpr, Expr, Node, SceneDef};
+use crate::nodes::{CallExpr, Expr, Node, SceneDef};
 use crate::eval::EvalCtx;
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -106,7 +106,7 @@ impl AnimationDef {
 mod tests {
     use super::*;
     use crate::avalue::AnimatedValueKind;
-    use crate::defs::Value;
+    use crate::nodes::Value;
 
     const EXAMPLE_JSON: &str = r#"{
   "scene": {"kind": "scene", "id": 0, "width": 1, "height": 2, "fill_color": 3, "children": [10, 20]},
@@ -169,7 +169,7 @@ mod tests {
         assert!(matches!(
             av1.kind,
             AnimatedValueKind::Const {
-                value: crate::defs::Expr::Const(Value::Int(200))
+                value: crate::nodes::Expr::Const(Value::Int(200))
             }
         ));
 
@@ -177,7 +177,7 @@ mod tests {
         assert!(matches!(
             av3.kind,
             AnimatedValueKind::Const {
-                value: crate::defs::Expr::Const(Value::Color(_))
+                value: crate::nodes::Expr::Const(Value::Color(_))
             }
         ));
 

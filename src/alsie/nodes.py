@@ -1,6 +1,6 @@
 from typing import Union, Literal
 
-from .layout import CENTERING_LAYOUT, ColumnLayout, LayoutBase, RowLayout
+from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .aobject import AnimatedObject, get_frame
 from .color import Color
@@ -401,15 +401,21 @@ class PathCubic(Node, PositionMixin):
         return self
 
 
-class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin):
+class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "image"
 
-    def __init__(self, parent, frame, path):
+    def __init__(self, parent, frame, path, keep_aspect):
         super().__init__(parent, frame)
         self._init_size()
         self._init_z()
         self._init_position()
+        self._init_alpha()
         self._add_attr("path", path)
+        self._add_attr("keep_aspect", keep_aspect)
+
+    def path(self, image_path):
+        self._set_attr("path", image_path)
+        return self
 
 
 def make_node(cls, *args):
@@ -443,5 +449,5 @@ def path():
     return make_node(Path)
 
 
-def image(path):
-    return make_node(Image, path)
+def image(path, keep_aspect=True):
+    return make_node(Image, path, keep_aspect)

@@ -348,6 +348,25 @@ pub enum NodeKind {
         c2_x: TopLevelExpr,
         c2_y: TopLevelExpr,
     },
+
+    /// An image (SVG for now).  `path` is resolved relative to the project directory.
+    Image {
+        #[serde(flatten)]
+        position: Position,
+        #[serde(flatten)]
+        size: Size,
+        z_level: TopLevelExpr,
+        alpha: TopLevelExpr,
+        path: TopLevelExpr,
+        /// When true, scale the image to fit inside the node box while
+        /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
+        #[serde(default = "default_keep_aspect")]
+        keep_aspect: TopLevelExpr,
+    },
+}
+
+fn default_keep_aspect() -> TopLevelExpr {
+    TopLevelExpr::new(Expr::Const(Value::Bool(false)))
 }
 
 impl NodeKind {

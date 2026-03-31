@@ -215,6 +215,7 @@ async fn tree_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
+    renderer::clear_image_cache();
     let result = anim.build_scene(FrameId::new(n));
     renderer::prune_text_cache();
     match result {
@@ -237,6 +238,7 @@ async fn trees_handler(
         return (StatusCode::BAD_REQUEST, "invalid range").into_response();
     }
     let result = tokio::task::spawn_blocking(move || {
+        renderer::clear_image_cache();
         (params.from..=params.to)
             .map(|n| {
                 anim.build_scene(FrameId::new(n as u32))
@@ -267,6 +269,7 @@ async fn node_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
+    renderer::clear_image_cache();
     let scene = match anim.build_scene(FrameId::new(params.frame)) {
         Ok(s) => s,
         Err(e) => {
@@ -291,6 +294,7 @@ async fn frame_handler(
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
     let result: Result<anyhow::Result<Vec<u8>>, _> = tokio::task::spawn_blocking(move || {
+        renderer::clear_image_cache();
         let scene = anim.build_scene(FrameId::new(n))?;
         let pixmap = renderer::render_scene(&scene, scale);
         renderer::prune_text_cache();
@@ -325,6 +329,7 @@ async fn frames_handler(
     }
 
     let results = tokio::task::spawn_blocking(move || {
+        renderer::clear_image_cache();
         use rayon::prelude::*;
         (from..=to)
             .into_par_iter()

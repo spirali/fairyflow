@@ -1,7 +1,7 @@
 mod animdef;
 mod avalue;
 mod basictypes;
-mod defs;
+mod nodes;
 mod eval;
 mod layout;
 

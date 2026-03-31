@@ -396,7 +396,7 @@ pub enum NodeKind {
         z_level: TopLevelExpr,
         alpha: TopLevelExpr,
         /// Matches the SVG group `id` attribute.
-        layer_name: String,
+        layer_name: Arc<String>,
         #[serde(default)]
         children: Vec<NodeId>,
     },

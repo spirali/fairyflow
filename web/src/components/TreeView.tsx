@@ -108,7 +108,7 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect, isDirectTextCh
   return (
     <div>
       <div
-        className={['tree-node', selectedNid === node.nid ? 'selected' : '', anyChanged ? 'node-changed' : ''].filter(Boolean).join(' ')}
+        className={['tree-node', selectedNid === node.nid ? 'selected' : '', anyChanged ? 'node-changed' : '', node.implicit ? 'node-implicit' : ''].filter(Boolean).join(' ')}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={() => onSelect(selectedNid === node.nid ? null : node.nid)}
       >
@@ -176,10 +176,15 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
 
 export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
-    const { id: nid, children: rawChildren, layers: rawLayers, hidden_layers: _hl, ...rest } = n;
+    const { id: nid, children: rawChildren, layers: rawLayers, hidden_layers: rawHidden, all_svg_layers: allSvgLayers, ...rest } = n;
     const id = `${prefix}${i}`;
     const children = addIds(rawChildren, `${id}.`);
-    const layerChildren: TreeNodeData[] = (rawLayers ?? []).map((l: RawImageLayer, li: number) => ({
+
+    // Explicitly named active layers (have overrides).
+    const namedLayerNames = new Set((rawLayers ?? []).map((l: RawImageLayer) => l.layer_name));
+    const hiddenLayerNames = new Set(rawHidden ?? []);
+
+    const explicitChildren: TreeNodeData[] = (rawLayers ?? []).map((l: RawImageLayer, li: number) => ({
       kind: 'layer' as const,
       id: `${id}.l${li}`,
       nid: l.id,
@@ -192,6 +197,19 @@ export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[
       z_level: l.z_level,
       children: [],
     }));
-    return { ...rest, id, nid, children: [...children, ...layerChildren] };
+
+    // Implicit layers: present in the SVG but not explicitly named and not inactive-hidden.
+    const implicitChildren: TreeNodeData[] = (allSvgLayers ?? [])
+      .filter(name => !namedLayerNames.has(name) && !hiddenLayerNames.has(name))
+      .map((name, li) => ({
+        kind: 'layer' as const,
+        id: `${id}.il${li}`,
+        nid: 0,
+        layer_name: name,
+        children: [],
+        implicit: true,
+      }));
+
+    return { ...rest, id, nid, children: [...children, ...explicitChildren, ...implicitChildren] };
   });
 }

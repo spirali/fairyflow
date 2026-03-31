@@ -195,7 +195,11 @@ pub enum NodeKind {
         /// Layer names that have a Layer node but are inactive this frame.
         /// These SVG layers must be hidden even though they have no active override.
         #[serde(default)]
-        hidden_layers: Vec<String>,
+        hidden_layers: Vec<Arc<String>>,
+        /// All `inkscape:label` layer names present in the SVG, in document order.
+        /// Used by the web UI to display implicit (unnamed) layers in the tree.
+        #[serde(default)]
+        all_svg_layers: Vec<Arc<String>>,
     },
 }
 
@@ -204,7 +208,7 @@ pub enum NodeKind {
 pub struct ImageLayer {
     pub id: u64,
     /// Identifies the SVG group by its `id` attribute.
-    pub layer_name: String,
+    pub layer_name: Arc<String>,
     #[serde(flatten)]
     pub position: Position,
     #[serde(flatten)]

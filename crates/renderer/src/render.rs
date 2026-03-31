@@ -151,6 +151,7 @@ impl Renderer {
                 z_level,
                 layers,
                 hidden_layers,
+                ..
             } => {
                 let effective_alpha = parent_alpha * *alpha as f32;
                 let layers = layers.clone();
@@ -829,24 +830,7 @@ fn svg_show_only_layer(data: &[u8], target_label: &str) -> Vec<u8> {
 /// `attributes["label"]`.  We guard it with a namespace-in-scope check so
 /// that an unrelated `label` attribute from a different namespace is ignored.
 fn inkscape_label(elem: &xmltree::Element) -> Option<&str> {
-    // Verify the Inkscape namespace URI is reachable from this element.
-    // `elem.namespaces` is populated by xml-rs with all bindings in scope,
-    // including those declared on ancestor elements.  The map is keyed by
-    // prefix (any string) and valued by namespace URI.
-    let inkscape_in_scope = elem
-        .namespaces
-        .as_ref()
-        .is_some_and(|ns| ns.0.values().any(|uri| uri == INKSCAPE_NS));
-
-    if inkscape_in_scope {
-        elem.attributes.get("label").map(String::as_str)
-    } else {
-        // The namespace map can be absent when xml-rs considers the element's
-        // scope "essentially empty" (only built-in XML bindings).  This should
-        // not happen for Inkscape SVGs, but we fall back to matching "label"
-        // unconditionally so parsing never silently fails.
-        elem.attributes.get("label").map(String::as_str)
-    }
+    elem.attributes.get("label").map(String::as_str)
 }
 
 /// Return a CSS `style` string identical to `style` but with `display:none`
@@ -863,7 +847,7 @@ fn css_display_none(style: &str) -> String {
 
 /// Load (or create from cache) a single-layer view of the SVG at `path`.
 /// The layer is identified by its `inkscape:label` attribute value.
-fn load_svg_layer(path: &str, layer_label: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
+fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<image_cache::CachedImage>> {
     // Use a composite cache key that won't collide with plain path keys
     // (file paths never contain the null byte).
     let cache_key = format!("{}\0{}", path, layer_label);
@@ -905,7 +889,7 @@ fn render_svg_image(
     size: &Size,
     keep_aspect: bool,
     layers: &[crate::scene::ImageLayer],
-    hidden_layers: &[String],
+    hidden_layers: &[Arc<String>],
     pixmap: &mut Pixmap,
     parent_transform: Transform,
     position: &Position,
@@ -946,10 +930,10 @@ fn render_svg_image(
             // `layers` get their overrides applied; layers listed in
             // `hidden_layers` are skipped; all others are rendered as-is.
             for label in &all_labels {
-                if hidden_layers.iter().any(|h| h == label) {
+                if hidden_layers.iter().any(|h| **h == *label) {
                     continue;
                 }
-                let override_ = layers.iter().find(|l| l.layer_name == *label);
+                let override_ = layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
                 let layer_alpha = override_
                     .map(|ov| effective_alpha * ov.alpha as f32)
                     .unwrap_or(effective_alpha);
@@ -1010,6 +994,13 @@ fn render_svg_tree(
 pub fn measure_image(path: &str) -> Option<(f32, f32)> {
     let cached = load_svg(path)?;
     Some((cached.width, cached.height))
+}
+
+/// Return all `inkscape:label` layer names in the SVG at `path`, in document order.
+/// Returns an empty vec if the file cannot be read or has no labelled layers.
+pub fn svg_image_layers(path: &str) -> Vec<String> {
+    let Some(cached) = load_svg(path) else { return Vec::new() };
+    svg_layer_labels(&cached.raw_data)
 }
 
 fn node_z_level(node: &Node) -> f64 {

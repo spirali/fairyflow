@@ -656,6 +656,10 @@
   border-left: 2px solid #e5c07b;
 }
 
+.tree-node.node-implicit {
+  opacity: 0.55;
+}
+
 .tree-node.node-new {
   border-left: 2px solid #98c379;
 }

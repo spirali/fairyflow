@@ -464,6 +464,7 @@ impl Node {
                     }
                     result
                 },
+                all_svg_layers: renderer::svg_image_layers(&path.eval(ctx)?.as_string_ref()?),
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"

@@ -51,6 +51,7 @@ export interface RawNode {
   // image node
   layers?: RawImageLayer[];
   hidden_layers?: string[];
+  all_svg_layers?: string[];
 }
 
 // The scene root returned by GET /tree/{n}
@@ -66,6 +67,8 @@ export interface TreeNodeData extends Omit<RawNode, 'id' | 'children'> {
   id: string;    // tree-position key, e.g. "0.1.2"
   nid: number;   // original numeric node id
   children?: TreeNodeData[];
+  /** True for SVG layers that exist in the image but aren't explicitly named in the script. */
+  implicit?: boolean;
 }
 
 // Also used for the synthetic scene root row in the tree view

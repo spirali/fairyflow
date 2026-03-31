@@ -149,12 +149,18 @@ impl Renderer {
                 path,
                 keep_aspect,
                 z_level,
+                layers,
+                hidden_layers,
             } => {
                 let effective_alpha = parent_alpha * *alpha as f32;
+                let layers = layers.clone();
+                let hidden_layers = hidden_layers.clone();
                 render_svg_image(
                     path,
                     size,
                     *keep_aspect,
+                    &layers,
+                    &hidden_layers,
                     pixmap,
                     parent_transform,
                     position,
@@ -737,15 +743,152 @@ fn load_svg(path: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
         return Some(cached);
     }
     let data = std::fs::read(path).ok()?;
-    let opt = usvg::Options::default();
+    let opt = usvg::Options {
+        fontdb: Resources::get().fontdb(),
+        ..Default::default()
+    };
     let tree = usvg::Tree::from_data(&data, &opt).ok()?;
     let svg_size = tree.size();
     let cached = image_cache::CachedImage {
         tree,
         width: svg_size.width(),
         height: svg_size.height(),
+        raw_data: data,
     };
     Some(image_cache::cache_store(path.to_string(), cached))
+}
+
+/// The Inkscape namespace URI used for layer metadata attributes.
+const INKSCAPE_NS: &str = "http://www.inkscape.org/namespaces/inkscape";
+
+/// Return the `inkscape:label` values of all direct-child `<g>` layer elements
+/// in the SVG, in document order.  Elements without a label are skipped.
+fn svg_layer_labels(data: &[u8]) -> Vec<String> {
+    let Ok(root) = xmltree::Element::parse(std::io::Cursor::new(data)) else {
+        return Vec::new();
+    };
+    root.children
+        .iter()
+        .filter_map(|child| {
+            let xmltree::XMLNode::Element(elem) = child else { return None };
+            if elem.name != "g" {
+                return None;
+            }
+            inkscape_label(elem).map(str::to_owned)
+        })
+        .collect()
+}
+
+/// Return a modified copy of the SVG bytes where every direct-child `<g>`
+/// element that carries an `inkscape:label` attribute whose value does **not**
+/// equal `target_label` is hidden by setting `display:none` in its `style`.
+///
+/// Namespace-awareness: xmltree (backed by xml-rs) stores every attribute
+/// under its **local name** as the HashMap key, regardless of what prefix the
+/// document uses to bind a namespace URI.  An attribute written as
+/// `inkscape:label`, `ink:label`, or `ns0:label` (all binding the Inkscape
+/// URI) will all appear in `element.attributes` under the key `"label"`.
+/// That means prefix variations are handled automatically.
+///
+/// To avoid accidentally matching an unrelated `label` attribute in a
+/// different namespace, we additionally require that the Inkscape namespace
+/// URI is declared somewhere in scope on the element.  xml-rs propagates all
+/// in-scope namespace bindings (including those declared on ancestors) into
+/// every `StartElement` event's namespace map, so a binding declared on the
+/// root `<svg>` will be present in `elem.namespaces` for every descendant.
+fn svg_show_only_layer(data: &[u8], target_label: &str) -> Vec<u8> {
+    let Ok(mut root) = xmltree::Element::parse(std::io::Cursor::new(data)) else {
+        return data.to_vec();
+    };
+
+    for child in &mut root.children {
+        // Rust 2024: iterating `&mut Vec<XMLNode>` yields `&mut XMLNode`;
+        // the binding pattern implicitly reborrrows without `ref mut`.
+        let xmltree::XMLNode::Element(elem) = child else { continue };
+        if elem.name != "g" {
+            continue;
+        }
+        let Some(label) = inkscape_label(elem) else { continue };
+        if label == target_label {
+            continue;
+        }
+        // Hide this layer by overwriting its `style` attribute.
+        let current = elem.attributes.get("style").cloned().unwrap_or_default();
+        elem.attributes.insert("style".to_string(), css_display_none(&current));
+    }
+
+    let mut output = Vec::new();
+    root.write(&mut output).ok();
+    output
+}
+
+/// Return the value of the `inkscape:label` attribute on `elem`, or `None` if
+/// the element has no such attribute or the Inkscape namespace is not in scope.
+///
+/// Because xmltree keys attributes by local name, the lookup is simply
+/// `attributes["label"]`.  We guard it with a namespace-in-scope check so
+/// that an unrelated `label` attribute from a different namespace is ignored.
+fn inkscape_label(elem: &xmltree::Element) -> Option<&str> {
+    // Verify the Inkscape namespace URI is reachable from this element.
+    // `elem.namespaces` is populated by xml-rs with all bindings in scope,
+    // including those declared on ancestor elements.  The map is keyed by
+    // prefix (any string) and valued by namespace URI.
+    let inkscape_in_scope = elem
+        .namespaces
+        .as_ref()
+        .is_some_and(|ns| ns.0.values().any(|uri| uri == INKSCAPE_NS));
+
+    if inkscape_in_scope {
+        elem.attributes.get("label").map(String::as_str)
+    } else {
+        // The namespace map can be absent when xml-rs considers the element's
+        // scope "essentially empty" (only built-in XML bindings).  This should
+        // not happen for Inkscape SVGs, but we fall back to matching "label"
+        // unconditionally so parsing never silently fails.
+        elem.attributes.get("label").map(String::as_str)
+    }
+}
+
+/// Return a CSS `style` string identical to `style` but with `display:none`
+/// set.  An existing `display` property is replaced; other properties are kept.
+fn css_display_none(style: &str) -> String {
+    let mut parts: Vec<&str> = style
+        .split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && !s.starts_with("display"))
+        .collect();
+    parts.push("display:none");
+    parts.join(";")
+}
+
+/// Load (or create from cache) a single-layer view of the SVG at `path`.
+/// The layer is identified by its `inkscape:label` attribute value.
+fn load_svg_layer(path: &str, layer_label: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
+    // Use a composite cache key that won't collide with plain path keys
+    // (file paths never contain the null byte).
+    let cache_key = format!("{}\0{}", path, layer_label);
+    if let Some(cached) = image_cache::cache_get(&cache_key) {
+        return Some(cached);
+    }
+
+    // Ensure the base SVG is loaded (so raw_data is available).
+    let base = load_svg(path)?;
+
+    let modified = svg_show_only_layer(&base.raw_data, layer_label);
+
+    let opt = usvg::Options {
+        fontdb: Resources::get().fontdb(),
+        ..Default::default()
+    };
+    let tree = usvg::Tree::from_data(&modified, &opt).ok()?;
+    let svg_size = tree.size();
+    let cached = image_cache::CachedImage {
+        tree,
+        width: svg_size.width(),
+        height: svg_size.height(),
+        raw_data: modified,
+    };
+    Some(image_cache::cache_store(cache_key, cached))
 }
 
 /// Render an SVG image node into `pixmap`.
@@ -753,10 +896,16 @@ fn load_svg(path: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
 /// For alpha = 1.0 the SVG is rendered directly into the main pixmap at full
 /// vector quality.  For alpha < 1.0 an intermediate raster pixmap (in scene
 /// units) is used so the opacity can be applied via `PixmapPaint`.
+///
+/// When `layers` is non-empty, each layer is rendered separately using a
+/// filtered view of the SVG (all other top-level groups hidden).  Layers are
+/// composited in ascending z-level order.
 fn render_svg_image(
     path: &str,
     size: &Size,
     keep_aspect: bool,
+    layers: &[crate::scene::ImageLayer],
+    hidden_layers: &[String],
     pixmap: &mut Pixmap,
     parent_transform: Transform,
     position: &Position,
@@ -782,12 +931,63 @@ fn render_svg_image(
 
     let node_transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
 
+    if layers.is_empty() && hidden_layers.is_empty() {
+        // No layer overrides or removals — render the full image.
+        render_svg_tree(&cached.tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
+    } else {
+        // Collect all inkscape:label values from the SVG in document order.
+        let all_labels = svg_layer_labels(&cached.raw_data);
+
+        if all_labels.is_empty() {
+            // The SVG has no named layers — fall back to rendering it whole.
+            render_svg_tree(&cached.tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
+        } else {
+            // Render every SVG layer in document order.  Layers listed in
+            // `layers` get their overrides applied; layers listed in
+            // `hidden_layers` are skipped; all others are rendered as-is.
+            for label in &all_labels {
+                if hidden_layers.iter().any(|h| h == label) {
+                    continue;
+                }
+                let override_ = layers.iter().find(|l| l.layer_name == *label);
+                let layer_alpha = override_
+                    .map(|ov| effective_alpha * ov.alpha as f32)
+                    .unwrap_or(effective_alpha);
+                if layer_alpha <= 0.0 {
+                    continue;
+                }
+                let (lx, ly) = override_
+                    .map(|ov| (ov.position.x as f32, ov.position.y as f32))
+                    .unwrap_or((0.0, 0.0));
+
+                let Some(layer_cached) = load_svg_layer(path, label) else { continue };
+                let layer_transform = node_transform.post_translate(lx, ly);
+                render_svg_tree(&layer_cached.tree, sx, sy, offset_x, offset_y, layer_transform, pixmap, layer_alpha, dest_w, dest_h);
+            }
+        }
+    }
+}
+
+/// Low-level helper: render a `usvg::Tree` into `pixmap` using the given scale
+/// and centering offsets.
+fn render_svg_tree(
+    tree: &usvg::Tree,
+    sx: f32,
+    sy: f32,
+    offset_x: f32,
+    offset_y: f32,
+    node_transform: Transform,
+    pixmap: &mut Pixmap,
+    effective_alpha: f32,
+    dest_w: f32,
+    dest_h: f32,
+) {
     if (effective_alpha - 1.0).abs() < 1e-6 {
         // Render directly into the main pixmap for full vector quality.
         let svg_transform = Transform::from_scale(sx, sy)
             .post_translate(offset_x, offset_y)
             .post_concat(node_transform);
-        resvg::render(&cached.tree, svg_transform, &mut pixmap.as_mut());
+        resvg::render(tree, svg_transform, &mut pixmap.as_mut());
     } else {
         // Render to an intermediate pixmap so we can apply opacity.
         let w_u32 = dest_w.ceil() as u32;
@@ -797,7 +997,7 @@ fn render_svg_image(
         };
         let svg_transform =
             Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
-        resvg::render(&cached.tree, svg_transform, &mut img_pixmap.as_mut());
+        resvg::render(tree, svg_transform, &mut img_pixmap.as_mut());
         let mut paint = PixmapPaint::default();
         paint.opacity = effective_alpha.clamp(0.0, 1.0);
         pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, node_transform, None);

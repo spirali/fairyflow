@@ -189,7 +189,29 @@ pub enum NodeKind {
         z_level: Inheritable<f64>,
         path: Arc<String>,
         keep_aspect: bool,
+        /// Active per-layer overrides.  Empty when no layers are specified.
+        #[serde(default)]
+        layers: Vec<ImageLayer>,
+        /// Layer names that have a Layer node but are inactive this frame.
+        /// These SVG layers must be hidden even though they have no active override.
+        #[serde(default)]
+        hidden_layers: Vec<String>,
     },
+}
+
+/// A layer override for an SVG image node.
+#[derive(Debug, Clone, Serialize)]
+pub struct ImageLayer {
+    pub id: u64,
+    /// Identifies the SVG group by its `id` attribute.
+    pub layer_name: String,
+    #[serde(flatten)]
+    pub position: Position,
+    #[serde(flatten)]
+    pub size: Size,
+    pub alpha: f64,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub z_level: Inheritable<f64>,
 }
 
 /// A node in the scene tree. Only carries the id;

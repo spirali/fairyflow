@@ -382,6 +382,23 @@ pub enum NodeKind {
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
         #[serde(default = "default_keep_aspect")]
         keep_aspect: TopLevelExpr,
+        /// Optional child layer nodes (kind = "layer").
+        #[serde(default)]
+        children: Vec<NodeId>,
+    },
+
+    /// A layer within an SVG image.  Always a child of an Image node.
+    Layer {
+        #[serde(flatten)]
+        position: Position,
+        #[serde(flatten)]
+        size: Size,
+        z_level: TopLevelExpr,
+        alpha: TopLevelExpr,
+        /// Matches the SVG group `id` attribute.
+        layer_name: String,
+        #[serde(default)]
+        children: Vec<NodeId>,
     },
 }
 
@@ -395,7 +412,9 @@ impl NodeKind {
             NodeKind::Group { children, .. }
             | NodeKind::Path { children, .. }
             | NodeKind::Text { children, .. }
-            | NodeKind::TextGroup { children, .. } => children,
+            | NodeKind::TextGroup { children, .. }
+            | NodeKind::Image { children, .. }
+            | NodeKind::Layer { children, .. } => children,
             _ => &[],
         }
     }

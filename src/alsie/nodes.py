@@ -413,9 +413,34 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         self._add_attr("path", path)
         self._add_attr("keep_aspect", keep_aspect)
 
+    def layer(self, name):
+        for child in self._children:
+            if child.layer_name == name:
+                return child
+        layer = ImageLayer(self, self._start, name)            
+        self._children.append(layer)
+        return layer
+
     def path(self, image_path):
         self._set_attr("path", image_path)
         return self
+
+
+class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
+    kind = "layer"
+
+    def __init__(self, parent, frame, layer_name):        
+        super().__init__(parent, frame)
+        self.layer_name = layer_name
+        self._init_size()
+        self._init_z()
+        self._init_position()
+        self._init_alpha()
+
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        result["layer_name"] = self.layer_name
+        return result
 
 
 def make_node(cls, *args):

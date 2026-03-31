@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { RawNode, SceneData, TreeNodeData } from '../types';
+import type { RawNode, RawImageLayer, SceneData, TreeNodeData } from '../types';
 import { NodeKindIcon } from './Icons';
 
 const KIND_LABELS: Partial<Record<TreeNodeData['kind'], string>> = {
@@ -101,7 +101,9 @@ function TreeNode({ node, prevNode, depth, selectedNid, onSelect, isDirectTextCh
       'z_level'] as const).some(k => prevNode[k] !== node[k]);
 
   const iconKind = isDirectTextChild ? 't_line' : node.kind;
-  const displayLabel = isDirectTextChild ? 'Line' : (KIND_LABELS[node.kind] ?? node.kind);
+  const displayLabel = isDirectTextChild ? 'Line'
+    : node.kind === 'layer' && node.layer_name ? `layer ${node.layer_name}`
+    : (KIND_LABELS[node.kind] ?? node.kind);
 
   return (
     <div>
@@ -174,9 +176,22 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
 
 export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
-    const { id: nid, children: rawChildren, ...rest } = n;
+    const { id: nid, children: rawChildren, layers: rawLayers, hidden_layers: _hl, ...rest } = n;
     const id = `${prefix}${i}`;
     const children = addIds(rawChildren, `${id}.`);
-    return { ...rest, id, nid, children };
+    const layerChildren: TreeNodeData[] = (rawLayers ?? []).map((l: RawImageLayer, li: number) => ({
+      kind: 'layer' as const,
+      id: `${id}.l${li}`,
+      nid: l.id,
+      layer_name: l.layer_name,
+      x: l.x,
+      y: l.y,
+      width: l.width,
+      height: l.height,
+      alpha: l.alpha,
+      z_level: l.z_level,
+      children: [],
+    }));
+    return { ...rest, id, nid, children: [...children, ...layerChildren] };
   });
 }

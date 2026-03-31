@@ -48,6 +48,7 @@ impl Node {
             | NodeKind::Line { position, .. }
             | NodeKind::Text { position, .. }
             | NodeKind::Image { position, .. }
+            | NodeKind::Layer { position, .. }
             | NodeKind::Cubic { position, .. } => Some(&position),
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } | NodeKind::Path { .. } => None,
         }
@@ -58,7 +59,8 @@ impl Node {
             NodeKind::Group { size, .. }
             | NodeKind::Rect { size, .. }
             | NodeKind::Ellipse { size, .. }
-            | NodeKind::Image { size, .. } => Some(&size),
+            | NodeKind::Image { size, .. }
+            | NodeKind::Layer { size, .. } => Some(&size),
             NodeKind::Text { .. }
             | NodeKind::Move { .. }
             | NodeKind::Line { .. }
@@ -131,6 +133,8 @@ impl Node {
 
     pub fn default_x(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
+            // Layers live inside an Image, not a Group, so layout doesn't apply.
+            NodeKind::Layer { .. } => 0.0,
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }
@@ -179,6 +183,8 @@ impl Node {
 
     pub fn default_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
+            // Layers live inside an Image, not a Group, so layout doesn't apply.
+            NodeKind::Layer { .. } => 0.0,
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }
@@ -227,6 +233,17 @@ impl Node {
 
     pub fn default_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
+            NodeKind::Layer { .. } => {
+                // Return the natural SVG width from the parent Image.
+                let Some(parent_id) = self.parent else { return Ok(0.0) };
+                let parent = ctx.node(parent_id)?;
+                let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
+                let path_val = path.eval(ctx)?;
+                let Some((nw, _nh)) = renderer::measure_image(path_val.as_str()?) else {
+                    return Ok(0.0);
+                };
+                nw as f64
+            }
             NodeKind::Group { children, layout, .. } => {
                 match layout {
                     Layout::Center | Layout::Column { .. } => {
@@ -285,6 +302,17 @@ impl Node {
 
     pub fn default_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
+            NodeKind::Layer { .. } => {
+                // Return the natural SVG height from the parent Image.
+                let Some(parent_id) = self.parent else { return Ok(0.0) };
+                let parent = ctx.node(parent_id)?;
+                let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
+                let path_val = path.eval(ctx)?;
+                let Some((_nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                    return Ok(0.0);
+                };
+                nh as f64
+            }
             NodeKind::Group { children, layout, .. } => {
                 match layout {
                     Layout::Center | Layout::Row { .. } => {

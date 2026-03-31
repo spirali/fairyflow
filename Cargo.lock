@@ -1247,6 +1247,7 @@ name = "renderer"
 version = "0.1.0"
 dependencies = [
  "csscolorparser",
+ "fontdb",
  "parley",
  "resvg",
  "serde",
@@ -1254,6 +1255,7 @@ dependencies = [
  "tiny-skia",
  "tracing",
  "usvg",
+ "xmltree",
 ]
 
 [[package]]
@@ -2173,6 +2175,21 @@ name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
+
+[[package]]
+name = "xml-rs"
+version = "0.8.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "xmltree"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7d8a75eaf6557bb84a65ace8609883db44a29951042ada9b393151532e41fcb"
+dependencies = [
+ "xml-rs",
+]
 
 [[package]]
 name = "xmlwriter"

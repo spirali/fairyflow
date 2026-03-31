@@ -6,6 +6,8 @@ pub struct CachedImage {
     pub tree: usvg::Tree,
     pub width: f32,
     pub height: f32,
+    /// Raw SVG bytes, kept so individual layers can be extracted.
+    pub raw_data: Vec<u8>,
 }
 
 struct ImageCache {
@@ -31,8 +33,9 @@ pub fn cache_get(path: &str) -> Option<Arc<CachedImage>> {
 /// Store a parsed image and return an `Arc` to it.
 pub fn cache_store(path: String, image: CachedImage) -> Arc<CachedImage> {
     let image = Arc::new(image);
+    let image2 = image.clone();
     let mut guard = cache().lock().unwrap();
-    guard.entries.insert(path, Arc::clone(&image));
+    guard.entries.insert(path, image2);
     image
 }
 

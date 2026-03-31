@@ -3,13 +3,24 @@
 // A node in the evaluated scene tree (mirrors renderer::Node serialization).
 // Variant-specific fields are flattened into the object by serde.
 // Text children (t_group / t_span) are serialized as regular child nodes.
+export interface RawImageLayer {
+  id: number;
+  layer_name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  alpha: number;
+  z_level?: number;
+}
+
 export interface RawNode {
   id: number;
-  kind: 'group' | 'rect' | 'ellipse' | 'path' | 'move' | 'line' | 'cubic' | 'text' | 't_group' | 't_span';
-  // position (group, rect, ellipse, move, line, cubic, text)
+  kind: 'group' | 'rect' | 'ellipse' | 'path' | 'move' | 'line' | 'cubic' | 'text' | 't_group' | 't_span' | 'image' | 'layer';
+  // position (group, rect, ellipse, move, line, cubic, text, image, layer)
   x?: number;
   y?: number;
-  // size (group, rect, ellipse)
+  // size (group, rect, ellipse, image, layer)
   width?: number;
   height?: number;
   // group-specific
@@ -26,7 +37,7 @@ export interface RawNode {
   c1_y?: number;
   c2_x?: number;
   c2_y?: number;
-  // z-level (group, rect, ellipse, path, text) — absent when inherited
+  // z-level (group, rect, ellipse, path, text, image, layer) — absent when inherited
   z_level?: number;
   // children (group, t_group, text lines)
   children?: RawNode[];
@@ -35,6 +46,11 @@ export interface RawNode {
   font_family?: string;
   font_size?: number;
   italic?: boolean;
+  // layer node
+  layer_name?: string;
+  // image node
+  layers?: RawImageLayer[];
+  hidden_layers?: string[];
 }
 
 // The scene root returned by GET /tree/{n}

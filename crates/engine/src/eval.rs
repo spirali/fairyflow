@@ -434,6 +434,7 @@ impl Node {
                 alpha,
                 path,
                 keep_aspect,
+                children,
             } => renderer::NodeKind::Image {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
@@ -441,6 +442,28 @@ impl Node {
                 alpha: alpha.eval_f64(ctx)?,
                 path: path.eval(ctx)?.as_string_ref()?,
                 keep_aspect: keep_aspect.eval(ctx)?.as_bool()?,
+                layers: {
+                    let mut result = Vec::new();
+                    for &id in children {
+                        let node = ctx.node(id)?;
+                        if node.is_active(ctx.frame()) {
+                            result.push(node.eval_as_image_layer(ctx)?);
+                        }
+                    }
+                    result
+                },
+                hidden_layers: {
+                    let mut result = Vec::new();
+                    for &id in children {
+                        let node = ctx.node(id)?;
+                        if !node.is_active(ctx.frame()) {
+                            if let NodeKind::Layer { layer_name, .. } = &node.kind {
+                                result.push(layer_name.clone());
+                            }
+                        }
+                    }
+                    result
+                },
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"
@@ -502,6 +525,27 @@ impl Node {
                     .collect::<anyhow::Result<Vec<_>>>()?,
             }),
             _ => anyhow::bail!("expected t_group node, got {:?}", self.id),
+        }
+    }
+
+    pub fn eval_as_image_layer(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::ImageLayer> {
+        match &self.kind {
+            NodeKind::Layer {
+                position,
+                size,
+                z_level,
+                alpha,
+                layer_name,
+                ..
+            } => Ok(renderer::ImageLayer {
+                id: self.id.as_u64(),
+                layer_name: layer_name.clone(),
+                position: position.eval(ctx)?,
+                size: size.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                alpha: alpha.eval_f64(ctx)?,
+            }),
+            _ => anyhow::bail!("expected layer node, got {:?}", self.id),
         }
     }
 

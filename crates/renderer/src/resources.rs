@@ -1,23 +1,52 @@
+use fontdb::Database;
 use parley::FontContext;
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache, SourceCacheOptions};
-use std::sync::{Mutex, OnceLock};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 
 static GLOBAL: OnceLock<Resources> = OnceLock::new();
 
 pub struct Resources {
     font_cx: Mutex<FontContext>,
+    fontdb: Mutex<FontDbState>,
+}
+
+/// Tracks the accumulated set of font directories so the database can be
+/// rebuilt from scratch whenever new directories are added (fontdb::Database
+/// does not implement Clone, so we rebuild rather than patch in place).
+struct FontDbState {
+    dirs: Vec<PathBuf>,
+    db: Arc<Database>,
+}
+
+impl FontDbState {
+    fn build(dirs: &[PathBuf]) -> Arc<Database> {
+        let mut db = Database::new();
+        db.load_system_fonts();
+        for dir in dirs {
+            db.load_fonts_dir(dir);
+        }
+        Arc::new(db)
+    }
 }
 
 impl Resources {
     pub fn init() {
-        GLOBAL.get_or_init(|| Resources {
-            font_cx: Mutex::new(FontContext {
-                collection: Collection::new(CollectionOptions {
-                    shared: true,
-                    system_fonts: true,
+        GLOBAL.get_or_init(|| {
+            let fontdb_state = FontDbState {
+                dirs: Vec::new(),
+                db: FontDbState::build(&[]),
+            };
+            Resources {
+                font_cx: Mutex::new(FontContext {
+                    collection: Collection::new(CollectionOptions {
+                        shared: true,
+                        system_fonts: true,
+                    }),
+                    source_cache: SourceCache::new(SourceCacheOptions { shared: true }),
                 }),
-                source_cache: SourceCache::new(SourceCacheOptions { shared: true }),
-            }),
+                fontdb: Mutex::new(fontdb_state),
+            }
         });
     }
 
@@ -31,15 +60,30 @@ impl Resources {
         self.font_cx.lock().unwrap().clone()
     }
 
-    /// Load all font files found (recursively) in the given directories.
+    /// Returns a reference-counted handle to the current font database.
+    /// Cheap to call — just clones an `Arc`.
+    pub fn fontdb(&self) -> Arc<Database> {
+        Arc::clone(&self.fontdb.lock().unwrap().db)
+    }
+
+    /// Load all font files found (recursively) in the given directories into
+    /// both the parley `FontContext` and the usvg `fontdb::Database`.
     pub fn load_font_directories(&self, dirs: &[impl AsRef<std::path::Path>]) {
         const FONT_EXTENSIONS: &[&str] = &["ttf", "otf", "ttc", "otc", "woff", "woff2"];
-        let mut guard = self.font_cx.lock().unwrap();
+
+        let mut font_cx_guard = self.font_cx.lock().unwrap();
+        let mut fontdb_guard = self.fontdb.lock().unwrap();
+
+        let mut added_any = false;
         for dir in dirs {
-            let dir = dir.as_ref();
-            let walker = walkdir(dir);
-            for entry in walker {
-                let path = entry.as_path();
+            let dir = dir.as_ref().to_path_buf();
+            if fontdb_guard.dirs.contains(&dir) {
+                continue;
+            }
+            fontdb_guard.dirs.push(dir.clone());
+            added_any = true;
+
+            for path in walkdir(&dir) {
                 let ext = path
                     .extension()
                     .and_then(|e| e.to_str())
@@ -48,9 +92,11 @@ impl Resources {
                     .as_deref()
                     .map_or(false, |e| FONT_EXTENSIONS.contains(&e))
                 {
-                    match std::fs::read(path) {
+                    match std::fs::read(&path) {
                         Ok(data) => {
-                            guard.collection.register_fonts(Blob::from(data), None);
+                            font_cx_guard
+                                .collection
+                                .register_fonts(Blob::from(data.clone()), None);
                             tracing::debug!("loaded font {}", path.display());
                         }
                         Err(e) => tracing::warn!("failed to load font {}: {e}", path.display()),
@@ -58,11 +104,15 @@ impl Resources {
                 }
             }
         }
+
+        if added_any {
+            fontdb_guard.db = FontDbState::build(&fontdb_guard.dirs);
+        }
     }
 }
 
 /// Yields all file paths under `root` recursively (best-effort; skips unreadable dirs).
-fn walkdir(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+fn walkdir(root: &std::path::Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {

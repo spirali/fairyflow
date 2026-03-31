@@ -92,6 +92,17 @@ export function LayerIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ImageLayerIcon({ size = 16 }: IconProps) {
+  const c = '#5BBFD4';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <path d="M4 8 L4 4 L11 4 L11 8" strokeLinejoin="round"/>
+      <rect x="4" y="8" width="24" height="18" rx="2"/>
+      <path d="M7 22 L12 15 L17 20 L21 14 L28 22"/>
+    </svg>
+  );
+}
+
 export function TextIcon({ size = 16 }: IconProps) {
   const c = '#7EC832';
   return (
@@ -139,7 +150,7 @@ const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = 
   line:    PathIcon,
   cubic:   PathIcon,
   image:   ImageIcon,
-  layer:   LayerIcon,
+  layer:   ImageLayerIcon,
   text:    TextIcon,
   t_line:  TextLineIcon,
   t_group: TextGroupIcon,

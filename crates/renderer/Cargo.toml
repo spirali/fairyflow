@@ -12,3 +12,5 @@ skrifa = "0.37.0"
 tracing = { workspace = true }
 resvg = "0.44"
 usvg = "0.44"
+fontdb = "0.22"
+xmltree = "0.10"

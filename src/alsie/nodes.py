@@ -71,8 +71,8 @@ class AlphaMixin:
 
 class ZLevelMixin:
 
-    def _init_z(self, parent):
-        self._add_from_parent("z_level", parent, 0)
+    def _init_z(self):
+        self._add_from_parent("z_level", self._parent, 0)
 
     def z_level(self, value):
         self._set_attr("z_level", value)
@@ -80,12 +80,14 @@ class ZLevelMixin:
 
 
 class SizeMixin:
-    def _init_size(self, width, height):
+
+    def _init_size(self, width=None, height=None):
+        if width is None:
+            width = expr_default_width(self)
+        if height is None:
+            height = expr_default_height(self)
         self._add_attr("width", width)
         self._add_attr("height", height)
-
-    def _init_default_size(self, node):
-        self._init_size(expr_default_width(node), expr_default_height(node))
 
     def width(self, value):
         self._set_attr("width", value)
@@ -102,13 +104,13 @@ class SizeMixin:
 
 
 class PositionMixin:
-    def _init_position_xy(self, x, y):
+    def _init_position(self, x=None, y=None):
+        if x is None:
+            x = expr_default_x(self)
+        if y is None:
+            y = expr_default_y(self)
         self._add_attr("x", x)
         self._add_attr("y", y)
-
-    def _init_position(self):
-        self._add_attr("x", expr_default_x(self))
-        self._add_attr("y", expr_default_y(self))
 
     def x(self, px):
         self._set_attr("x", px)
@@ -229,9 +231,9 @@ class Group(
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._init_context_manager()
-        self._init_default_size(self)
+        self._init_size()
         self._init_alpha()
-        self._init_z(parent)
+        self._init_z()
         self._add_attr("rotation", 0)
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
@@ -299,7 +301,7 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
         super().__init__(parent, frame)
         self._init_size(0, 0)
         self._init_style()
-        self._init_z(parent)
+        self._init_z()
         self._init_position()
 
 
@@ -310,7 +312,7 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
         super().__init__(parent, frame)
         self._init_size(0, 0)
         self._init_style()
-        self._init_z(parent)
+        self._init_z()
         self._init_position()
 
 
@@ -320,7 +322,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
         self._init_style()
-        self._init_z(parent)
+        self._init_z()
 
     def _prev_coords(self):
         if self._children:
@@ -350,7 +352,7 @@ class PathMove(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position_xy(x, y)
+        self._init_position(x, y)
 
 
 class PathLine(Node, PositionMixin):
@@ -358,7 +360,7 @@ class PathLine(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position_xy(x, y)
+        self._init_position(x, y)
 
 
 class PathCubic(Node, PositionMixin):
@@ -366,7 +368,7 @@ class PathCubic(Node, PositionMixin):
 
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
-        self._init_position_xy(x, y)
+        self._init_position(x, y)
         self._add_attr("c1_x", 0)
         self._add_attr("c1_y", 0)
         self._add_attr("c2_x", 0)
@@ -399,11 +401,22 @@ class PathCubic(Node, PositionMixin):
         return self
 
 
-def make_node(cls):
+class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin):
+    kind = "image"
+
+    def __init__(self, parent, frame, path):
+        super().__init__(parent, frame)
+        self._init_size()
+        self._init_z()
+        self._init_position()
+        self._add_attr("path", path)
+
+
+def make_node(cls, *args):
     current_node = get_current_node()
     if current_node is None:
         raise Exception("Element created out of context of a parent ndoe")
-    item = cls(current_node, get_frame())
+    item = cls(current_node, get_frame(), *args)
     current_node._children.append(item)
     return item
 
@@ -428,3 +441,7 @@ def ellipse():
 
 def path():
     return make_node(Path)
+
+
+def image(path):
+    return make_node(Image, path)

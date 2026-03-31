@@ -265,8 +265,19 @@ impl Node {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer::measure_text(&[child]).0 as f64
             }
-            NodeKind::Image { path, .. } => {
-                renderer::measure_image(path.eval(ctx)?.as_str()?).map(|(w, _)| w as f64).unwrap_or(0.0)
+            NodeKind::Image { path, size, .. } => {
+                let path_val = path.eval(ctx)?;
+                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                    return Ok(0.0);
+                };
+                if size.height.get_expr().is_default_height_of(self.id) {
+                    // Both dimensions are defaults → return natural width.
+                    nw as f64
+                } else {
+                    // Height is explicit → scale width to preserve aspect ratio.
+                    let h = size.height.eval_f64(ctx)?;
+                    if nh == 0.0 { 0.0 } else { h * nw as f64 / nh as f64 }
+                }
             }
             _ => 0.0,
         })
@@ -312,13 +323,25 @@ impl Node {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer::measure_text(&[child]).1 as f64
             }
-            NodeKind::Image { path, .. } => {
-                renderer::measure_image(path.eval(ctx)?.as_str()?).map(|(_, h)| h as f64).unwrap_or(0.0)
+            NodeKind::Image { path, size, .. } => {
+                let path_val = path.eval(ctx)?;
+                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                    return Ok(0.0);
+                };
+                if size.width.get_expr().is_default_width_of(self.id) {
+                    // Both dimensions are defaults → return natural height.
+                    nh as f64
+                } else {
+                    // Width is explicit → scale height to preserve aspect ratio.
+                    let w = size.width.eval_f64(ctx)?;
+                    if nw == 0.0 { 0.0 } else { w * nh as f64 / nw as f64 }
+                }
             }
             _ => 0.0,
         })
     }
 }
+
 
 fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     let NodeKind::Text { children, .. } = &node.text_ancestor(ctx)?.kind else {

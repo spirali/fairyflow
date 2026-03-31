@@ -194,6 +194,26 @@ pub enum Expr {
     Inherited { expr: Box<Expr> },
 }
 
+impl Expr {
+    /// Returns `true` if this expression is a `default_width` call on `node_id`.
+    pub fn is_default_width_of(&self, node_id: NodeId) -> bool {
+        match self {
+            Expr::Call(CallExpr::DefaultWidth { node }) => node.get_id() == node_id,
+            Expr::Inherited { expr } => expr.is_default_width_of(node_id),
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if this expression is a `default_height` call on `node_id`.
+    pub fn is_default_height_of(&self, node_id: NodeId) -> bool {
+        match self {
+            Expr::Call(CallExpr::DefaultHeight { node }) => node.get_id() == node_id,
+            Expr::Inherited { expr } => expr.is_default_height_of(node_id),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(transparent)]
 pub struct TopLevelExpr(Expr);

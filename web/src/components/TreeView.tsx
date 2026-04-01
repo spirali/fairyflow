@@ -174,11 +174,11 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
   );
 }
 
-export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[] {
+export function addIds(nodes: RawNode[] | undefined, prefix = '', _counter = { n: -1 }): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
     const { id: nid, children: rawChildren, layers: rawLayers, hidden_layers: rawHidden, all_svg_layers: allSvgLayers, ...rest } = n;
     const id = `${prefix}${i}`;
-    const children = addIds(rawChildren, `${id}.`);
+    const children = addIds(rawChildren, `${id}.`, _counter);
 
     // Explicitly named active layers (have overrides).
     const namedLayerNames = new Set((rawLayers ?? []).map((l: RawImageLayer) => l.layer_name));
@@ -199,12 +199,13 @@ export function addIds(nodes: RawNode[] | undefined, prefix = ''): TreeNodeData[
     }));
 
     // Implicit layers: present in the SVG but not explicitly named and not inactive-hidden.
+    // Each gets a unique negative nid so clicking one selects only that layer.
     const implicitChildren: TreeNodeData[] = (allSvgLayers ?? [])
       .filter(name => !namedLayerNames.has(name) && !hiddenLayerNames.has(name))
       .map((name, li) => ({
         kind: 'layer' as const,
         id: `${id}.il${li}`,
-        nid: 0,
+        nid: _counter.n--,
         layer_name: name,
         children: [],
         implicit: true,

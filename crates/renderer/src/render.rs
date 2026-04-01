@@ -156,7 +156,7 @@ impl Renderer {
                 let effective_alpha = parent_alpha * *alpha as f32;
                 let layers = layers.clone();
                 let hidden_layers = hidden_layers.clone();
-                render_svg_image(
+                render_image(
                     path,
                     size,
                     *keep_aspect,
@@ -738,27 +738,136 @@ impl OutlinePen for GlyphPen {
     }
 }
 
-/// Load an SVG from the cache or parse it from disk.
-fn load_svg(path: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
+/// Dispatch: load any supported image format (SVG, PNG, JPEG, ORA) from disk.
+fn load_image(path: &str) -> Option<Arc<image_cache::CachedImage>> {
     if let Some(cached) = image_cache::cache_get(path) {
         return Some(cached);
     }
     let data = std::fs::read(path).ok()?;
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    match ext.as_str() {
+        "svg" | "svgz" => load_svg_from_data(path, data),
+        "png" | "jpg" | "jpeg" => load_raster_from_data(path, data),
+        "ora" => load_ora_from_data(path, data),
+        _ => None,
+    }
+}
+
+fn load_svg_from_data(path: &str, data: Vec<u8>) -> Option<Arc<image_cache::CachedImage>> {
     let opt = usvg::Options {
         fontdb: Resources::get().fontdb(),
         ..Default::default()
     };
     let tree = usvg::Tree::from_data(&data, &opt).ok()?;
     let svg_size = tree.size();
-    let svg_layers = Arc::new(svg_layer_labels(&data));
+    let image_layers = Arc::new(svg_layer_labels(&data));
     let cached = image_cache::CachedImage {
-        tree,
+        kind: image_cache::CachedImageKind::Svg { tree, raw_data: data },
         width: svg_size.width(),
         height: svg_size.height(),
-        raw_data: data,
-        svg_layers,
+        image_layers: Some(image_layers),
     };
     Some(image_cache::cache_store(path.to_string(), cached))
+}
+
+fn load_raster_from_data(path: &str, data: Vec<u8>) -> Option<Arc<image_cache::CachedImage>> {
+    let img = image::load_from_memory(&data).ok()?;
+    let width = img.width() as f32;
+    let height = img.height() as f32;
+    let pixmap = image_to_pixmap(img)?;
+    let cached = image_cache::CachedImage {
+        kind: image_cache::CachedImageKind::Raster { pixmap },
+        width,
+        height,
+        image_layers: None,
+    };
+    Some(image_cache::cache_store(path.to_string(), cached))
+}
+
+fn load_ora_from_data(path: &str, data: Vec<u8>) -> Option<Arc<image_cache::CachedImage>> {
+    use std::io::Read;
+    let cursor = std::io::Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+
+    let stack_xml = {
+        let mut file = archive.by_name("stack.xml").ok()?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).ok()?;
+        buf
+    };
+    let root = xmltree::Element::parse(std::io::Cursor::new(stack_xml.as_bytes())).ok()?;
+    let width: f32 = root.attributes.get("w")?.parse().ok()?;
+    let height: f32 = root.attributes.get("h")?.parse().ok()?;
+
+    let stack_elem = root.children.iter().find_map(|child| {
+        if let xmltree::XMLNode::Element(elem) = child {
+            if elem.name == "stack" { Some(elem) } else { None }
+        } else {
+            None
+        }
+    })?;
+
+    // Collect layer metadata in top-to-bottom stack.xml order.
+    let mut layers_info: Vec<(String, String, i32, i32)> = Vec::new();
+    for child in &stack_elem.children {
+        let xmltree::XMLNode::Element(elem) = child else { continue };
+        if elem.name != "layer" {
+            continue;
+        }
+        let name = elem.attributes.get("name").cloned().unwrap_or_default();
+        let src = elem.attributes.get("src").cloned().unwrap_or_default();
+        let x: i32 = elem.attributes.get("x").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let y: i32 = elem.attributes.get("y").and_then(|v| v.parse().ok()).unwrap_or(0);
+        layers_info.push((name, src, x, y));
+    }
+
+    // Store layer names bottom-to-top (consistent with SVG document order).
+    let image_layers: Vec<String> = layers_info.iter().rev().map(|(n, ..)| n.clone()).collect();
+
+    // Decode layer PNGs and store in bottom-to-top render order.
+    let mut ora_layers: Vec<image_cache::OraLayer> = Vec::new();
+    for (name, src, x, y) in layers_info.iter().rev() {
+        let png_data = {
+            let Ok(mut file) = archive.by_name(src) else { continue };
+            let mut buf = Vec::new();
+            if file.read_to_end(&mut buf).is_err() {
+                continue;
+            }
+            buf
+        };
+        let Ok(img) = image::load_from_memory(&png_data) else { continue };
+        let Some(pixmap) = image_to_pixmap(img) else { continue };
+        ora_layers.push(image_cache::OraLayer { name: name.clone(), pixmap, x: *x, y: *y });
+    }
+
+    let cached = image_cache::CachedImage {
+        kind: image_cache::CachedImageKind::Ora { layers: ora_layers },
+        width,
+        height,
+        image_layers: Some(Arc::new(image_layers)),
+    };
+    Some(image_cache::cache_store(path.to_string(), cached))
+}
+
+/// Convert a decoded `DynamicImage` to a `Pixmap` with premultiplied alpha.
+fn image_to_pixmap(img: image::DynamicImage) -> Option<Pixmap> {
+    let rgba = img.into_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+    let size = tiny_skia::IntSize::from_wh(width, height)?;
+    let data: Vec<u8> = rgba
+        .pixels()
+        .flat_map(|p| {
+            let [r, g, b, a] = p.0;
+            let pm = |c: u8| (c as u32 * a as u32 / 255) as u8;
+            [pm(r), pm(g), pm(b), a]
+        })
+        .collect();
+    Pixmap::from_vec(data, size)
 }
 
 /// The Inkscape namespace URI used for layer metadata attributes.
@@ -829,8 +938,7 @@ fn svg_show_only_layer(data: &[u8], target_label: &str) -> Vec<u8> {
 /// the element has no such attribute or the Inkscape namespace is not in scope.
 ///
 /// Because xmltree keys attributes by local name, the lookup is simply
-/// `attributes["label"]`.  We guard it with a namespace-in-scope check so
-/// that an unrelated `label` attribute from a different namespace is ignored.
+/// `attributes["label"]`.
 fn inkscape_label(elem: &xmltree::Element) -> Option<&str> {
     elem.attributes.get("label").map(String::as_str)
 }
@@ -857,10 +965,14 @@ fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<image_cache::Cach
         return Some(cached);
     }
 
-    // Ensure the base SVG is loaded (so raw_data is available).
-    let base = load_svg(path)?;
+    // Ensure the base image is loaded and extract its raw SVG bytes.
+    let base = load_image(path)?;
+    let raw_data = match &base.kind {
+        image_cache::CachedImageKind::Svg { raw_data, .. } => raw_data.clone(),
+        _ => return None,
+    };
 
-    let modified = svg_show_only_layer(&base.raw_data, layer_label);
+    let modified = svg_show_only_layer(&raw_data, layer_label);
 
     let opt = usvg::Options {
         fontdb: Resources::get().fontdb(),
@@ -869,25 +981,58 @@ fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<image_cache::Cach
     let tree = usvg::Tree::from_data(&modified, &opt).ok()?;
     let svg_size = tree.size();
     let cached = image_cache::CachedImage {
-        tree,
+        kind: image_cache::CachedImageKind::Svg { tree, raw_data: modified },
         width: svg_size.width(),
         height: svg_size.height(),
-        raw_data: modified,
-        svg_layers: Arc::new(Vec::new()),
+        image_layers: None,
     };
     Some(image_cache::cache_store(cache_key, cached))
 }
 
-/// Render an SVG image node into `pixmap`.
+/// Render a raster `Pixmap` into the destination `pixmap`.
 ///
-/// For alpha = 1.0 the SVG is rendered directly into the main pixmap at full
-/// vector quality.  For alpha < 1.0 an intermediate raster pixmap (in scene
-/// units) is used so the opacity can be applied via `PixmapPaint`.
+/// `sx`/`sy` scale the source; `offset_x`/`offset_y` position the scaled image
+/// within the node box (letterbox margins or ORA layer offsets).
+fn render_raster_pixmap(
+    src: &Pixmap,
+    sx: f32,
+    sy: f32,
+    offset_x: f32,
+    offset_y: f32,
+    node_transform: Transform,
+    pixmap: &mut Pixmap,
+    effective_alpha: f32,
+    dest_w: f32,
+    dest_h: f32,
+) {
+    let mut paint = PixmapPaint::default();
+    paint.quality = tiny_skia::FilterQuality::Bilinear;
+    if (effective_alpha - 1.0).abs() < 1e-6 {
+        let transform = Transform::from_scale(sx, sy)
+            .post_translate(offset_x, offset_y)
+            .post_concat(node_transform);
+        pixmap.draw_pixmap(0, 0, src.as_ref(), &paint, transform, None);
+    } else {
+        let w_u32 = dest_w.ceil() as u32;
+        let h_u32 = dest_h.ceil() as u32;
+        let Some(mut img_pixmap) = Pixmap::new(w_u32.max(1), h_u32.max(1)) else { return };
+        let inner_transform = Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
+        img_pixmap.draw_pixmap(0, 0, src.as_ref(), &paint, inner_transform, None);
+        let mut composite_paint = PixmapPaint::default();
+        composite_paint.opacity = effective_alpha.clamp(0.0, 1.0);
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &composite_paint, node_transform, None);
+    }
+}
+
+/// Render an image node (SVG, PNG, JPEG, or ORA) into `pixmap`.
 ///
-/// When `layers` is non-empty, each layer is rendered separately using a
-/// filtered view of the SVG (all other top-level groups hidden).  Layers are
-/// composited in ascending z-level order.
-fn render_svg_image(
+/// For SVG with alpha = 1.0 the tree is rendered directly at full vector
+/// quality; for alpha < 1.0 an intermediate pixmap is used.  PNG/JPEG are
+/// drawn as scaled raster images.  ORA images are composited layer by layer.
+///
+/// When `layers` / `hidden_layers` is non-empty, each named layer is handled
+/// individually (overrides applied or layer skipped).
+fn render_image(
     path: &str,
     size: &Size,
     keep_aspect: bool,
@@ -898,7 +1043,7 @@ fn render_svg_image(
     position: &Position,
     effective_alpha: f32,
 ) {
-    let Some(cached) = load_svg(path) else { return };
+    let Some(cached) = load_image(path) else { return };
     let dest_w = size.width as f32;
     let dest_h = size.height as f32;
     if dest_w <= 0.0 || dest_h <= 0.0 || cached.width <= 0.0 || cached.height <= 0.0 {
@@ -918,38 +1063,76 @@ fn render_svg_image(
 
     let node_transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
 
-    if layers.is_empty() && hidden_layers.is_empty() {
-        // No layer overrides or removals — render the full image.
-        render_svg_tree(&cached.tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
-    } else {
-        // Layer names were parsed at load time and stored in the cache.
-        let all_labels = &cached.svg_layers;
-
-        if all_labels.is_empty() {
-            // The SVG has no named layers — fall back to rendering it whole.
-            render_svg_tree(&cached.tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
-        } else {
-            // Render every SVG layer in document order.  Layers listed in
-            // `layers` get their overrides applied; layers listed in
-            // `hidden_layers` are skipped; all others are rendered as-is.
-            for label in all_labels.iter() {
-                if hidden_layers.iter().any(|h| **h == *label) {
-                    continue;
+    match &cached.kind {
+        image_cache::CachedImageKind::Svg { tree, .. } => {
+            if layers.is_empty() && hidden_layers.is_empty() {
+                render_svg_tree(tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
+            } else {
+                let all_labels = cached.image_layers.as_ref();
+                if all_labels.is_none_or(|labels| labels.is_empty()) {
+                    // No named layers — render the whole SVG.
+                    render_svg_tree(tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
+                } else {
+                    for label in all_labels.unwrap().iter() {
+                        if hidden_layers.iter().any(|h| **h == *label) {
+                            continue;
+                        }
+                        let override_ = layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
+                        let layer_alpha = override_
+                            .map(|ov| effective_alpha * ov.alpha as f32)
+                            .unwrap_or(effective_alpha);
+                        if layer_alpha <= 0.0 {
+                            continue;
+                        }
+                        let (lx, ly) = override_
+                            .map(|ov| (ov.position.x as f32, ov.position.y as f32))
+                            .unwrap_or((0.0, 0.0));
+                        let Some(layer_cached) = load_svg_layer(path, label) else { continue };
+                        let layer_tree = match &layer_cached.kind {
+                            image_cache::CachedImageKind::Svg { tree, .. } => tree,
+                            _ => continue,
+                        };
+                        let layer_transform = node_transform.post_translate(lx, ly);
+                        render_svg_tree(layer_tree, sx, sy, offset_x, offset_y, layer_transform, pixmap, layer_alpha, dest_w, dest_h);
+                    }
                 }
-                let override_ = layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
-                let layer_alpha = override_
-                    .map(|ov| effective_alpha * ov.alpha as f32)
-                    .unwrap_or(effective_alpha);
-                if layer_alpha <= 0.0 {
-                    continue;
+            }
+        }
+        image_cache::CachedImageKind::Raster { pixmap: src } => {
+            // PNG/JPEG: no layer support.
+            render_raster_pixmap(src, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
+        }
+        image_cache::CachedImageKind::Ora { layers: ora_layers } => {
+            // ORA: composite layers in bottom-to-top order.
+            let all_labels = &cached.image_layers;
+            if layers.is_empty() && hidden_layers.is_empty() {
+                for layer_data in ora_layers.iter() {
+                    let layer_ox = offset_x + layer_data.x as f32 * sx;
+                    let layer_oy = offset_y + layer_data.y as f32 * sy;
+                    render_raster_pixmap(&layer_data.pixmap, sx, sy, layer_ox, layer_oy, node_transform, pixmap, effective_alpha, dest_w, dest_h);
                 }
-                let (lx, ly) = override_
-                    .map(|ov| (ov.position.x as f32, ov.position.y as f32))
-                    .unwrap_or((0.0, 0.0));
-
-                let Some(layer_cached) = load_svg_layer(path, label) else { continue };
-                let layer_transform = node_transform.post_translate(lx, ly);
-                render_svg_tree(&layer_cached.tree, sx, sy, offset_x, offset_y, layer_transform, pixmap, layer_alpha, dest_w, dest_h);
+            } else if let Some(all_labels) = all_labels {
+                for label in all_labels.iter() {
+                    if hidden_layers.iter().any(|h| **h == *label) {
+                        continue;
+                    }
+                    let Some(layer_data) = ora_layers.iter().find(|l| l.name == label.as_str()) else {
+                        continue;
+                    };
+                    let override_ = layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
+                    let layer_alpha = override_
+                        .map(|ov| effective_alpha * ov.alpha as f32)
+                        .unwrap_or(effective_alpha);
+                    if layer_alpha <= 0.0 {
+                        continue;
+                    }
+                    let (lx, ly) = override_
+                        .map(|ov| (ov.position.x as f32, ov.position.y as f32))
+                        .unwrap_or((0.0, 0.0));
+                    let layer_ox = offset_x + layer_data.x as f32 * sx + lx;
+                    let layer_oy = offset_y + layer_data.y as f32 * sy + ly;
+                    render_raster_pixmap(&layer_data.pixmap, sx, sy, layer_ox, layer_oy, node_transform, pixmap, layer_alpha, dest_w, dest_h);
+                }
             }
         }
     }
@@ -991,18 +1174,20 @@ fn render_svg_tree(
     }
 }
 
-/// Return the natural (intrinsic) pixel size of an SVG image, or `None` if the
+/// Return the natural (intrinsic) pixel size of an image, or `None` if the
 /// file cannot be read or parsed.  Results are cached for the lifetime of the
 /// current request.
 pub fn measure_image(path: &str) -> Option<(f32, f32)> {
-    let cached = load_svg(path)?;
+    let cached = load_image(path)?;
     Some((cached.width, cached.height))
 }
 
-/// Return all `inkscape:label` layer names in the SVG at `path`, in document order.
-/// The names are parsed once at load time and stored in the cache; this just clones the Arc.
+/// Return all layer names for the image at `path`, in document order.
+/// For SVG: `inkscape:label` layer names (bottom-to-top).
+/// For ORA: layer names from `stack.xml` (bottom-to-top).
+/// For JPEG/PNG: always empty.
 pub fn svg_image_layers(path: &str) -> Arc<Vec<String>> {
-    load_svg(path).map(|c| c.svg_layers.clone()).unwrap_or_default()
+    load_image(path).map(|c| c.image_layers.clone().unwrap_or_default()).unwrap_or_default()
 }
 
 fn node_z_level(node: &Node) -> f64 {

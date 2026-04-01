@@ -92,6 +92,33 @@ impl Node {
         s.width.eval_f64(ctx)
     }
 
+    pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+        let Some(s) = self.get_size() else {
+            return Ok(0.0);
+        };
+        s.height.eval_f64(ctx)
+    }
+
+    pub fn get_outer_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+        let width = self.get_width(ctx)?;
+        Ok(match &self.kind {
+            NodeKind::Group { scale_x, .. } => {
+                scale_x.eval_f64(ctx)? * width
+            },
+            _ => width
+        })
+    }
+
+    pub fn get_outer_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+        let height = self.get_height(ctx)?;
+        Ok(match &self.kind {
+            NodeKind::Group { scale_y, .. } => {
+                scale_y.eval_f64(ctx)? * height
+            },
+            _ => height
+        })
+    }
+
     pub fn get_parent_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         if let Some(parent) = self.parent {
             let node = ctx.node(parent)?;
@@ -108,13 +135,6 @@ impl Node {
         } else {
             ctx.scene_height()
         }
-    }
-
-    pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
-        let Some(s) = self.get_size() else {
-            return Ok(0.0);
-        };
-        s.height.eval_f64(ctx)
     }
 
     pub fn parent_layout<'a>(&self, ctx: &'a EvalCtx) -> anyhow::Result<&'a Layout> {
@@ -148,7 +168,7 @@ impl Node {
                     }
                     Layout::Column { align, .. } => {
                         let parent_w = self.get_parent_width(ctx)?;
-                        let self_w = self.get_width(ctx)?;
+                        let self_w = self.get_outer_width(ctx)?;
                         (parent_w - self_w) * align.eval_f64(ctx)?
                     }
                     Layout::Row { gap, .. } => {
@@ -164,7 +184,7 @@ impl Node {
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
-                                x += gap + node.get_width(ctx)?;
+                                x += gap + node.get_outer_width(ctx)?;
                             }
                         }
                         0.0
@@ -209,14 +229,14 @@ impl Node {
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
-                                y += gap + node.get_height(ctx)?;
+                                y += gap + node.get_outer_height(ctx)?;
                             }
                         }
                         0.0
                     }
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
-                        let self_h = self.get_height(ctx)?;
+                        let self_h = self.get_outer_height(ctx)?;
                         (parent_h - self_h) * align.eval_f64(ctx)?
                     }
                 }

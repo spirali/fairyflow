@@ -222,36 +222,14 @@ class ContextManagerMixin:
         restore_ctx(self._ctx)
         self._ctx = None
 
+class RotAndScaleMixin:
 
-class Group(
-    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin, ZLevelMixin
-):
-    kind = "group"
-
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
-        self._init_context_manager()
-        self._init_size()
-        self._init_alpha()
-        self._init_z()
+    def _init_rot_and_scale(self):
         self._add_attr("rotation", 0)
+        self._add_attr("pivot_x", 0.5)
+        self._add_attr("pivot_y", 0.5)
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
-        self._init_position()
-        self._layout = CENTERING_LAYOUT
-
-    def column(self, gap=0, align=0.5):
-        self._layout = ColumnLayout(get_frame(), gap, align)
-        return self        
-    
-    def row(self, gap=0, align=0.5):
-        self._layout = RowLayout(get_frame(), gap, align)
-        return self            
-
-    def serialize(self, serializer):
-        result = super().serialize(serializer)
-        result["layout"] = self._layout.serialize(serializer)
-        return result
 
     def scale_x(self, value):
         self._set_attr("scale_x", value)
@@ -269,6 +247,36 @@ class Group(
     def rotate(self, value):
         self._set_attr("rotation", value)
         return self
+
+
+class Group(
+    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin, ZLevelMixin, RotAndScaleMixin
+):
+    kind = "group"
+
+    def __init__(self, parent, frame):
+        super().__init__(parent, frame)
+        self._init_context_manager()
+        self._init_size()
+        self._init_alpha()
+        self._init_z()
+        self._init_rot_and_scale()
+
+        self._init_position()
+        self._layout = CENTERING_LAYOUT
+
+    def column(self, gap=0, align=0.5):
+        self._layout = ColumnLayout(get_frame(), gap, align)
+        return self        
+    
+    def row(self, gap=0, align=0.5):
+        self._layout = RowLayout(get_frame(), gap, align)
+        return self            
+
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        result["layout"] = self._layout.serialize(serializer)
+        return result
 
 
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):

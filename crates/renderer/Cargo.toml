@@ -14,3 +14,5 @@ resvg = "0.44"
 usvg = "0.44"
 fontdb = "0.22"
 xmltree = "0.10"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

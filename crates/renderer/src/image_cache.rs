@@ -1,15 +1,37 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
+use tiny_skia::Pixmap;
 use tracing::debug;
 
+pub struct OraLayer {
+    pub name: String,
+    pub pixmap: Pixmap,
+    pub x: i32,
+    pub y: i32,
+}
+
+pub enum CachedImageKind {
+    Svg {
+        tree: usvg::Tree,
+        /// Raw SVG bytes, kept so individual layers can be extracted.
+        raw_data: Vec<u8>,
+    },
+    /// Decoded raster image (PNG or JPEG).  No layer support.
+    Raster {
+        pixmap: Pixmap,
+    },
+    /// Open Raster (ORA) image.  Layers are stored in bottom-to-top render order.
+    Ora {
+        layers: Vec<OraLayer>,
+    },
+}
+
 pub struct CachedImage {
-    pub tree: usvg::Tree,
+    pub kind: CachedImageKind,
     pub width: f32,
     pub height: f32,
-    /// Raw SVG bytes, kept so individual layers can be extracted.
-    pub raw_data: Vec<u8>,
-    /// `inkscape:label` names of all top-level layer groups, in document order.
-    pub svg_layers: Arc<Vec<String>>,
+    /// Layer names in document order (bottom-to-top for SVG/ORA).  Empty for JPEG/PNG.
+    pub image_layers: Option<Arc<Vec<String>>>,
 }
 
 struct ImageCache {

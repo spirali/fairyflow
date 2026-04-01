@@ -199,7 +199,7 @@ pub enum NodeKind {
         /// All `inkscape:label` layer names present in the SVG, in document order.
         /// Used by the web UI to display implicit (unnamed) layers in the tree.
         #[serde(default)]
-        all_svg_layers: Vec<Arc<String>>,
+        all_svg_layers: Arc<Vec<String>>,
     },
 }
 

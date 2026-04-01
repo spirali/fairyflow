@@ -8,6 +8,8 @@ pub struct CachedImage {
     pub height: f32,
     /// Raw SVG bytes, kept so individual layers can be extracted.
     pub raw_data: Vec<u8>,
+    /// `inkscape:label` names of all top-level layer groups, in document order.
+    pub svg_layers: Arc<Vec<String>>,
 }
 
 struct ImageCache {

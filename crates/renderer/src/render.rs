@@ -750,11 +750,13 @@ fn load_svg(path: &str) -> Option<std::sync::Arc<image_cache::CachedImage>> {
     };
     let tree = usvg::Tree::from_data(&data, &opt).ok()?;
     let svg_size = tree.size();
+    let svg_layers = Arc::new(svg_layer_labels(&data));
     let cached = image_cache::CachedImage {
         tree,
         width: svg_size.width(),
         height: svg_size.height(),
         raw_data: data,
+        svg_layers,
     };
     Some(image_cache::cache_store(path.to_string(), cached))
 }
@@ -871,6 +873,7 @@ fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<image_cache::Cach
         width: svg_size.width(),
         height: svg_size.height(),
         raw_data: modified,
+        svg_layers: Arc::new(Vec::new()),
     };
     Some(image_cache::cache_store(cache_key, cached))
 }
@@ -919,8 +922,8 @@ fn render_svg_image(
         // No layer overrides or removals — render the full image.
         render_svg_tree(&cached.tree, sx, sy, offset_x, offset_y, node_transform, pixmap, effective_alpha, dest_w, dest_h);
     } else {
-        // Collect all inkscape:label values from the SVG in document order.
-        let all_labels = svg_layer_labels(&cached.raw_data);
+        // Layer names were parsed at load time and stored in the cache.
+        let all_labels = &cached.svg_layers;
 
         if all_labels.is_empty() {
             // The SVG has no named layers — fall back to rendering it whole.
@@ -929,7 +932,7 @@ fn render_svg_image(
             // Render every SVG layer in document order.  Layers listed in
             // `layers` get their overrides applied; layers listed in
             // `hidden_layers` are skipped; all others are rendered as-is.
-            for label in &all_labels {
+            for label in all_labels.iter() {
                 if hidden_layers.iter().any(|h| **h == *label) {
                     continue;
                 }
@@ -997,10 +1000,9 @@ pub fn measure_image(path: &str) -> Option<(f32, f32)> {
 }
 
 /// Return all `inkscape:label` layer names in the SVG at `path`, in document order.
-/// Returns an empty vec if the file cannot be read or has no labelled layers.
-pub fn svg_image_layers(path: &str) -> Vec<String> {
-    let Some(cached) = load_svg(path) else { return Vec::new() };
-    svg_layer_labels(&cached.raw_data)
+/// The names are parsed once at load time and stored in the cache; this just clones the Arc.
+pub fn svg_image_layers(path: &str) -> Arc<Vec<String>> {
+    load_svg(path).map(|c| c.svg_layers.clone()).unwrap_or_default()
 }
 
 fn node_z_level(node: &Node) -> f64 {

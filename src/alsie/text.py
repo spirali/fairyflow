@@ -1,7 +1,14 @@
 from .exprs import expr_default_x, expr_default_y
 from .position import Position
 
-from .nodes import Node, NodeWithChildren, PositionMixin, StyleMixin, ZLevelMixin, make_node
+from .nodes import (
+    Node,
+    NodeWithChildren,
+    PositionMixin,
+    StyleMixin,
+    ZLevelMixin,
+    make_node,
+)
 
 
 class TextStyleMixin(StyleMixin):

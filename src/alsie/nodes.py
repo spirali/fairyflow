@@ -1,11 +1,25 @@
 from typing import Union, Literal
+import os
 
 from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .aobject import AnimatedObject, get_frame
 from .color import Color
-from .exprs import expr_default_height, expr_default_width, expr_default_x, expr_default_y, expr_mul, expr_sub
-from .ctxvars import get_current_node, store_ctx, restore_ctx, ROOT_OBJECT, set_current_node
+from .exprs import (
+    expr_default_height,
+    expr_default_width,
+    expr_default_x,
+    expr_default_y,
+    expr_mul,
+    expr_sub,
+)
+from .ctxvars import (
+    get_current_node,
+    store_ctx,
+    restore_ctx,
+    ROOT_OBJECT,
+    set_current_node,
+)
 
 
 class Node(AnimatedObject):
@@ -28,7 +42,11 @@ class Node(AnimatedObject):
 
     def parent_group(self):
         parent = self._parent
-        if isinstance(self._parent, Group) or isinstance(self._parent, Scene) or parent is None:
+        if (
+            isinstance(self._parent, Group)
+            or isinstance(self._parent, Scene)
+            or parent is None
+        ):
             return parent
         return parent.parent_group()
 
@@ -55,7 +73,7 @@ class Node(AnimatedObject):
         if self._parent is None:
             raise Exception("Node does not have parent")
         return self._parent
-    
+
     def __repr__(self):
         return f"<{self.kind} id={self._id}>"
 
@@ -67,10 +85,9 @@ class AlphaMixin:
     def alpha(self, value):
         self._set_attr("alpha", value)
         return self
-    
+
 
 class ZLevelMixin:
-
     def _init_z(self):
         self._add_from_parent("z_level", self._parent, 0)
 
@@ -80,7 +97,6 @@ class ZLevelMixin:
 
 
 class SizeMixin:
-
     def _init_size(self, width=None, height=None):
         if width is None:
             width = expr_default_width(self)
@@ -128,7 +144,9 @@ class PositionMixin:
     def align_x(self, value):
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
-            new_value = expr_mul(expr_sub(parent._get_attr("width"), self._get_attr("width")), value)
+            new_value = expr_mul(
+                expr_sub(parent._get_attr("width"), self._get_attr("width")), value
+            )
         else:
             new_value = expr_mul(parent._get_attr("width"), value)
         self._set_attr("x", new_value)
@@ -137,7 +155,9 @@ class PositionMixin:
     def align_y(self, value):
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
-            new_value = expr_mul(expr_sub(parent._get_attr("height"), self._get_attr("height")), value)
+            new_value = expr_mul(
+                expr_sub(parent._get_attr("height"), self._get_attr("height")), value
+            )
         else:
             new_value = expr_mul(parent._get_attr("height"), value)
         self._set_attr("y", new_value)
@@ -222,8 +242,8 @@ class ContextManagerMixin:
         restore_ctx(self._ctx)
         self._ctx = None
 
-class RotAndScaleMixin:
 
+class RotAndScaleMixin:
     def _init_rot_and_scale(self):
         self._add_attr("rotation", 0)
         self._add_attr("pivot_x", 0.5)
@@ -250,7 +270,13 @@ class RotAndScaleMixin:
 
 
 class Group(
-    NodeWithChildren, ContextManagerMixin, PositionMixin, SizeMixin, AlphaMixin, ZLevelMixin, RotAndScaleMixin
+    NodeWithChildren,
+    ContextManagerMixin,
+    PositionMixin,
+    SizeMixin,
+    AlphaMixin,
+    ZLevelMixin,
+    RotAndScaleMixin,
 ):
     kind = "group"
 
@@ -267,11 +293,11 @@ class Group(
 
     def column(self, gap=0, align=0.5):
         self._layout = ColumnLayout(get_frame(), gap, align)
-        return self        
-    
+        return self
+
     def row(self, gap=0, align=0.5):
         self._layout = RowLayout(get_frame(), gap, align)
-        return self            
+        return self
 
     def serialize(self, serializer):
         result = super().serialize(serializer)
@@ -296,7 +322,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))
         return self
-    
+
     def _new_id(self):
         self._id_counter += 1
         return self._id_counter
@@ -412,24 +438,28 @@ class PathCubic(Node, PositionMixin):
 class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "image"
 
-    def __init__(self, parent, frame, path, keep_aspect):
+    def __init__(self, parent, frame, image_path, keep_aspect):
         super().__init__(parent, frame)
         self._init_size()
         self._init_z()
         self._init_position()
         self._init_alpha()
-        self._add_attr("path", path)
+        self._add_attr("path", None)
+        self.path(image_path)
         self._add_attr("keep_aspect", keep_aspect)
 
     def layer(self, name):
         for child in self._children:
             if child.layer_name == name:
                 return child
-        layer = ImageLayer(self, self._start, name)            
+        layer = ImageLayer(self, self._start, name)
         self._children.append(layer)
         return layer
 
     def path(self, image_path):
+        image_path = os.path.abspath(image_path)
+        if not os.path.exists(image_path):
+            raise Exception(f"Path '{image_path}' does not exists.")
         self._set_attr("path", image_path)
         return self
 
@@ -437,7 +467,7 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "layer"
 
-    def __init__(self, parent, frame, layer_name):        
+    def __init__(self, parent, frame, layer_name):
         super().__init__(parent, frame)
         self.layer_name = layer_name
         self._init_size()

@@ -24,23 +24,26 @@ class Call(Expr):
 
 
 class InheritedExprs(Expr):
-    
     def __init__(self, expr):
         self.expr = expr
 
     def serialize_expr(self):
         from .serializer import serialize_expr
+
         return {"kind": "inherited", "expr": serialize_expr(self.expr)}
-    
+
 
 def expr_add(a, b):
     return Call("+", a=a, b=b)
 
+
 def expr_sub(a, b):
     return Call("-", a=a, b=b)
 
+
 def expr_mul(a, b):
     return Call("*", a=a, b=b)
+
 
 def expr_hold(av):
     return Call("hold", av=av)
@@ -60,4 +63,3 @@ def expr_default_width(node):
 
 def expr_default_height(node):
     return Call("default_height", node=node)
-

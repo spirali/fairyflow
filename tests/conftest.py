@@ -100,7 +100,13 @@ def test_scene(request):
     def_path = out_dir / "def.json"
     def_path.write_text(json.dumps(exported, indent=2))
 
-    cmd = [str(SERVER_BINARY), "render-json", str(def_path), str(frames_dir), "--write-tree"]
+    cmd = [
+        str(SERVER_BINARY),
+        "render-json",
+        str(def_path),
+        str(frames_dir),
+        "--write-tree",
+    ]
     if s.select_frames is not None:
         cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
     if s.target_resolution is not None:

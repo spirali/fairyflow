@@ -15,6 +15,7 @@ def transition(tr: Transition):
 def frame(frame: int):
     FRAME.set(frame)
 
+
 def step():
     transition("step")
 
@@ -34,8 +35,10 @@ def get_transition() -> Transition:
 def set_current_node(node):
     CURRENT_NODE.set(node)
 
+
 def get_current_node():
     return CURRENT_NODE.get()
+
 
 def store_ctx():
     return CURRENT_NODE.get(), FRAME.get(), TRANSITION.get()
@@ -46,6 +49,7 @@ def restore_ctx(ctx):
     CURRENT_NODE.set(node)
     FRAME.set(frame)
     TRANSITION.set(tr)
+
 
 def reset_ctx(ctx):
     ROOT_OBJECT.set(None)

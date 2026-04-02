@@ -1,4 +1,4 @@
-use engine::{AnimationDef, FrameId};
+use engine::{AnimationDef, FrameId, SceneSelection};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
@@ -19,7 +19,7 @@ pub async fn render_anim_to_dir(
         std::process::exit(1);
     }
 
-    let key_frames = anim.key_frames();
+    let key_frames = anim.key_frames(SceneSelection::All);
     let frame_count = key_frames.last().map(|f| f.as_u32() + 1).unwrap_or(1);
     let frames_to_render: Vec<u32> = frames.unwrap_or_else(|| (0..frame_count).collect());
     info!(count = frames_to_render.len(), "rendering frames");
@@ -37,7 +37,7 @@ pub async fn render_anim_to_dir(
                 .into_par_iter()
                 .try_for_each(|n| -> Result<(), String> {
                     let scene = anim
-                        .build_scene(FrameId::new(n))
+                        .build_scene(FrameId::new(n), SceneSelection::All)
                         .map_err(|e| e.to_string())?;
                     let pixmap = match target_resolution {
                         Some((w, h)) => renderer::render_scene_fitted(&scene, w, h),

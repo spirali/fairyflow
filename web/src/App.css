@@ -415,6 +415,22 @@
   opacity: 0.4;
 }
 
+.tl-scene-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 2px 4px;
+  height: 22px;
+  cursor: pointer;
+  max-width: 140px;
+}
+.tl-scene-select:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* Two-row frame slider container */
 .tl-frame-slider {
   display: flex;

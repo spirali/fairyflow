@@ -6,7 +6,7 @@ import type { OnMount, Monaco } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
-import type { ConsoleLine, NodeBounds, SceneData, ServerMsg, WsStatus } from './types';
+import type { ConsoleLine, NodeBounds, SceneData, SceneInfo, ServerMsg, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -24,6 +24,8 @@ export default function App() {
   const [keyFrames, setKeyFrames] = useState<number[]>([]);
   const [frame, setFrame] = useState(0);
   const [runId, setRunId] = useState(0);
+  const [scenes, setScenes] = useState<SceneInfo[]>([]);
+  const [selectedScene, setSelectedScene] = useState<number | 'all'>('all');
 
   // ── canvas layout ─────────────────────────────────────────────────────────
   interface CanvasLayout { serverScale: number; cssWidth: number; cssHeight: number; pngWidth: number; pngHeight: number }
@@ -208,6 +210,10 @@ export default function App() {
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const reconnectCount = useRef(0);
 
+  // ── scene selection ───────────────────────────────────────────────────────
+  const sceneParam = selectedScene === 'all' ? '' : `&scene=${selectedScene}`;
+  const sceneCacheKey = selectedScene === 'all' ? 'all' : String(selectedScene);
+
   // ── derived ───────────────────────────────────────────────────────────────
   const maxFrame = frames - 1;
   const keyFrameSet = new Set(keyFrames);
@@ -240,6 +246,9 @@ export default function App() {
         } else if (msg.type === 'error') {
           setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
         } else if (msg.type === 'tree') {
+          const sc = msg.scenes ?? [];
+          setScenes(sc);
+          setSelectedScene('all');
           setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
           setFrame(0);
@@ -294,16 +303,47 @@ export default function App() {
     setNodeBounds(null);
   }, [runId]);
 
+  // ── update frames/keyframes and clear caches when scene selection changes ──
+  useEffect(() => {
+    const imgCache = imageCacheRef.current;
+    imgCache.forEach(url => URL.revokeObjectURL(url));
+    imgCache.clear();
+    treeCacheRef.current.clear();
+    setCacheVersion(0);
+    setFrame(0);
+    if (selectedScene === 'all') {
+      // Recompute from all scenes combined
+      if (scenes.length > 0) {
+        let offset = 0;
+        const allKf: number[] = [];
+        for (const s of scenes) {
+          for (const kf of s.key_frames) allKf.push(kf + offset);
+          offset += s.frame_count;
+        }
+        allKf.sort((a, b) => a - b);
+        setKeyFrames([...new Set(allKf)]);
+        setFrames(offset);
+      }
+    } else {
+      const s = scenes[selectedScene as number];
+      if (s) {
+        setKeyFrames(s.key_frames);
+        setFrames(s.frame_count);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedScene]);
+
   // ── fetch scene tree on demand (with cache) ────────────────────────────────
   useEffect(() => {
     if (frames <= 0) return;
     const ctrl = new AbortController();
 
     const fetchTree = async (n: number): Promise<SceneData | null> => {
-      const key = `${runId}-${n}`;
+      const key = `${runId}-${sceneCacheKey}-${n}`;
       const cached = treeCacheRef.current.get(key);
       if (cached) return cached;
-      const r = await fetch(`/tree/${n}?v=${runId}`, { signal: ctrl.signal });
+      const r = await fetch(`/tree/${n}?v=${runId}${sceneParam}`, { signal: ctrl.signal });
       if (!r.ok) return null;
       const data = await r.json() as SceneData;
       treeCacheRef.current.set(key, data);
@@ -329,7 +369,7 @@ export default function App() {
     if (imageCacheRef.current.has(key)) return; // already cached
 
     const ctrl = new AbortController();
-    fetch(`/frame/${frame}?scale=${sk}&v=${runId}`, { signal: ctrl.signal })
+    fetch(`/frame/${frame}?scale=${sk}&v=${runId}${sceneParam}`, { signal: ctrl.signal })
       .then(r => r.ok ? r.blob() : null)
       .then(blob => {
         if (!blob || ctrl.signal.aborted) return;
@@ -352,7 +392,7 @@ export default function App() {
   useEffect(() => {
     if (selectedNid == null) { setNodeBounds(null); return; }
     const ctrl = new AbortController();
-    fetch(`/node/${selectedNid}?frame=${frame}`, { signal: ctrl.signal })
+    fetch(`/node/${selectedNid}?frame=${frame}${sceneParam}`, { signal: ctrl.signal })
       .then(r => r.ok ? r.json() as Promise<NodeBounds> : null)
       .then(data => setNodeBounds(data))
       .catch(() => {});
@@ -461,7 +501,7 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   function cacheKey(n: number, scaleKey: string) {
-    return `${runId}-${n}-${scaleKey}`;
+    return `${runId}-${sceneCacheKey}-${n}-${scaleKey}`;
   }
 
   function storeCachedFrame(n: number, sk: string, pngBase64: string) {
@@ -486,7 +526,7 @@ export default function App() {
     const uncachedTrees: number[] = [];
     for (let i = 0; i < totalFrames; i++) {
       if (!imageCacheRef.current.has(cacheKey(i, sk))) uncachedImages.push(i);
-      if (!treeCacheRef.current.has(`${runId}-${i}`)) uncachedTrees.push(i);
+      if (!treeCacheRef.current.has(`${runId}-${sceneCacheKey}-${i}`)) uncachedTrees.push(i);
     }
 
     if (uncachedImages.length > 0 || uncachedTrees.length > 0) {
@@ -495,7 +535,7 @@ export default function App() {
         await Promise.all([
           // Images: one bulk request
           uncachedImages.length > 0
-            ? fetch(`/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}`)
+            ? fetch(`/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}${sceneParam}`)
                 .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<RenderedFrameResponse[]>; })
                 .then(data => {
                   for (const { n, png } of data) storeCachedFrame(n, sk, png);
@@ -504,11 +544,11 @@ export default function App() {
             : Promise.resolve(),
           // Trees: one bulk request
           uncachedTrees.length > 0
-            ? fetch(`/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}`)
+            ? fetch(`/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}${sceneParam}`)
                 .then(r => r.ok ? r.json() as Promise<Array<{ n: number; scene: SceneData }>> : null)
                 .then(data => {
                   if (!data) return;
-                  for (const { n, scene } of data) treeCacheRef.current.set(`${runId}-${n}`, scene);
+                  for (const { n, scene } of data) treeCacheRef.current.set(`${runId}-${sceneCacheKey}-${n}`, scene);
                 })
                 .catch(() => {})
             : Promise.resolve(),
@@ -600,6 +640,7 @@ export default function App() {
       crf: exportCrf,
       from_frame: exportFromFrame,
       to_frame: exportToFrame,
+      scene_index: selectedScene === 'all' ? null : selectedScene,
     };
 
     let finished = false;
@@ -659,7 +700,7 @@ export default function App() {
   // ── image src ──────────────────────────────────────────────────────────────
   const scaleKey = canvasLayout?.serverScale.toFixed(3) ?? '1.000';
   const imgSrc = imageCacheRef.current.get(cacheKey(frame, scaleKey))
-    ?? (canvasLayout ? `/frame/${frame}?scale=${scaleKey}&v=${runId}` : '');
+    ?? (canvasLayout ? `/frame/${frame}?scale=${scaleKey}&v=${runId}${sceneParam}` : '');
 
   const isActive = isPlaying || isPrefetching;
 
@@ -933,6 +974,26 @@ export default function App() {
 
                     <span className="timeline-label">{frame} / {maxFrame}</span>
                     {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
+
+                    {scenes.length > 1 && (
+                      <>
+                        <span className="tl-sep" />
+                        <select
+                          className="tl-scene-select"
+                          value={selectedScene === 'all' ? 'all' : String(selectedScene)}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setSelectedScene(v === 'all' ? 'all' : Number(v));
+                          }}
+                          disabled={isActive}
+                        >
+                          <option value="all">All scenes</option>
+                          {scenes.map((s, i) => (
+                            <option key={i} value={String(i)}>{s.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
 
                     <span className="tl-sep" />
 

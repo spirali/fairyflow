@@ -465,6 +465,8 @@ impl Node {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SceneDef {
     pub id: NodeId,
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(flatten)]
     pub size: Size,
     pub fill_color: TopLevelExpr,

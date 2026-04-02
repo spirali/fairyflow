@@ -1,5 +1,4 @@
 use crate::FrameId;
-use crate::animdef::AnimationDef;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
 use crate::nodes::{
@@ -10,31 +9,40 @@ use anyhow::bail;
 use by_address::ByAddress;
 use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const EVAL_DEPTH_MAX: u32 = 64;
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
-    root: &'a AnimationDef,
+    scene_def: &'a SceneDef,
+    nodes: &'a HashMap<NodeId, Node>,
+    animated_values: &'a HashMap<AvId, AnimatedValue>,
     evaluating_exprs: RefCell<HashSet<*const Expr>>,
 }
 
 impl<'a> EvalCtx<'a> {
-    pub fn new(frame: FrameId, root: &'a AnimationDef) -> Self {
+    pub fn new(
+        frame: FrameId,
+        scene_def: &'a SceneDef,
+        nodes: &'a HashMap<NodeId, Node>,
+        animated_values: &'a HashMap<AvId, AnimatedValue>,
+    ) -> Self {
         Self {
             frame,
-            root,
+            scene_def,
+            nodes,
+            animated_values,
             evaluating_exprs: RefCell::new(HashSet::new()),
         }
     }
 
     pub fn scene_width(&self) -> anyhow::Result<f64> {
-        self.root.scene.size.width.eval_f64(self)
+        self.scene_def.size.width.eval_f64(self)
     }
 
     pub fn scene_height(&self) -> anyhow::Result<f64> {
-        self.root.scene.size.height.eval_f64(self)
+        self.scene_def.size.height.eval_f64(self)
     }
 
     #[inline]
@@ -43,8 +51,7 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn av(&self, av_id: AvId) -> anyhow::Result<&AnimatedValue> {
-        self.root
-            .animated_values
+        self.animated_values
             .get(&av_id)
             .ok_or_else(|| anyhow::anyhow!("Av {} not found", av_id))
     }
@@ -63,8 +70,7 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn node(&self, node_id: NodeId) -> anyhow::Result<&'a Node> {
-        self.root
-            .nodes
+        self.nodes
             .get(&node_id)
             .ok_or_else(|| anyhow::anyhow!("node {:?} not found", node_id))
     }
@@ -77,7 +83,7 @@ impl<'a> EvalCtx<'a> {
 fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     let mut chain = Vec::new();
     let mut current = node_id;
-    while let Some(node) = ctx.root.nodes.get(&current) {
+    while let Some(node) = ctx.nodes.get(&current) {
         if matches!(node.kind, NodeKind::Group { .. }) {
             chain.push(current);
         }

@@ -89,9 +89,15 @@ export type ConsoleLine = { kind: 'out' | 'err' | 'sys'; text: string };
 
 export type WsStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
+export interface SceneInfo {
+  name: string;
+  key_frames: number[];
+  frame_count: number;
+}
+
 export type ServerMsg =
   | { type: 'file'; content: string }
   | { type: 'output'; text: string }
   | { type: 'error'; text: string }
-  | { type: 'tree'; key_frames: number[]; frame_count: number }
+  | { type: 'tree'; key_frames: number[]; frame_count: number; scenes: SceneInfo[] }
   | { type: 'done'; exit_code: number | null };

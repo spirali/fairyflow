@@ -1,4 +1,4 @@
-use engine::AnimationDef;
+use engine::{AnimationDef, SceneSelection};
 use serde::Serialize;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +10,13 @@ use tracing::info;
 use tracing::warn;
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Serialize)]
+pub struct SceneInfoMsg {
+    pub name: String,
+    pub key_frames: Vec<u32>,
+    pub frame_count: u32,
+}
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -24,8 +31,11 @@ pub enum BuildProcessMsg {
         exit_code: Option<i32>,
     },
     Tree {
+        /// Combined key frames and frame count for "All scenes" mode.
         key_frames: Vec<u32>,
         frame_count: u32,
+        /// Per-scene metadata.
+        scenes: Vec<SceneInfoMsg>,
     },
 }
 
@@ -125,13 +135,19 @@ pub async fn run_python(
         match tokio::fs::read_to_string(&tree_path).await {
             Ok(json_str) => match AnimationDef::from_str(&json_str) {
                 Ok(anim) => {
-                    let key_frames: Vec<_> = anim.key_frames().iter().map(|f| f.as_u32()).collect();
+                    let key_frames: Vec<_> = anim.key_frames(SceneSelection::All).iter().map(|f| f.as_u32()).collect();
                     let frame_count = key_frames.last().copied().unwrap_or(0) + 1;
-                    info!(run_id = id, frame_count, "animation cached");
+                    let scenes: Vec<SceneInfoMsg> = anim.scene_infos().into_iter().map(|si| SceneInfoMsg {
+                        name: si.name,
+                        key_frames: si.key_frames,
+                        frame_count: si.frame_count,
+                    }).collect();
+                    info!(run_id = id, frame_count, scenes = scenes.len(), "animation cached");
                     *animation_cache.lock().unwrap() = Some(Arc::new(anim));
                     tx.send(BuildProcessMsg::Tree {
                         key_frames,
                         frame_count,
+                        scenes,
                     })
                     .await
                     .ok();

@@ -7,7 +7,7 @@ use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use engine::{AnimationDef, FrameId};
+use engine::{AnimationDef, FrameId, SceneSelection};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -221,16 +221,30 @@ fn get_animation(state: &AppState) -> Option<Arc<AnimationDef>> {
     state.animation.lock().unwrap().as_ref().map(Arc::clone)
 }
 
+fn scene_selection(scene: Option<u32>) -> SceneSelection {
+    match scene {
+        Some(i) => SceneSelection::Single(i as usize),
+        None => SceneSelection::All,
+    }
+}
+
 #[derive(Deserialize)]
 struct FrameQuery {
     #[serde(default = "default_scale")]
     scale: f32,
+    scene: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct SceneQuery {
+    scene: Option<u32>,
 }
 
 #[derive(Deserialize)]
 struct RangeQuery {
     from: u32,
     to: u32,
+    scene: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -239,6 +253,7 @@ struct FramesQuery {
     to: u32,
     #[serde(default = "default_scale")]
     scale: f32,
+    scene: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -261,17 +276,20 @@ fn default_scale() -> f32 {
 struct NodeQuery {
     #[serde(default)]
     frame: u32,
+    scene: Option<u32>,
 }
 
 async fn tree_handler(
     Path(n): axum::extract::Path<u32>,
+    Query(params): Query<SceneQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
+    let sel = scene_selection(params.scene);
     renderer::clear_image_cache();
-    let result = anim.build_scene(FrameId::new(n));
+    let result = anim.build_scene(FrameId::new(n), sel);
     renderer::prune_text_cache();
     match result {
         Ok(scene) => axum::Json(scene).into_response(),
@@ -292,11 +310,12 @@ async fn trees_handler(
     if params.from > params.to {
         return (StatusCode::BAD_REQUEST, "invalid range").into_response();
     }
+    let sel = scene_selection(params.scene);
     let result = tokio::task::spawn_blocking(move || {
         renderer::clear_image_cache();
         (params.from..=params.to)
             .map(|n| {
-                anim.build_scene(FrameId::new(n as u32))
+                anim.build_scene(FrameId::new(n as u32), sel)
                     .map(|scene| TreeFrame { n, scene })
             })
             .collect::<Result<Vec<_>, _>>()
@@ -324,8 +343,9 @@ async fn node_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
+    let sel = scene_selection(params.scene);
     renderer::clear_image_cache();
-    let scene = match anim.build_scene(FrameId::new(params.frame)) {
+    let scene = match anim.build_scene(FrameId::new(params.frame), sel) {
         Ok(s) => s,
         Err(e) => {
             warn!(node = id, frame = params.frame, error = %e, "build_scene failed in node_handler");
@@ -348,9 +368,10 @@ async fn frame_handler(
     let Some(anim) = get_animation(&state) else {
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
+    let sel = scene_selection(params.scene);
     let result: Result<anyhow::Result<Vec<u8>>, _> = tokio::task::spawn_blocking(move || {
         renderer::clear_image_cache();
-        let scene = anim.build_scene(FrameId::new(n))?;
+        let scene = anim.build_scene(FrameId::new(n), sel)?;
         let pixmap = renderer::render_scene(&scene, scale);
         renderer::prune_text_cache();
         Ok(pixmap.encode_png()?)
@@ -382,6 +403,7 @@ async fn frames_handler(
     if from > to {
         return (StatusCode::BAD_REQUEST, "invalid range").into_response();
     }
+    let sel = scene_selection(params.scene);
 
     let results = tokio::task::spawn_blocking(move || {
         renderer::clear_image_cache();
@@ -389,7 +411,7 @@ async fn frames_handler(
         (from..=to)
             .into_par_iter()
             .filter_map(|n| {
-                let scene = anim.build_scene(FrameId::new(n as u32)).ok()?;
+                let scene = anim.build_scene(FrameId::new(n as u32), sel).ok()?;
                 let pixmap = renderer::render_scene(&scene, scale);
                 let png = pixmap.encode_png().ok()?;
                 Some(RenderedFrame {

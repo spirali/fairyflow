@@ -2,7 +2,7 @@ use crate::service::AppState;
 use axum::Json;
 use axum::extract::State;
 use axum::response::sse::{Event, Sse};
-use engine::FrameId;
+use engine::{FrameId, SceneSelection};
 use serde::Deserialize;
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -26,6 +26,8 @@ pub struct ExportParams {
     pub crf: u32,
     pub from_frame: Option<u32>,
     pub to_frame: Option<u32>,
+    /// Which scene to export. None = all scenes concatenated.
+    pub scene_index: Option<u32>,
 }
 
 fn default_fps() -> u32 { 24 }
@@ -80,7 +82,11 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
     }
 
     // ── frame range ──────────────────────────────────────────────────────────
-    let key_frames = anim.key_frames();
+    let sel = match params.scene_index {
+        Some(i) => SceneSelection::Single(i as usize),
+        None => SceneSelection::All,
+    };
+    let key_frames = anim.key_frames(sel);
     let frame_count = key_frames.last().map(|f| f.as_u32() + 1).unwrap_or(1);
     let last = frame_count.saturating_sub(1);
     let from = params.from_frame.unwrap_or(0).min(last);
@@ -119,7 +125,7 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
         use rayon::prelude::*;
         let done = done_count;
         frames_arc.par_iter().enumerate().try_for_each(|(idx, &frame_n)| -> Result<(), String> {
-            let scene = anim.build_scene(FrameId::new(frame_n)).map_err(|e| e.to_string())?;
+            let scene = anim.build_scene(FrameId::new(frame_n), sel).map_err(|e| e.to_string())?;
             let pixmap = match target_res {
                 Some((w, h)) => renderer::render_scene_fitted(&scene, w, h),
                 None => renderer::render_scene(&scene, 1.0),

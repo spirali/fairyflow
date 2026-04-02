@@ -50,6 +50,8 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/ws", get(ws_handler))
         .route("/ls", get(ls_handler))
         .route("/file", get(file_handler).put(file_save_handler))
+        .route("/new-file", post(new_file_handler))
+        .route("/new-dir", post(new_dir_handler))
         .route("/frame/{n}", get(frame_handler))
         .route("/frames", get(frames_handler))
         .route("/tree/{n}", get(tree_handler))
@@ -153,6 +155,58 @@ async fn file_handler(Query(params): Query<FileQuery>) -> impl IntoResponse {
             (StatusCode::NOT_FOUND, "file not found").into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "could not read file").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewItemBody {
+    dir: String,
+    name: String,
+}
+
+/// Returns `Some(path)` if `dir/name` is safe (no `..`, no slashes in name).
+fn safe_create_path(dir: &str, name: &str) -> Option<PathBuf> {
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+        return None;
+    }
+    let base = std::path::Path::new(".");
+    let dir_path = if dir.is_empty() || dir == "." {
+        base.to_path_buf()
+    } else {
+        base.join(dir)
+    };
+    let full = dir_path.join(name);
+    for component in full.components() {
+        if component == std::path::Component::ParentDir {
+            return None;
+        }
+    }
+    Some(full)
+}
+
+async fn new_file_handler(axum::Json(body): axum::Json<NewItemBody>) -> impl IntoResponse {
+    let Some(path) = safe_create_path(&body.dir, &body.name) else {
+        return (StatusCode::BAD_REQUEST, "invalid path").into_response();
+    };
+    if path.exists() {
+        return (StatusCode::CONFLICT, "already exists").into_response();
+    }
+    match tokio::fs::write(&path, b"").await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+async fn new_dir_handler(axum::Json(body): axum::Json<NewItemBody>) -> impl IntoResponse {
+    let Some(path) = safe_create_path(&body.dir, &body.name) else {
+        return (StatusCode::BAD_REQUEST, "invalid path").into_response();
+    };
+    if path.exists() {
+        return (StatusCode::CONFLICT, "already exists").into_response();
+    }
+    match tokio::fs::create_dir(&path).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
 

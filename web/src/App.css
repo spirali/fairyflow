@@ -939,6 +939,108 @@
 .filetree-entry.filetree-active:hover {
   background: #1177bb;
 }
+.filetree-entry.filetree-context {
+  outline: 1px solid rgba(80, 140, 200, 0.4);
+  outline-offset: -1px;
+}
+
+.filetree-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.filetree-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0;
+  opacity: 0.7;
+}
+.filetree-action-btn:hover {
+  background: var(--bg-hover);
+  opacity: 1;
+}
+
+.filetree-dialog {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.filetree-dialog-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.filetree-dialog-dir {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filetree-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 6px;
+  outline: none;
+}
+.filetree-dialog-input:focus {
+  border-color: #0e639c;
+}
+
+.filetree-dialog-error {
+  font-size: 11px;
+  color: #f48771;
+  margin-top: 4px;
+}
+
+.filetree-dialog-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+
+.filetree-dialog-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+}
+.filetree-dialog-btn-ok {
+  background: #0e639c;
+  color: #fff;
+}
+.filetree-dialog-btn-ok:hover {
+  background: #1177bb;
+}
+.filetree-dialog-btn-cancel {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.filetree-dialog-btn-cancel:hover {
+  background: var(--border);
+}
 
 .filetree-chevron {
   width: 14px;

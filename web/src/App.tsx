@@ -42,6 +42,24 @@ export default function App() {
   const playReturnFrameRef = useRef(0);
   const cancelledRef = useRef(false);
 
+  // ── video export ─────────────────────────────────────────────────────────
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const [exportWidth, setExportWidth] = useState(0);
+  const [exportHeight, setExportHeight] = useState(0);
+  const [exportFps, setExportFps] = useState(24);
+  const [exportCodec, setExportCodec] = useState<'h264' | 'h265' | 'vp9'>('h264');
+  const [exportCrf, setExportCrf] = useState(23);
+  const [exportFilename, setExportFilename] = useState('animation.mp4');
+  const [exportFromFrame, setExportFromFrame] = useState(0);
+  const [exportToFrame, setExportToFrame] = useState(0);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'done' | 'error'>('idle');
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportMessage, setExportMessage] = useState('');
+  const [exportDonePath, setExportDonePath] = useState('');
+  const [exportErrorMsg, setExportErrorMsg] = useState('');
+
   // ── node selection ────────────────────────────────────────────────────────
   const [selectedNid, setSelectedNid] = useState<number | null>(null);
   const [nodeBounds, setNodeBounds] = useState<NodeBounds | null>(null);
@@ -532,6 +550,112 @@ export default function App() {
     setFrame(playReturnFrameRef.current);
   }
 
+  // ── export menu close on outside click ───────────────────────────────────
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [exportMenuOpen]);
+
+  // ── video export handler ───────────────────────────────────────────────────
+  function openExportDialog() {
+    setExportMenuOpen(false);
+    setExportWidth(sceneWidth ?? 0);
+    setExportHeight(sceneHeight ?? 0);
+    setExportToFrame(maxFrame);
+    setExportFps(fps);
+    setExportStatus('idle');
+    setExportProgress(0);
+    setExportMessage('');
+    setExportDonePath('');
+    setExportErrorMsg('');
+    setExportDialogOpen(true);
+  }
+
+  function handleCodecChange(codec: 'h264' | 'h265' | 'vp9') {
+    setExportCodec(codec);
+    // Auto-fix extension to match container
+    const ext = codec === 'vp9' ? '.webm' : '.mp4';
+    setExportFilename(prev => prev.replace(/\.(mp4|webm)$/i, '') + ext);
+  }
+
+  async function handleExport() {
+    if (exportStatus === 'exporting') return;
+    setExportStatus('exporting');
+    setExportProgress(0);
+    setExportMessage('Rendering frames…');
+    setExportDonePath('');
+    setExportErrorMsg('');
+
+    const body = {
+      width: exportWidth, height: exportHeight,
+      filename: exportFilename,
+      fps: exportFps,
+      codec: exportCodec,
+      crf: exportCrf,
+      from_frame: exportFromFrame,
+      to_frame: exportToFrame,
+    };
+
+    let finished = false;
+    try {
+      const response = await fetch('/export-video', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (!response.ok || !response.body) {
+        setExportStatus('error');
+        setExportErrorMsg(`Server error: ${response.status}`);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, {stream: true});
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'progress') {
+              setExportProgress(Math.round(ev.done / ev.total * 100));
+              setExportMessage(`Rendering frames… ${ev.done}/${ev.total}`);
+            } else if (ev.type === 'ffmpeg') {
+              setExportProgress(100);
+              setExportMessage('Encoding video…');
+            } else if (ev.type === 'done') {
+              finished = true;
+              setExportStatus('done');
+              setExportDonePath(ev.path);
+            } else if (ev.type === 'error') {
+              finished = true;
+              setExportStatus('error');
+              setExportErrorMsg(ev.message);
+            }
+          } catch { /* ignore malformed lines */ }
+        }
+      }
+      if (!finished) {
+        setExportStatus('error');
+        setExportErrorMsg('Export ended unexpectedly.');
+      }
+    } catch (e) {
+      setExportStatus('error');
+      setExportErrorMsg(String(e));
+    }
+  }
+
   // ── image src ──────────────────────────────────────────────────────────────
   const scaleKey = canvasLayout?.serverScale.toFixed(3) ?? '1.000';
   const imgSrc = imageCacheRef.current.get(cacheKey(frame, scaleKey))
@@ -610,6 +734,7 @@ export default function App() {
   }
 
   return (
+    <>
     <div className="app">
       <MenuBar />
 
@@ -808,6 +933,25 @@ export default function App() {
 
                     <span className="timeline-label">{frame} / {maxFrame}</span>
                     {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
+
+                    <span className="tl-sep" />
+
+                    <div className="tl-menu-anchor" ref={exportMenuRef}>
+                      <button
+                        className="tl-btn tl-menu-btn"
+                        title="More options"
+                        onClick={() => setExportMenuOpen(v => !v)}
+                      >☰</button>
+                      {exportMenuOpen && (
+                        <div className="tl-dropdown">
+                          <button
+                            className="tl-dropdown-item"
+                            onClick={openExportDialog}
+                            disabled={!hasScene}
+                          >Export as video…</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -875,5 +1019,103 @@ export default function App() {
         </PanelGroup>
       </div>
     </div>
+
+    {/* ── Export dialog ──────────────────────────────────────────────────── */}
+    {exportDialogOpen && (
+      <div className="modal-overlay" onClick={() => { if (exportStatus !== 'exporting') setExportDialogOpen(false); }}>
+        <div className="export-dialog" onClick={e => e.stopPropagation()}>
+          <div className="export-dialog-header">
+            <span>Export as Video</span>
+            <button
+              className="export-dialog-close"
+              onClick={() => setExportDialogOpen(false)}
+              disabled={exportStatus === 'exporting'}
+            >✕</button>
+          </div>
+
+          <div className="export-dialog-body">
+            <div className="export-row">
+              <label>Resolution</label>
+              <span className="export-wh">
+                <input type="number" className="export-num" value={exportWidth}  min={0} onChange={e => setExportWidth(Number(e.target.value))} />
+                <span>×</span>
+                <input type="number" className="export-num" value={exportHeight} min={0} onChange={e => setExportHeight(Number(e.target.value))} />
+              </span>
+              <span className="export-hint">0 = original</span>
+            </div>
+
+            <div className="export-row">
+              <label>FPS</label>
+              <input type="number" className="export-num" value={exportFps} min={1} max={120}
+                onChange={e => setExportFps(Number(e.target.value))} />
+            </div>
+
+            <div className="export-row">
+              <label>Codec</label>
+              <select value={exportCodec} onChange={e => handleCodecChange(e.target.value as typeof exportCodec)}>
+                <option value="h264">H.264 (.mp4)</option>
+                <option value="h265">H.265 (.mp4)</option>
+                <option value="vp9">VP9 (.webm)</option>
+              </select>
+            </div>
+
+            <div className="export-row">
+              <label>Quality (CRF {exportCrf})</label>
+              <input type="range" className="export-slider" min={0} max={51} value={exportCrf}
+                onChange={e => setExportCrf(Number(e.target.value))} />
+              <span className="export-hint">lower = better</span>
+            </div>
+
+            <div className="export-row">
+              <label>Filename</label>
+              <input type="text" className="export-text" value={exportFilename}
+                onChange={e => setExportFilename(e.target.value)} />
+            </div>
+
+            <div className="export-row">
+              <label>Frame range</label>
+              <input type="number" className="export-num" value={exportFromFrame} min={0} max={maxFrame}
+                onChange={e => setExportFromFrame(Number(e.target.value))} />
+              <span>–</span>
+              <input type="number" className="export-num" value={exportToFrame} min={0} max={maxFrame}
+                onChange={e => setExportToFrame(Number(e.target.value))} />
+            </div>
+          </div>
+
+          {exportStatus === 'exporting' && (
+            <div className="export-progress-area">
+              <div className="export-progress-label">{exportMessage}</div>
+              <div className="export-progress-track">
+                <div className="export-progress-fill" style={{width: `${exportProgress}%`}} />
+              </div>
+            </div>
+          )}
+
+          {exportStatus === 'done' && (
+            <div className="export-result export-result-ok">
+              Saved to <code>{exportDonePath}</code>
+            </div>
+          )}
+
+          {exportStatus === 'error' && (
+            <div className="export-result export-result-err">{exportErrorMsg}</div>
+          )}
+
+          <div className="export-dialog-footer">
+            <button className="export-btn-cancel"
+              onClick={() => setExportDialogOpen(false)}
+              disabled={exportStatus === 'exporting'}>
+              {exportStatus === 'done' || exportStatus === 'error' ? 'Close' : 'Cancel'}
+            </button>
+            <button className="export-btn-ok"
+              onClick={handleExport}
+              disabled={exportStatus === 'exporting' || !exportFilename.trim()}>
+              {exportStatus === 'exporting' ? 'Exporting…' : 'Export'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

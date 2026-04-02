@@ -5,7 +5,7 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, Query, State, WebSocketUpgrade};
 use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, post};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use engine::{AnimationDef, FrameId};
 use serde::{Deserialize, Serialize};
@@ -18,8 +18,8 @@ use tower_http::services::ServeDir;
 use tracing::{debug, info, warn};
 
 #[derive(Clone)]
-struct AppState {
-    animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
+pub(crate) struct AppState {
+    pub(crate) animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
     config: Arc<Mutex<ProjectConfig>>,
 }
 
@@ -55,6 +55,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/tree/{n}", get(tree_handler))
         .route("/trees", get(trees_handler))
         .route("/node/{id}", get(node_handler))
+        .route("/export-video", post(crate::export::export_handler))
         .fallback_service(ServeDir::new(web_dist))
         .with_state(state);
 

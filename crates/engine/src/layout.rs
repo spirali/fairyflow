@@ -2,42 +2,6 @@ use crate::basictypes::NodeId;
 use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::eval::EvalCtx;
 
-struct BBox {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-impl BBox {
-    pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
-        BBox {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    pub fn new_zero_size(x: f64, y: f64) -> Self {
-        BBox {
-            x,
-            y,
-            width: 0.0,
-            height: 0.0,
-        }
-    }
-
-    pub fn empty() -> Self {
-        BBox {
-            x: 0.0,
-            y: 0.0,
-            width: 0.0,
-            height: 0.0,
-        }
-    }
-}
-
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
         match &self.kind {

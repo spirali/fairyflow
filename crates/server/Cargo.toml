@@ -10,6 +10,7 @@ rayon = "1"
 engine = { path = "../engine" }
 renderer = { path = "../renderer" }
 axum = { version = "0.8.8", features = ["ws"] }
+futures-util = "0.3"
 clap = { version = "4", features = ["derive"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

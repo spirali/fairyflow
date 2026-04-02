@@ -454,6 +454,8 @@ impl Node {
             } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
                 text_style: text_style.eval_as_inheritable(ctx)?,
+                sh_language: sh_language.clone(),
+                sh_theme: sh_theme.clone(),
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 lines: children
                     .iter()

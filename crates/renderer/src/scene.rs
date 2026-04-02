@@ -196,6 +196,10 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         text_style: TextStyle,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sh_language: Option<Arc<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sh_theme: Option<Arc<String>>,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]

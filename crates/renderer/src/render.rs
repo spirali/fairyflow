@@ -1,4 +1,5 @@
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
+use crate::highlight;
 use crate::image_cache;
 use crate::resources::Resources;
 use crate::scene::{Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild, TextSpan};
@@ -140,12 +141,17 @@ impl Renderer {
             NodeKind::Text {
                 position,
                 lines,
-                z_level,
+                sh_language,
+                sh_theme,
                 ..
             } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 let lines = lines.clone();
-                self.render_text_lines(&lines, pixmap, transform, parent_alpha);
+                let sh = sh_language.as_ref().map(|lang| {
+                    let theme = sh_theme.as_ref().map(|s| s.as_str()).unwrap_or("InspiredGitHub");
+                    (lang.as_str(), theme)
+                });
+                self.render_text_lines(&lines, pixmap, transform, parent_alpha, sh);
             }
             NodeKind::Image {
                 position,
@@ -182,9 +188,44 @@ impl Renderer {
         pixmap: &mut Pixmap,
         parent_transform: Transform,
         parent_alpha: f32,
+        sh: Option<(&str, &str)>,
     ) {
+        // Pre-compute SH colors for the entire text block in one pass so that
+        // the syntect parser state carries correctly across TextChild boundaries.
+        //
+        // span_starts[line_idx][span_idx] = byte offset of that span's text in
+        // the full concatenated program text (no ZWNJ separators).
+        let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh.map(|(lang, theme)| {
+            let mut full_text = String::new();
+            let span_starts: Vec<Vec<usize>> = lines
+                .iter()
+                .map(|line| {
+                    let mut spans: Vec<&TextSpan> = Vec::new();
+                    collect_spans(line, &mut spans);
+                    spans
+                        .iter()
+                        .map(|s| {
+                            let start = full_text.len();
+                            full_text.push_str(s.text.as_str());
+                            start
+                        })
+                        .collect()
+                })
+                .collect();
+
+            let resources = Resources::get();
+            let colors = highlight::highlight_text(
+                &full_text,
+                lang,
+                theme,
+                &resources.syntax_set,
+                &resources.theme_set,
+            );
+            (span_starts, colors)
+        });
+
         let mut y_cursor = 0.0f32;
-        for line in lines {
+        for (line_idx, line) in lines.iter().enumerate() {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
             if spans.is_empty() {
@@ -193,10 +234,47 @@ impl Renderer {
 
             let cached = self.get_or_build_line(&spans);
 
+            // For SH: build the ZWNJ-text span ranges so we can map
+            // glyph.cluster (offset in ZWNJ text) → offset in original text.
+            let zwnj_ranges: Vec<(std::ops::Range<usize>, usize)> = if sh_ctx.is_some() {
+                let (_, r) = build_span_text(&spans);
+                r
+            } else {
+                Vec::new()
+            };
+
             for glyph in &cached.glyphs {
                 let span = spans[glyph.span_idx];
-                let fill_color = span.text_style.fill_color.value().as_ref().map(|c| c.to_skia_color());
                 let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
+
+                // Resolve fill color: SH overrides when the span's fill_color is Inherited.
+                let fill_color = if let Some((ref span_starts, ref sh_colors)) = sh_ctx {
+                    if span.text_style.fill_color.is_inherited() {
+                        let zwnj_start = zwnj_ranges
+                            .get(glyph.span_idx)
+                            .map(|(r, _)| r.start)
+                            .unwrap_or(0);
+                        let offset_in_span = (glyph.cluster as usize)
+                            .saturating_sub(zwnj_start)
+                            .min(span.text.len());
+                        let span_start_in_full = span_starts[line_idx]
+                            .get(glyph.span_idx)
+                            .copied()
+                            .unwrap_or(0);
+                        let byte_in_full = span_start_in_full + offset_in_span;
+
+                        sh_colors
+                            .color_at(byte_in_full)
+                            .map(|c| c.to_skia_color())
+                            .or_else(|| {
+                                span.text_style.fill_color.value().as_ref().map(|c| c.to_skia_color())
+                            })
+                    } else {
+                        span.text_style.fill_color.value().as_ref().map(|c| c.to_skia_color())
+                    }
+                } else {
+                    span.text_style.fill_color.value().as_ref().map(|c| c.to_skia_color())
+                };
 
                 let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
                     continue;
@@ -351,35 +429,41 @@ impl Renderer {
                 // baseline without y_cursor — y_cursor is added at render time via y_offset
                 let baseline = glyph_run.baseline();
 
-                for glyph in glyph_run.glyphs() {
-                    // Per-glyph span lookup: a single run may span multiple style ranges.
-                    let span_idx = layout
-                        .styles()
-                        .get(glyph.style_index())
-                        .map(|s| s.brush)
-                        .unwrap_or(0)
-                        .min(spans.len().saturating_sub(1));
+                // Iterate clusters to obtain per-cluster byte offsets in the
+                // ZWNJ text, then iterate the glyphs within each cluster.
+                for cluster in run.visual_clusters() {
+                    let cluster_byte = cluster.text_range().start as u32;
+                    for glyph in cluster.glyphs() {
+                        // Per-glyph span lookup: a single run may span multiple style ranges.
+                        let span_idx = layout
+                            .styles()
+                            .get(glyph.style_index())
+                            .map(|s| s.brush)
+                            .unwrap_or(0)
+                            .min(spans.len().saturating_sub(1));
 
-                    let gx = run_x + glyph.x;
-                    let gy = baseline - glyph.y;
-                    run_x += glyph.advance;
+                        let gx = run_x + glyph.x;
+                        let gy = baseline - glyph.y;
+                        run_x += glyph.advance;
 
-                    let glyph_id = GlyphId::from(glyph.id as u16);
-                    let Some(outline) = outlines.get(glyph_id) else {
-                        continue;
-                    };
+                        let glyph_id = GlyphId::from(glyph.id as u16);
+                        let Some(outline) = outlines.get(glyph_id) else {
+                            continue;
+                        };
 
-                    let settings = DrawSettings::unhinted(
-                        SkrifaSize::new(font_size),
-                        LocationRef::new(&normalized_coords),
-                    );
-                    let mut pen = GlyphPen::new(gx, gy);
-                    let _ = outline.draw(settings, &mut pen);
-                    glyphs.push(glyph_cache::CachedGlyph {
-                        span_idx,
-                        x: gx,
-                        path: VectorPath { verbs: pen.verbs },
-                    });
+                        let settings = DrawSettings::unhinted(
+                            SkrifaSize::new(font_size),
+                            LocationRef::new(&normalized_coords),
+                        );
+                        let mut pen = GlyphPen::new(gx, gy);
+                        let _ = outline.draw(settings, &mut pen);
+                        glyphs.push(glyph_cache::CachedGlyph {
+                            span_idx,
+                            x: gx,
+                            path: VectorPath { verbs: pen.verbs },
+                            cluster: cluster_byte,
+                        });
+                    }
                 }
             }
         }

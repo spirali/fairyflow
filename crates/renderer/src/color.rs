@@ -12,6 +12,15 @@ impl Color {
         csscolorparser::Color::from_html(color).ok().map(Color)
     }
 
+    pub(crate) fn from_rgba8(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color(csscolorparser::Color {
+            r: r as f32 / 255.0,
+            g: g as f32 / 255.0,
+            b: b as f32 / 255.0,
+            a: a as f32 / 255.0,
+        })
+    }
+
     pub fn set_alpha(&mut self, alpha: f32) {
         self.0.a = alpha;
     }

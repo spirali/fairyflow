@@ -3,12 +3,16 @@ use parley::FontContext;
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache, SourceCacheOptions};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 
 static GLOBAL: OnceLock<Resources> = OnceLock::new();
 
 pub struct Resources {
     font_cx: Mutex<FontContext>,
     fontdb: Mutex<FontDbState>,
+    pub syntax_set: SyntaxSet,
+    pub theme_set: ThemeSet,
 }
 
 /// Tracks the accumulated set of font directories so the database can be
@@ -46,6 +50,8 @@ impl Resources {
                     source_cache: SourceCache::new(SourceCacheOptions { shared: true }),
                 }),
                 fontdb: Mutex::new(fontdb_state),
+                syntax_set: SyntaxSet::load_defaults_newlines(),
+                theme_set: ThemeSet::load_defaults(),
             }
         });
     }

@@ -1,5 +1,6 @@
 mod color;
 mod glyph_cache;
+mod highlight;
 mod image_cache;
 mod render;
 mod resources;

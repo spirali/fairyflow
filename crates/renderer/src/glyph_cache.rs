@@ -29,6 +29,9 @@ pub struct CachedGlyph {
     pub x: f32,
     /// Outline at y_cursor = 0 with (run_x + glyph.x, baseline - glyph.y) applied.
     pub path: VectorPath,
+    /// Byte offset of this glyph's cluster in the full ZWNJ-separated text string
+    /// that was passed to parley.  Used to map glyphs to SH token colors.
+    pub cluster: u32,
 }
 
 /// A fully laid-out line of text, ready to render or measure.

@@ -197,9 +197,16 @@ impl Renderer {
         // the full concatenated program text (no ZWNJ separators).
         let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh.map(|(lang, theme)| {
             let mut full_text = String::new();
+            // Insert '\n' between consecutive TextChild entries so syntect sees
+            // them as separate lines and recognises tokens that span child
+            // boundaries correctly (e.g. "print" split across "pr"/"in"/"t(…)").
             let span_starts: Vec<Vec<usize>> = lines
                 .iter()
-                .map(|line| {
+                .enumerate()
+                .map(|(i, line)| {
+                    if i > 0 {
+                        full_text.push('\n');
+                    }
                     let mut spans: Vec<&TextSpan> = Vec::new();
                     collect_spans(line, &mut spans);
                     spans

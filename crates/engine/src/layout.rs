@@ -51,14 +51,14 @@ impl Node {
 
     pub fn get_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
-            return Ok(0.0);
+            return self.default_width(ctx);
         };
         s.width.eval_f64(ctx)
     }
 
     pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
-            return Ok(0.0);
+            return self.default_height(ctx);
         };
         s.height.eval_f64(ctx)
     }

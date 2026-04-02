@@ -79,16 +79,20 @@ impl Renderer {
         match &node.kind {
             NodeKind::Group {
                 position,
-                size: _,
+                size,
                 alpha,
                 scale_x,
                 scale_y,
                 rotation,
+                pivot_x,
+                pivot_y,
                 z_level,
                 children,
             } => {
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform =
-                    positional_transform(position, *scale_x, *scale_y, *rotation, parent_transform);
+                    positional_transform(position, *scale_x, *scale_y, *rotation, pivot_x_abs, pivot_y_abs, parent_transform);
                 let alpha = parent_alpha * *alpha as f32;
                 // Clone to avoid holding a borrow on node.kind while calling self methods.
                 let children = children.clone();
@@ -100,7 +104,7 @@ impl Renderer {
                 style,
                 z_level,
             } => {
-                let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
+                let transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
                 else {
                     return;
@@ -114,7 +118,7 @@ impl Renderer {
                 style,
                 z_level,
             } => {
-                let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
+                let transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
                 else {
                     return;
@@ -138,7 +142,7 @@ impl Renderer {
                 lines,
                 z_level,
             } => {
-                let transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
+                let transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 let lines = lines.clone();
                 self.render_text_lines(&lines, pixmap, transform, parent_alpha);
             }
@@ -461,10 +465,14 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
             scale_x,
             scale_y,
             rotation,
+            pivot_x,
+            pivot_y,
             children,
             z_level,
         } => {
-            let t = positional_transform(position, *scale_x, *scale_y, *rotation, parent);
+            let pivot_x_abs = (pivot_x * size.width) as f32;
+            let pivot_y_abs = (pivot_y * size.height) as f32;
+            let t = positional_transform(position, *scale_x, *scale_y, *rotation, pivot_x_abs, pivot_y_abs, parent);
             if node.id == node_id {
                 return Some(aabb(size.width as f32, size.height as f32, t));
             }
@@ -474,7 +482,7 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
         | NodeKind::Ellipse { position, size, .. }
         | NodeKind::Image { position, size, .. } => {
             if node.id == node_id {
-                let t = positional_transform(position, 1.0, 1.0, 0.0, parent);
+                let t = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent);
                 return Some(aabb(size.width as f32, size.height as f32, t));
             }
             None
@@ -489,7 +497,7 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
         }
         NodeKind::Text { position, .. } => {
             if node.id == node_id {
-                let t = positional_transform(position, 1.0, 1.0, 0.0, parent);
+                let t = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent);
                 return Some(aabb(0.0, 0.0, t));
             }
             None
@@ -570,11 +578,14 @@ fn positional_transform(
     scale_x: f64,
     scale_y: f64,
     rotation: f64,
+    pivot_x: f32,
+    pivot_y: f32,
     parent: Transform,
 ) -> Transform {
-    Transform::from_scale(scale_x as f32, scale_y as f32)
+    Transform::from_translate(-pivot_x, -pivot_y)
+        .post_scale(scale_x as f32, scale_y as f32)
         .post_rotate(rotation as f32)
-        .post_translate(position.x as f32, position.y as f32)
+        .post_translate(position.x as f32 + pivot_x, position.y as f32 + pivot_y)
         .post_concat(parent)
 }
 
@@ -1061,7 +1072,7 @@ fn render_image(
         (dest_w / cached.width, dest_h / cached.height, 0.0, 0.0)
     };
 
-    let node_transform = positional_transform(position, 1.0, 1.0, 0.0, parent_transform);
+    let node_transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
 
     match &cached.kind {
         image_cache::CachedImageKind::Svg { tree, .. } => {

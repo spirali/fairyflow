@@ -90,14 +90,17 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
 }
 
 /// Get the affine transform parameters of a Group node at the current frame.
-/// Returns (tx, ty, sx, sy, cos_r, sin_r).
-fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64, f64, f64)> {
+/// Returns (tx, ty, sx, sy, cos_r, sin_r, pivot_x_abs, pivot_y_abs).
+fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64, f64, f64, f64, f64)> {
     match &node.kind {
         NodeKind::Group {
             position,
+            size,
             scale_x,
             scale_y,
             rotation,
+            pivot_x,
+            pivot_y,
             ..
         } => {
             let tx = position.x.eval_f64(ctx)?;
@@ -105,15 +108,18 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64,
             let sx = scale_x.eval_f64(ctx)?;
             let sy = scale_y.eval_f64(ctx)?;
             let r = rotation.eval_f64(ctx)?.to_radians();
-            Ok((tx, ty, sx, sy, r.cos(), r.sin()))
+            let w = size.width.eval_f64(ctx)?;
+            let h = size.height.eval_f64(ctx)?;
+            let pvx = pivot_x.eval_f64(ctx)? * w;
+            let pvy = pivot_y.eval_f64(ctx)? * h;
+            Ok((tx, ty, sx, sy, r.cos(), r.sin(), pvx, pvy))
         }
         _ => anyhow::bail!("node {:?} has no group transform (not a group)", node.id),
     }
 }
 
 /// Transform (lx, ly) from node n's local space into n's parent space.
-/// parent_x = cos(r)*sx*lx - sin(r)*sy*ly + tx
-/// parent_y = sin(r)*sx*lx + cos(r)*sy*ly + ty
+/// Pivot is expressed in absolute local-space coordinates (pivot_x * width, pivot_y * height).
 fn from_node_pos(
     tx: f64,
     ty: f64,
@@ -121,17 +127,21 @@ fn from_node_pos(
     sy: f64,
     cos_r: f64,
     sin_r: f64,
+    pvx: f64,
+    pvy: f64,
     lx: f64,
     ly: f64,
 ) -> (f64, f64) {
+    let qx = lx - pvx;
+    let qy = ly - pvy;
     (
-        cos_r * sx * lx - sin_r * sy * ly + tx,
-        sin_r * sx * lx + cos_r * sy * ly + ty,
+        cos_r * sx * qx - sin_r * sy * qy + pvx + tx,
+        sin_r * sx * qx + cos_r * sy * qy + pvy + ty,
     )
 }
 
 /// Transform (px, py) from parent space into node n's local space.
-/// q = parent_pos - translation;  local_x = (cos(r)*qx + sin(r)*qy) / sx
+/// Pivot is expressed in absolute local-space coordinates (pivot_x * width, pivot_y * height).
 fn into_node_pos(
     tx: f64,
     ty: f64,
@@ -139,14 +149,16 @@ fn into_node_pos(
     sy: f64,
     cos_r: f64,
     sin_r: f64,
+    pvx: f64,
+    pvy: f64,
     px: f64,
     py: f64,
 ) -> (f64, f64) {
-    let qx = px - tx;
-    let qy = py - ty;
+    let qx = px - pvx - tx;
+    let qy = py - pvy - ty;
     (
-        (cos_r * qx + sin_r * qy) / sx,
-        (-sin_r * qx + cos_r * qy) / sy,
+        (cos_r * qx + sin_r * qy) / sx + pvx,
+        (-sin_r * qx + cos_r * qy) / sy + pvy,
     )
 }
 
@@ -188,15 +200,15 @@ fn node_transform(
     // Go up: each node transforms from its local space to its parent's space
     for node_id in cs {
         let node = ctx.node(node_id)?;
-        let (tx, ty, sx, sy, cos_r, sin_r) = group_transform(node, ctx)?;
-        (px, py) = from_node_pos(tx, ty, sx, sy, cos_r, sin_r, px, py);
+        let (tx, ty, sx, sy, cos_r, sin_r, pvx, pvy) = group_transform(node, ctx)?;
+        (px, py) = from_node_pos(tx, ty, sx, sy, cos_r, sin_r, pvx, pvy, px, py);
     }
 
     // Go down: each node transforms from parent space into its local space
     for node_id in ct {
         let node = ctx.node(node_id)?;
-        let (tx, ty, sx, sy, cos_r, sin_r) = group_transform(node, ctx)?;
-        (px, py) = into_node_pos(tx, ty, sx, sy, cos_r, sin_r, px, py);
+        let (tx, ty, sx, sy, cos_r, sin_r, pvx, pvy) = group_transform(node, ctx)?;
+        (px, py) = into_node_pos(tx, ty, sx, sy, cos_r, sin_r, pvx, pvy, px, py);
     }
 
     Ok((px, py))
@@ -356,6 +368,8 @@ impl Node {
                 size,
                 alpha,
                 rotation,
+                pivot_x,
+                pivot_y,
                 scale_x,
                 scale_y,
                 layout,
@@ -366,6 +380,8 @@ impl Node {
                 size: size.eval(ctx)?,
                 alpha: alpha.eval_f64(ctx)?,
                 rotation: rotation.eval_f64(ctx)?,
+                pivot_x: pivot_x.eval_f64(ctx)?,
+                pivot_y: pivot_y.eval_f64(ctx)?,
                 scale_x: scale_x.eval_f64(ctx)?,
                 scale_y: scale_y.eval_f64(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,

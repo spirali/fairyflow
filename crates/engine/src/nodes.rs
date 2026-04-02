@@ -289,6 +289,8 @@ pub enum NodeKind {
         size: Size,
         alpha: TopLevelExpr,
         rotation: TopLevelExpr,
+        pivot_x: TopLevelExpr,
+        pivot_y: TopLevelExpr,
         scale_x: TopLevelExpr,
         scale_y: TopLevelExpr,
         z_level: TopLevelExpr,
@@ -380,7 +382,6 @@ pub enum NodeKind {
         path: TopLevelExpr,
         /// When true, scale the image to fit inside the node box while
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
-        #[serde(default = "default_keep_aspect")]
         keep_aspect: TopLevelExpr,
         /// Optional child layer nodes (kind = "layer").
         #[serde(default)]
@@ -400,10 +401,6 @@ pub enum NodeKind {
         #[serde(default)]
         children: Vec<NodeId>,
     },
-}
-
-fn default_keep_aspect() -> TopLevelExpr {
-    TopLevelExpr::new(Expr::Const(Value::Bool(false)))
 }
 
 impl NodeKind {

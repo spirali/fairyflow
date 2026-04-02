@@ -134,6 +134,8 @@ pub enum NodeKind {
         scale_x: f64,
         scale_y: f64,
         rotation: f64,
+        pivot_x: f64,
+        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         children: Vec<Node>,

@@ -82,6 +82,9 @@ class AlphaMixin:
     def _init_alpha(self):
         self._add_attr("alpha", 1)
 
+    def _init_alpha_from_parent(self):
+        self._add_from_parent("alpha")
+
     def alpha(self, value):
         self._set_attr("alpha", value)
         return self
@@ -89,7 +92,7 @@ class AlphaMixin:
 
 class ZLevelMixin:
     def _init_z(self):
-        self._add_from_parent("z_level", self._parent, 0)
+        self._add_from_parent("z_level", 0)
 
     def z_level(self, value):
         self._set_attr("z_level", value)
@@ -186,6 +189,12 @@ class StyleMixin(AlphaMixin):
         self._add_attr("stroke_color", None)
         self._add_attr("stroke_width", 1)
         self._init_alpha()
+
+    def _init_style_from_parent(self):
+        self._add_from_parent("fill_color")
+        self._add_from_parent("stroke_color")
+        self._add_from_parent("stroke_width")
+        self._init_alpha_from_parent()
 
     def color(self, value: str):
         self._set_attr("fill_color", Color.parse(value))

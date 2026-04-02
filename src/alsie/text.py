@@ -1,3 +1,4 @@
+from .ctxvars import get_frame
 from .exprs import expr_default_x, expr_default_y
 from .position import Position
 
@@ -12,12 +13,18 @@ from .nodes import (
 
 
 class TextStyleMixin(StyleMixin):
+
     def _init_text_style(self):
+        self._init_style()
         self._add_attr("font", "sans-serif")
         self._add_attr("font_size", 16)
-        self._add_attr("stroke_color", None)
         self._add_attr("italic", False)
-        self._init_style()
+
+    def _init_text_style_from_parent(self):        
+        self._init_style_from_parent()
+        self._add_from_parent("font")
+        self._add_from_parent("font_size")
+        self._add_from_parent("italic")        
 
     def italic(self, value: bool):
         self._set_attr("italic", value)
@@ -37,7 +44,7 @@ class TextSpan(Node, TextStyleMixin):
 
     def __init__(self, parent, frame, text):
         super().__init__(parent, frame)
-        self._init_text_style()
+        self._init_text_style_from_parent()
         self._add_attr("text", text)
 
     def text(self, value: str):
@@ -52,10 +59,10 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
 
     def __init__(self, parent, frame):
         super().__init__(parent, frame)
-        self._init_text_style()
+        self._init_text_style_from_parent()
 
     def span(self, text):
-        span = TextSpan(self, self._frame, text)
+        span = TextSpan(self, get_frame(), text)
         self._children.append(span)
         return span
 
@@ -68,22 +75,31 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
-    def __init__(self, parent, frame):
+    def __init__(self, parent, frame, sh_language, sh_theme):
         super().__init__(parent, frame)
-        self._init_position(0, 0)
+        self._init_position()
         self._init_text_style()
-        self._init_z(parent)
+        self._init_z()
+        self.sh_language = sh_language
+        self.sh_theme = sh_theme
 
     def group(self):
-        group = TextGroup(self, self._frame)
+        group = TextGroup(self, get_frame())
         self._children.append(group)
         return group
 
     def span(self, text):
-        span = TextSpan(self, self._frame, text)
+        span = TextSpan(self, get_frame(), text)
         self._children.append(span)
         return span
+    
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        if self.sh_language is not None:
+            result["sh_language"] = self.sh_language
+        if self.sh_theme is not None:
+            result["sh_theme"] = self.sh_theme
+    
 
-
-def text(*, frame=None):
-    return make_node(Text, frame)
+def text():
+    return make_node(Text)

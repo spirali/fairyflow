@@ -141,6 +141,7 @@ impl Renderer {
                 position,
                 lines,
                 z_level,
+                ..
             } => {
                 let transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 let lines = lines.clone();
@@ -194,8 +195,8 @@ impl Renderer {
 
             for glyph in &cached.glyphs {
                 let span = spans[glyph.span_idx];
-                let fill_color = span.style.fill_color.as_ref().map(|c| c.to_skia_color());
-                let alpha = parent_alpha * span.style.alpha as f32;
+                let fill_color = span.text_style.fill_color.value().as_ref().map(|c| c.to_skia_color());
+                let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
 
                 let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
                     continue;
@@ -208,14 +209,14 @@ impl Renderer {
                     paint.anti_alias = true;
                     pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
                 }
-                if let Some(ref sc) = span.style.stroke_color {
+                if let Some(sc) = span.text_style.stroke_color.value() {
                     let mut color = sc.to_skia_color();
                     color.set_alpha(color.alpha() * alpha);
                     let mut paint = Paint::default();
                     paint.set_color(color);
                     paint.anti_alias = true;
                     let stroke = Stroke {
-                        width: span.style.stroke_width as f32,
+                        width: *span.text_style.stroke_width.value() as f32,
                         ..Default::default()
                     };
                     pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
@@ -306,14 +307,14 @@ impl Renderer {
             // Brush carries the span index so we can look it up per-glyph below.
             builder.push(StyleProperty::Brush(*span_idx), range.clone());
             builder.push(
-                StyleProperty::FontSize(span.font_size as f32),
+                StyleProperty::FontSize(*span.text_style.font_size.value() as f32),
                 range.clone(),
             );
             builder.push(
-                StyleProperty::FontStack(FontStack::Source((span.font_family.as_str()).into())),
+                StyleProperty::FontStack(FontStack::Source((span.text_style.font_family.value().as_str()).into())),
                 range.clone(),
             );
-            if span.italic {
+            if *span.text_style.italic.value() {
                 builder.push(
                     StyleProperty::FontStyle(parley::FontStyle::Italic),
                     range.clone(),
@@ -677,9 +678,9 @@ fn make_line_key(spans: &[&TextSpan]) -> glyph_cache::LineKey {
         .iter()
         .map(|s| glyph_cache::SpanKey {
             text: s.text.clone(),
-            font_family: s.font_family.clone(),
-            font_size_bits: (s.font_size as f32).to_bits(),
-            italic: s.italic,
+            font_family: s.text_style.font_family.value().clone(),
+            font_size_bits: (*s.text_style.font_size.value() as f32).to_bits(),
+            italic: *s.text_style.italic.value(),
         })
         .collect::<Vec<_>>()
         .into_boxed_slice()

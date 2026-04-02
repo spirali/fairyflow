@@ -15,5 +15,5 @@ pub use render::{
 pub use resources::Resources;
 pub use scene::{
     ImageLayer, Inheritable, Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild,
-    TextGroup, TextSpan,
+    TextGroup, TextSpan, TextStyle,
 };

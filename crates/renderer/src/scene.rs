@@ -65,16 +65,33 @@ pub struct Style {
     pub alpha: f64,
 }
 
+/// Text styling that may be inherited from a parent node.
+/// Fields are omitted from serialization when they are inherited (not overridden).
+#[derive(Debug, Clone, Serialize)]
+pub struct TextStyle {
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub fill_color: Inheritable<Option<Color>>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub stroke_color: Inheritable<Option<Color>>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub stroke_width: Inheritable<f64>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub alpha: Inheritable<f64>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub font_family: Inheritable<Arc<String>>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub font_size: Inheritable<f64>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub italic: Inheritable<bool>,
+}
+
 /// A single styled text run.
 #[derive(Debug, Clone, Serialize)]
 pub struct TextSpan {
     pub id: u64,
     pub text: Arc<String>,
     #[serde(flatten)]
-    pub style: Style,
-    pub font_family: Arc<String>,
-    pub font_size: f64,
-    pub italic: bool,
+    pub text_style: TextStyle,
 }
 
 /// A node in the text tree — either a nested group or a leaf span.
@@ -91,6 +108,8 @@ pub enum TextChild {
 #[derive(Debug, Clone, Serialize)]
 pub struct TextGroup {
     pub id: u64,
+    #[serde(flatten)]
+    pub text_style: TextStyle,
     pub children: Vec<TextChild>,
 }
 
@@ -175,6 +194,8 @@ pub enum NodeKind {
     Text {
         #[serde(flatten)]
         position: Position,
+        #[serde(flatten)]
+        text_style: TextStyle,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]

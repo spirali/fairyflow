@@ -12,9 +12,9 @@ class AnimatedObject:
     def _add_attr(self, name, value):
         self._attrs[name] = AnimatedValue(value, self._start)
 
-    def _add_from_parent(self, name, parent, default=None):
-        if name in parent._attrs:
-            self._add_attr(name, InheritedExprs(parent._get_attr(name)))
+    def _add_from_parent(self, name, default=None):
+        if name in self._parent._attrs:
+            self._add_attr(name, InheritedExprs(self._parent._get_attr(name)))
         else:
             self._add_attr(name, InheritedExprs(default))
 

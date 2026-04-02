@@ -357,6 +357,20 @@ impl Style {
     }
 }
 
+impl TextStyle {
+    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextStyle> {
+        Ok(renderer::TextStyle {
+            fill_color: self.style.fill_color.eval_as_inheritable(ctx)?.map(|v| -> anyhow::Result<_> { Ok(v.clone().into_color()) })?,
+            stroke_color: self.style.stroke_color.eval_as_inheritable(ctx)?.map(|v| -> anyhow::Result<_> { Ok(v.clone().into_color()) })?,
+            stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
+            alpha: self.style.alpha.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
+            font_family: self.font.eval_as_inheritable(ctx)?.map(|v| v.as_string_ref())?,
+            font_size: self.font_size.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
+            italic: self.italic.eval_as_inheritable(ctx)?.map(|v| v.as_bool())?,
+        })
+    }
+}
+
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
@@ -432,11 +446,14 @@ impl Node {
             },
             NodeKind::Text {
                 position,
+                text_style,
                 z_level,
+                sh_language,
+                sh_theme,
                 children,
-                ..
             } => renderer::NodeKind::Text {
                 position: position.eval(ctx)?,
+                text_style: text_style.eval_as_inheritable(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
                 lines: children
                     .iter()
@@ -534,8 +551,9 @@ impl Node {
 
     pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextGroup> {
         match &self.kind {
-            NodeKind::TextGroup { children, .. } => Ok(renderer::TextGroup {
+            NodeKind::TextGroup { text_style, children } => Ok(renderer::TextGroup {
                 id: self.id.as_u64(),
+                text_style: text_style.eval_as_inheritable(ctx)?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
@@ -568,22 +586,11 @@ impl Node {
 
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
         match &self.kind {
-            NodeKind::TextSpan { text_style, text } => {
-                let TextStyle {
-                    style,
-                    font,
-                    font_size,
-                    italic,
-                } = text_style;
-                Ok(renderer::TextSpan {
-                    id: self.id.as_u64(),
-                    text: text.eval(ctx)?.as_string_ref()?,
-                    style: style.eval(ctx)?,
-                    font_family: font.eval(ctx)?.as_string_ref()?,
-                    font_size: font_size.eval_f64(ctx)?,
-                    italic: italic.eval(ctx)?.as_bool()?,
-                })
-            }
+            NodeKind::TextSpan { text_style, text } => Ok(renderer::TextSpan {
+                id: self.id.as_u64(),
+                text: text.eval(ctx)?.as_string_ref()?,
+                text_style: text_style.eval_as_inheritable(ctx)?,
+            }),
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }
     }

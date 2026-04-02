@@ -334,6 +334,8 @@ pub enum NodeKind {
         #[serde(flatten)]
         text_style: TextStyle,
         z_level: TopLevelExpr,
+        sh_language: Arc<String>,
+        sh_theme: Arc<String>,
         #[serde(default)]
         children: Vec<NodeId>,
     },

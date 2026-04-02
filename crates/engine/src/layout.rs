@@ -99,23 +99,66 @@ impl Node {
         s.height.eval_f64(ctx)
     }
 
+    /// Returns `(offset_x, offset_y)`: the position of the AABB's top-left corner
+    /// relative to the node's own (x, y) position in the parent space.
+    /// For non-group nodes (no rotation/scale) this is always (0, 0).
+    pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
+        match &self.kind {
+            NodeKind::Group { size, scale_x, scale_y, rotation, pivot_x, pivot_y, .. } => {
+                let w = size.width.eval_f64(ctx)?;
+                let h = size.height.eval_f64(ctx)?;
+                let sx = scale_x.eval_f64(ctx)?;
+                let sy = scale_y.eval_f64(ctx)?;
+                let r = rotation.eval_f64(ctx)?.to_radians();
+                let pvx = pivot_x.eval_f64(ctx)? * w;
+                let pvy = pivot_y.eval_f64(ctx)? * h;
+
+                // final_x = pvx + cx*(lx−pvx) + dx*(ly−pvy)  where cx=cos r·sx, dx=−sin r·sy
+                // min over lx ∈ {0,w}: if cx≥0 → cx*(0−pvx) = −cx*pvx, else cx*(w−pvx)
+                // min over ly ∈ {0,h}: if dx≥0 → dx*(0−pvy) = −dx*pvy, else dx*(h−pvy)
+                let cx = r.cos() * sx;
+                let dx = -r.sin() * sy;
+                let min_x = pvx
+                    + (if cx >= 0.0 { -cx * pvx } else { cx * (w - pvx) })
+                    + (if dx >= 0.0 { -dx * pvy } else { dx * (h - pvy) });
+
+                let cy = r.sin() * sx;
+                let dy = r.cos() * sy;
+                let min_y = pvy
+                    + (if cy >= 0.0 { -cy * pvx } else { cy * (w - pvx) })
+                    + (if dy >= 0.0 { -dy * pvy } else { dy * (h - pvy) });
+
+                Ok((min_x, min_y))
+            }
+            _ => Ok((0.0, 0.0)),
+        }
+    }
+
     pub fn get_outer_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let width = self.get_width(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group { scale_x, .. } => {
-                scale_x.eval_f64(ctx)? * width
-            },
-            _ => width
+            NodeKind::Group { scale_x, scale_y, rotation, .. } => {
+                let sx = scale_x.eval_f64(ctx)?;
+                let sy = scale_y.eval_f64(ctx)?;
+                let r = rotation.eval_f64(ctx)?.to_radians();
+                let height = self.get_height(ctx)?;
+                r.cos().abs() * sx * width + r.sin().abs() * sy * height
+            }
+            _ => width,
         })
     }
 
     pub fn get_outer_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let height = self.get_height(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group { scale_y, .. } => {
-                scale_y.eval_f64(ctx)? * height
-            },
-            _ => height
+            NodeKind::Group { scale_x, scale_y, rotation, .. } => {
+                let sx = scale_x.eval_f64(ctx)?;
+                let sy = scale_y.eval_f64(ctx)?;
+                let r = rotation.eval_f64(ctx)?.to_radians();
+                let width = self.get_width(ctx)?;
+                r.sin().abs() * sx * width + r.cos().abs() * sy * height
+            }
+            _ => height,
         })
     }
 
@@ -160,16 +203,17 @@ impl Node {
             | NodeKind::Ellipse { .. }
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
+                let (off_x, _) = self.aabb_offset(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_w = self.get_parent_width(ctx)?;
-                        let self_w = self.get_width(ctx)?;
-                        (parent_w - self_w) / 2.0
+                        let self_w = self.get_outer_width(ctx)?;
+                        (parent_w - self_w) / 2.0 - off_x
                     }
                     Layout::Column { align, .. } => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) * align.eval_f64(ctx)?
+                        (parent_w - self_w) * align.eval_f64(ctx)? - off_x
                     }
                     Layout::Row { gap, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
@@ -180,7 +224,7 @@ impl Node {
                         let gap = gap.eval_f64(ctx)?;
                         for child in children {
                             if *child == self.id {
-                                return Ok(x);
+                                return Ok(x - off_x);
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
@@ -210,11 +254,12 @@ impl Node {
             | NodeKind::Ellipse { .. }
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
+                let (_, off_y) = self.aabb_offset(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_h = self.get_parent_height(ctx)?;
-                        let self_h = self.get_height(ctx)?;
-                        (parent_h - self_h) / 2.0
+                        let self_h = self.get_outer_height(ctx)?;
+                        (parent_h - self_h) / 2.0 - off_y
                     }
                     Layout::Column { gap, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
@@ -225,7 +270,7 @@ impl Node {
                         let gap = gap.eval_f64(ctx)?;
                         for child in children {
                             if *child == self.id {
-                                return Ok(y);
+                                return Ok(y - off_y);
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
@@ -237,7 +282,7 @@ impl Node {
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) * align.eval_f64(ctx)?
+                        (parent_h - self_h) * align.eval_f64(ctx)? - off_y
                     }
                 }
             }

@@ -36,9 +36,11 @@ class Serializer:
         return node._id
 
 
-def create_export(scene):
+def create_export(idx, scene):
+    if scene.name is None:
+        scene.name = f"Scene_{idx + 1}"
     serializer = Serializer()
-    serialized_scene = scene.serialize(serializer)
+    serialized_scene = scene.serialize(serializer)    
     return {
         "scene": serialized_scene,
         "animated_values": serializer.animated_values,
@@ -46,8 +48,8 @@ def create_export(scene):
     }
 
 
-def write_tree(obj, path):
-    export = create_export(obj)
+def write_tree(objs, path):
+    export = [create_export(idx, obj) for idx, obj in enumerate(objs)]
     print(json.dumps(export))
     with open(path, "w") as f:
         json.dump(export, f)

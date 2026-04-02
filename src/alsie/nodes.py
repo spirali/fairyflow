@@ -17,7 +17,7 @@ from .ctxvars import (
     get_current_node,
     store_ctx,
     restore_ctx,
-    ROOT_OBJECT,
+    ROOT_OBJECTS,
     set_current_node,
 )
 
@@ -324,6 +324,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._add_attr("fill_color", Color.parse("white"))
         self._id_counter = 0
         self._layout = CENTERING_LAYOUT
+        self.name = None
 
     def __enter__(self):
         super().__enter__()
@@ -335,6 +336,11 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def _new_id(self):
         self._id_counter += 1
         return self._id_counter
+    
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        result["name"] = self.name
+        return result
 
 
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
@@ -501,7 +507,7 @@ def make_node(cls, *args):
 
 def scene(width: int, height: int):
     scene = Scene(width, height)
-    ROOT_OBJECT.set(scene)
+    ROOT_OBJECTS.get().append(scene)
     return scene
 
 

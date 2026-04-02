@@ -20,11 +20,11 @@ def main():
 
     runpy.run_path(args.source_filename, init_globals=context, run_name="__main__")
 
-    from .ctxvars import ROOT_OBJECT
+    from .ctxvars import ROOT_OBJECTS
 
-    obj = ROOT_OBJECT.get()
-    if obj is not None:
-        write_tree(obj, args.out_filename)
+    objs = ROOT_OBJECTS.get()
+    if objs is not None:
+        write_tree(objs, args.out_filename)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import contextvars
 from .avalue import Transition
 
-ROOT_OBJECT = contextvars.ContextVar("root_context", default=None)
+ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
 FRAME = contextvars.ContextVar[int]("frame", default=0)
@@ -52,7 +52,7 @@ def restore_ctx(ctx):
 
 
 def reset_ctx(ctx):
-    ROOT_OBJECT.set(None)
+    ROOT_OBJECTS.set([])
     CURRENT_NODE.set(None)
     FRAME.set(0)
     TRANSITION.set("step")

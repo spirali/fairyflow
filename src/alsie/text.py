@@ -99,7 +99,8 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
             result["sh_language"] = self.sh_language
         if self.sh_theme is not None:
             result["sh_theme"] = self.sh_theme
+        return result
     
 
-def text():
-    return make_node(Text)
+def text(sh_language=None, sh_theme=None):
+    return make_node(Text, sh_language, sh_theme)

@@ -47,7 +47,7 @@ enum Cmd {
         #[arg(long)]
         token: Option<String>,
 
-        /// Project directory to serve (must contain alsie.toml)
+        /// Project directory to serve (must contain fairyflow.toml)
         directory: PathBuf,
     },
     /// Render all frames from a JSON animation file to PNG images
@@ -125,10 +125,10 @@ async fn main() {
 }
 
 async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
-    let toml_path = directory.join("alsie.toml");
+    let toml_path = directory.join("fairyflow.toml");
     if !toml_path.exists() {
         eprintln!(
-            "error: {} does not contain alsie.toml — run `alsie init {}` first",
+            "error: {} does not contain fairyflow.toml — run `fairyflow init {}` first",
             directory.display(),
             directory.display()
         );
@@ -138,7 +138,7 @@ async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
     let config = match crate::config::ProjectConfig::load(&toml_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("error: failed to load alsie.toml: {e}");
+            eprintln!("error: failed to load fairyflow.toml: {e}");
             std::process::exit(1);
         }
     };
@@ -231,7 +231,7 @@ async fn run_init(directory: PathBuf) {
         std::process::exit(1);
     }
 
-    let files = ["alsie.toml", "scene1.apy", "main.asq"];
+    let files = ["fairyflow.toml", "scene1.ffpy", "main.ffsq"];
     for name in &files {
         let path = directory.join(name);
         if path.exists() {

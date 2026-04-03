@@ -1,4 +1,4 @@
-from alsie import *
+from fairyflow import *
 
 
 def test_svg_image(test_scene):

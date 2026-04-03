@@ -168,10 +168,10 @@ async fn file_save_handler(
 
     let is_config = std::path::Path::new(&params.path)
         .file_name()
-        .map_or(false, |n| n == "alsie.toml");
+        .map_or(false, |n| n == "fairyflow.toml");
 
     if is_config {
-        match ProjectConfig::load(std::path::Path::new("alsie.toml")) {
+        match ProjectConfig::load(std::path::Path::new("fairyflow.toml")) {
             Ok(new_cfg) => {
                 renderer::Resources::get().load_font_directories(&new_cfg.font_directories);
                 *state.config.lock().unwrap() = new_cfg.clone();

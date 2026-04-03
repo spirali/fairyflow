@@ -1,4 +1,4 @@
-const TOKEN_KEY = 'alsie_token';
+const TOKEN_KEY = 'fairyflow_token';
 let _token: string | null = null;
 
 export function setToken(token: string): void {

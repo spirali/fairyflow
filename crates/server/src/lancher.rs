@@ -56,17 +56,17 @@ pub async fn run_python(
 ) {
     let id = RUN_ID.fetch_add(1, Ordering::Relaxed);
     info!(run_id = id, path = source_path, "run_python started");
-    let tree_path = std::env::temp_dir().join(format!("alsie_{id}_tree.json"));
+    let tree_path = std::env::temp_dir().join(format!("fairyflow_{id}_tree.json"));
 
     let mut cmd = Command::new("python3");
-    cmd.args(["-m", "alsie"]);
+    cmd.args(["-m", "fairyflow"]);
     if let Some(p) = &prologue {
         cmd.arg("--prologue").arg(p);
     }
     cmd.arg(&source_path).arg(&tree_path).arg(fps.to_string());
 
     let mut child = match cmd
-        .env("PYTHONPATH", "crates/alsie/python")
+        .env("PYTHONPATH", "crates/fairyflow/python")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

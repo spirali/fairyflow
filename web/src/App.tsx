@@ -157,7 +157,7 @@ export default function App() {
         if (curIdx >= 0 && tabsRef.current[curIdx]) {
           viewStatesRef.current.set(tabsRef.current[curIdx].path, editor.saveViewState());
         }
-        const lang = path.endsWith('.apy') ? 'python' : undefined;
+        const lang = path.endsWith('.ffpy') ? 'python' : undefined;
         const model = monaco.editor.createModel(content, lang, monaco.Uri.file(path));
         modelsRef.current.set(path, model);
         const newTabs = [...tabsRef.current, { path, isDirty: false }];
@@ -503,7 +503,7 @@ export default function App() {
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       const path = currentFileRef.current;
-      if (!path?.endsWith('.apy')) return;
+      if (!path?.endsWith('.ffpy')) return;
       const code = editorRef.current?.getValue();
       if (!code || !wsRef.current) return;
       fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {

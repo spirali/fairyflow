@@ -20,7 +20,7 @@ function FolderIcon({ open }: { open: boolean }) {
   );
 }
 
-function ApyFileIcon() {
+function FfpyFileIcon() {
   const c = '#8B83F0';
   return (
     <svg width="16" height="16" viewBox="0 0 32 32" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -35,7 +35,7 @@ function ApyFileIcon() {
   );
 }
 
-function AsqFileIcon() {
+function FfsqFileIcon() {
   const c = '#60c0a0';
   return (
     <svg width="16" height="16" viewBox="0 0 32 32" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -61,7 +61,7 @@ function PythonFileIcon() {
   );
 }
 
-function AlsieTomlIcon() {
+function FairyFlowTomlIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <circle cx="8" cy="8" r="6.5" stroke="#c09040" strokeWidth="1.2" />
@@ -90,9 +90,9 @@ function GenericFileIcon() {
 
 function EntryIcon({ entry, open }: { entry: FsEntry; open: boolean }) {
   if (entry.is_dir) return <FolderIcon open={open} />;
-  if (entry.name === 'alsie.toml') return <AlsieTomlIcon />;
-  if (entry.name.endsWith('.apy')) return <ApyFileIcon />;
-  if (entry.name.endsWith('.asq')) return <AsqFileIcon />;
+  if (entry.name === 'fairyflow.toml') return <FairyFlowTomlIcon />;
+  if (entry.name.endsWith('.ffpy')) return <FfpyFileIcon />;
+  if (entry.name.endsWith('.ffsq')) return <FfsqFileIcon />;
   if (entry.name.endsWith('.py')) return <PythonFileIcon />;
   return <GenericFileIcon />;
 }
@@ -156,11 +156,11 @@ function TreeNode({ entry, path, depth, expandedDirs, activeFile, contextPath, o
   );
 }
 
-type DialogKind = 'apy' | 'asq' | 'file' | 'dir';
+type DialogKind = 'ffpy' | 'ffsq' | 'file' | 'dir';
 
 const DIALOG_LABELS: Record<DialogKind, { title: string; placeholder: string; ext?: string }> = {
-  apy: { title: 'New Scene File', placeholder: 'filename.apy', ext: '.apy' },
-  asq: { title: 'New Sequence File', placeholder: 'filename.asq', ext: '.asq' },
+  ffpy: { title: 'New Scene File', placeholder: 'filename.ffpy', ext: '.ffpy' },
+  ffsq: { title: 'New Sequence File', placeholder: 'filename.ffsq', ext: '.ffsq' },
   file: { title: 'New File', placeholder: 'filename' },
   dir: { title: 'New Directory', placeholder: 'directory name' },
 };
@@ -255,7 +255,7 @@ export default function FileTree({ activeFile, onFileClick }: Props) {
       <div className="filetree-header">
         <span className="filetree-header-title">EXPLORER</span>
         <div className="filetree-header-actions">
-          <button className="filetree-action-btn" title="New Scene File (.apy)" onClick={() => setDialog('apy')}>
+          <button className="filetree-action-btn" title="New Scene File (.ffpy)" onClick={() => setDialog('ffpy')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="2" y="1" width="9" height="14" rx="1" fill="#8B83F0" opacity="0.7"/>
               <path d="M11 1l3 3v11H5v-1h8V4l-2-3z" fill="#8B83F0"/>
@@ -264,7 +264,7 @@ export default function FileTree({ activeFile, onFileClick }: Props) {
               <line x1="6" y1="13" x2="10" y2="13" stroke="white" strokeWidth="1.4"/>
             </svg>
           </button>
-          <button className="filetree-action-btn" title="New Sequence File (.asq)" onClick={() => setDialog('asq')}>
+          <button className="filetree-action-btn" title="New Sequence File (.ffsq)" onClick={() => setDialog('ffsq')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="2" y="1" width="9" height="14" rx="1" fill="#60c0a0" opacity="0.7"/>
               <path d="M11 1l3 3v11H5v-1h8V4l-2-3z" fill="#60c0a0"/>

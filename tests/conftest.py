@@ -5,8 +5,8 @@ import subprocess
 import time
 import sys
 import os
-from alsie import scene
-from alsie.serializer import create_export
+from fairyflow import scene
+from fairyflow.serializer import create_export
 import numpy as np
 from PIL import Image
 
@@ -19,8 +19,8 @@ SERVER_STARTUP_TIMEOUT = 10  # seconds
 CURRENT_DIR = ROOT / "tests" / "current"
 CHECK_DIR = ROOT / "tests" / "check"
 
-ALSIE_TEST_CREATE = int(os.environ.get("ALSIE_TEST_CREATE", False))
-ALSIE_TEST_UPDATE = int(os.environ.get("ALSIE_TEST_UPDATE", False))
+FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
+FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
 
 
 def pytest_sessionstart(session):
@@ -32,7 +32,7 @@ def pytest_sessionstart(session):
 
 @pytest.fixture(scope="session")
 def server_port():
-    """Build (if needed) and start the Alsie server on a free port.
+    """Build (if needed) and start the FairyFlow server on a free port.
     Killed automatically after the test session."""
     # Pick a free port by binding briefly and releasing it
     with socket.socket() as s:
@@ -116,10 +116,10 @@ def test_scene(request):
     subprocess.run(cmd, check=True, cwd=ROOT)
 
     check_frames_dir = CHECK_DIR / request.node.name / "frames"
-    if ALSIE_TEST_UPDATE and check_frames_dir.is_dir():
+    if FAIRYFLOW_TEST_UPDATE and check_frames_dir.is_dir():
         shutil.rmtree(check_frames_dir)
     if not check_frames_dir.is_dir():
-        if ALSIE_TEST_CREATE or ALSIE_TEST_UPDATE:
+        if FAIRYFLOW_TEST_CREATE or FAIRYFLOW_TEST_UPDATE:
             shutil.copytree(frames_dir, check_frames_dir)
             pngs = list(check_frames_dir.glob("*.png"))
             if pngs:
@@ -127,7 +127,7 @@ def test_scene(request):
             return
         else:
             raise Exception(
-                f"Check directory '{check_frames_dir}' not found; run with ALSIE_TEST_CREATE=1 to create the snapshot"
+                f"Check directory '{check_frames_dir}' not found; run with FAIRYFLOW_TEST_CREATE=1 to create the snapshot"
             )
 
     current_frames = sorted(frames_dir.glob("*.png"))

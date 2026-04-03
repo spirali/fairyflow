@@ -102,7 +102,7 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let temp_dir = std::env::temp_dir().join(format!("alsie-export-{ts}"));
+    let temp_dir = std::env::temp_dir().join(format!("fairyflow-export-{ts}"));
     if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
         send(&tx, serde_json::json!({"type":"error","message": format!("Failed to create temp dir: {e}")}));
         return;

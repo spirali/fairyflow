@@ -1,0 +1,5 @@
+/* Remove only the gradient Chrome overlays into the video area, while keeping
+   the controls panel itself visible with its default dark background. */
+video::-webkit-media-controls-panel {
+  background-image: none !important;
+}

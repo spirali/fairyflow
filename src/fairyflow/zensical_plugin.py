@@ -205,12 +205,13 @@ def _do_frame(source: str, highlighted: str, frame: int) -> str:
             return _error_html(highlighted, str(exc))
 
     b64 = base64.b64encode(cached_png.read_bytes()).decode("ascii")
+    label = '<p style="margin:.5em 0 .2em;font-style:italic;color:#666">Output image</p>'
     img = (
         f'<img src="data:image/png;base64,{b64}" '
         f'alt="fairyflow frame {frame}" '
-        f'style="max-width:100%;display:block;margin:.5em 0;border:1px solid black" />'
+        f'style="max-width:100%;display:block;margin:0 0 .5em;border:1px solid black" />'
     )
-    return f"{highlighted}\n{img}"
+    return f"{highlighted}\n{label}\n{img}"
 
 
 def _do_video(source: str, highlighted: str) -> str:
@@ -224,11 +225,16 @@ def _do_video(source: str, highlighted: str) -> str:
         except Exception as exc:
             return _error_html(highlighted, str(exc))
 
+    # Root-relative URL: docs/assets/ffpy/hash.mp4 → /assets/ffpy/hash.mp4.
+    # A plain relative path would break on pages served under a subdirectory
+    # (use_directory_urls=True), so we always use an absolute site-root path.
     rel = output_mp4.relative_to(_project_root() / "docs")
+    url = "/" + rel.as_posix()
+    label = '<p style="margin:.5em 0 .2em;font-style:italic;color:#666">Output video</p>'
     video = (
-        f'<video controls style="max-width:100%;display:block;margin:.5em 0">'
-        f'<source src="{rel}" type="video/mp4">'
+        f'<video controls style="max-width:100%;display:block;margin:0 0 .5em;border:1px solid black">'
+        f'<source src="{url}" type="video/mp4">'
         f"Your browser does not support the video tag."
         f"</video>"
     )
-    return f"{highlighted}\n{video}"
+    return f"{highlighted}\n{label}\n{video}"

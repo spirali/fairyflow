@@ -86,8 +86,7 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
         Some(i) => SceneSelection::Single(i as usize),
         None => SceneSelection::All,
     };
-    let key_frames = anim.key_frames(sel);
-    let frame_count = key_frames.last().map(|f| f.as_u32() + 1).unwrap_or(1);
+    let frame_count = anim.frame_count(sel);
     let last = frame_count.saturating_sub(1);
     let from = params.from_frame.unwrap_or(0).min(last);
     let to = params.to_frame.unwrap_or(last).min(last);

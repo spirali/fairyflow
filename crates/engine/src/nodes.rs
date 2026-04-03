@@ -470,6 +470,7 @@ pub struct SceneDef {
     #[serde(flatten)]
     pub size: Size,
     pub fill_color: TopLevelExpr,
+    pub frames: u32,
     #[serde(default)]
     pub children: Vec<NodeId>,
 }

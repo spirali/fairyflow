@@ -22,6 +22,7 @@ use tracing::{debug, info, warn};
 pub(crate) struct AppState {
     pub(crate) animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
     config: Arc<Mutex<ProjectConfig>>,
+    config_tx: broadcast::Sender<ProjectConfig>,
     token: Arc<String>,
 }
 
@@ -50,6 +51,23 @@ enum ClientMsg {
     Terminate,
 }
 
+fn print_banner(port: u16, token: &str) {
+    // ANSI escape codes
+    let r    = "\x1b[0m";    // reset
+    let b    = "\x1b[1m";    // bold
+    let pink = "\x1b[95m";   // bright magenta / pink
+    let blue = "\x1b[94m";   // bright blue
+    let gray = "\x1b[90m";   // dark gray (dim)
+
+    // FAIRY — pink → magenta → cyan
+    println!();
+    println!("  {b}{pink}Fairy{r}");
+    println!("  {b}{blue}   Flow{r}");
+    println!();
+    println!("  {b}       http://localhost:{port}/{r}{gray}?token={token}{r}");
+    println!();
+}
+
 pub async fn start_service(directory: &std::path::Path, port: u16, config: ProjectConfig, token: String) {
     info!(directory = %directory.display(), "serving project");
 
@@ -61,9 +79,11 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         }
     };
 
+    let (config_tx, _) = broadcast::channel::<ProjectConfig>(4);
     let state = AppState {
         animation: Arc::new(Mutex::new(None)),
         config: Arc::new(Mutex::new(config)),
+        config_tx,
         token: Arc::new(token.clone()),
     };
 
@@ -86,8 +106,8 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    info!("http://localhost:{}/?token={}", port, token);
-    println!("http://localhost:{}/?token={}", port, token);
+    print_banner(port, &token);
+    info!("listening at http://localhost:{}/?token={}", port, token);
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -154,7 +174,8 @@ async fn file_save_handler(
         match ProjectConfig::load(std::path::Path::new("alsie.toml")) {
             Ok(new_cfg) => {
                 renderer::Resources::get().load_font_directories(&new_cfg.font_directories);
-                *state.config.lock().unwrap() = new_cfg;
+                *state.config.lock().unwrap() = new_cfg.clone();
+                state.config_tx.send(new_cfg).ok();
             }
             Err(e) => {
                 return (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response();
@@ -464,6 +485,14 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
 
     let (out_tx, mut out_rx) = mpsc::channel::<BuildProcessMsg>(64);
     let (kill_tx, _) = broadcast::channel::<()>(4);
+    let mut config_rx = state.config_tx.subscribe();
+
+    // Send current config immediately on connect.
+    let initial_fps = state.config.lock().unwrap().fps;
+    let init_msg = serde_json::to_string(&BuildProcessMsg::Config { fps: initial_fps }).unwrap();
+    if socket.send(Message::Text(init_msg.into())).await.is_err() {
+        return;
+    }
 
     loop {
         tokio::select! {
@@ -477,11 +506,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                                 debug!(killed_receivers = n, "sent kill signal");
                                 let tx = out_tx.clone();
                                 let kill_rx = kill_tx.subscribe();
-                                let prologue = state.config.lock().unwrap()
-                                    .prologue.as_deref()
+                                let cfg = state.config.lock().unwrap();
+                                let prologue = cfg.prologue.as_deref()
                                     .and_then(|p| std::env::current_dir().ok().map(|d| d.join(p)));
+                                let fps = cfg.fps;
+                                drop(cfg);
                                 debug!("subscribed new kill_rx, spawning run_python");
-                                tokio::spawn(run_python(path, prologue, tx, kill_rx, state.animation.clone()));
+                                tokio::spawn(run_python(path, prologue, fps, tx, kill_rx, state.animation.clone()));
                             }
                             Ok(ClientMsg::Terminate) => {
                                 info!("received Terminate request");
@@ -499,6 +530,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             }
             Some(msg) = out_rx.recv() => {
                 let kind = match &msg {
+                    BuildProcessMsg::Config { .. } => "config",
                     BuildProcessMsg::Output { .. } => "output",
                     BuildProcessMsg::Error  { .. } => "error",
                     BuildProcessMsg::Tree   { .. } => "tree",
@@ -506,6 +538,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 };
                 debug!(kind, "forwarding message to WebSocket");
                 let text = serde_json::to_string(&msg).unwrap();
+                if socket.send(Message::Text(text.into())).await.is_err() {
+                    warn!("WebSocket send failed - exiting handle_socket");
+                    break;
+                }
+            }
+            Ok(cfg) = config_rx.recv() => {
+                let text = serde_json::to_string(&BuildProcessMsg::Config { fps: cfg.fps }).unwrap();
                 if socket.send(Message::Text(text.into())).await.is_err() {
                     warn!("WebSocket send failed - exiting handle_socket");
                     break;

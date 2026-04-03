@@ -19,8 +19,7 @@ pub async fn render_anim_to_dir(
         std::process::exit(1);
     }
 
-    let key_frames = anim.key_frames(SceneSelection::All);
-    let frame_count = key_frames.last().map(|f| f.as_u32() + 1).unwrap_or(1);
+    let frame_count = anim.frame_count(SceneSelection::All);
     let frames_to_render: Vec<u32> = frames.unwrap_or_else(|| (0..frame_count).collect());
     info!(count = frames_to_render.len(), "rendering frames");
 

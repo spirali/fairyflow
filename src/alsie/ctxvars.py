@@ -1,5 +1,6 @@
 import contextvars
 from .avalue import Transition
+from . import config
 
 ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 
@@ -8,8 +9,28 @@ FRAME = contextvars.ContextVar[int]("frame", default=0)
 TRANSITION = contextvars.ContextVar[Transition]("transition", default="step")
 
 
-def frame(frame: int):
+def set_frame(frame: int):
+    node = CURRENT_NODE.get()
+    if node:
+        node.get_scene().update_max_frame(frame)
     FRAME.set(frame)
+
+
+def jump_frames(frames: int):
+    set_frame(FRAME.get() + frames)
+
+
+def set_time(time: float):
+    set_frame(int(round(config.FPS * time)))
+
+
+def jump_time(time: float):
+    jump_frames(int(round(config.FPS * time)))
+
+
+def cue():
+    node = CURRENT_NODE.get()
+    node.get_scene().cues.add(get_frame())
 
 
 def transition(tr: Transition):
@@ -38,17 +59,6 @@ def set_current_node(node):
 
 def get_current_node():
     return CURRENT_NODE.get()
-
-
-def store_ctx():
-    return CURRENT_NODE.get(), FRAME.get(), TRANSITION.get()
-
-
-def restore_ctx(ctx):
-    node, frame, tr = ctx
-    CURRENT_NODE.set(node)
-    FRAME.set(frame)
-    TRANSITION.set(tr)
 
 
 def reset_ctx(ctx):

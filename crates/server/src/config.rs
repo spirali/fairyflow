@@ -2,6 +2,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProjectConfig {
+    #[serde(default = "default_fps")]
+    pub fps: u32,
     pub prologue: Option<String>,
     #[serde(default)]
     pub font_directories: Vec<String>,
@@ -12,4 +14,8 @@ impl ProjectConfig {
         let content = std::fs::read_to_string(path)?;
         Ok(toml::from_str(&content)?)
     }
+}
+
+fn default_fps() -> u32 {
+    24
 }

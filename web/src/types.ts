@@ -96,6 +96,7 @@ export interface SceneInfo {
 }
 
 export type ServerMsg =
+  | { type: 'config'; fps: number }
   | { type: 'file'; content: string }
   | { type: 'output'; text: string }
   | { type: 'error'; text: string }

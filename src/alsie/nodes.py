@@ -15,11 +15,10 @@ from .exprs import (
 )
 from .ctxvars import (
     get_current_node,
-    store_ctx,
-    restore_ctx,
     ROOT_OBJECTS,
     set_current_node,
 )
+from .config import DEFAULT_SCENE_CONFIG
 
 
 class Node(AnimatedObject):
@@ -73,6 +72,9 @@ class Node(AnimatedObject):
         if self._parent is None:
             raise Exception("Node does not have parent")
         return self._parent
+    
+    def get_scene(self):
+        return self._parent.get_scene()
 
     def __repr__(self):
         return f"<{self.kind} id={self._id}>"
@@ -243,12 +245,12 @@ class ContextManagerMixin:
 
     def __enter__(self):
         assert self._ctx is None
-        self._ctx = store_ctx()
+        self._ctx = get_current_node()
         set_current_node(self)
         return self
 
     def __exit__(self, *args):
-        restore_ctx(self._ctx)
+        set_current_node(self._ctx)
         self._ctx = None
 
 
@@ -317,14 +319,22 @@ class Group(
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
-    def __init__(self, width, height):
+    def __init__(self, width, height, color):
         super().__init__(None, 0)
         self._init_context_manager()
+        if width is None:
+            width = DEFAULT_SCENE_CONFIG["width"]
+        if height is None:
+            height = DEFAULT_SCENE_CONFIG["height"]
+        if color is None:
+            color = DEFAULT_SCENE_CONFIG["color"]
         self._init_size(width, height)
-        self._add_attr("fill_color", Color.parse("white"))
+        self._add_attr("fill_color", color)
         self._id_counter = 0
         self._layout = CENTERING_LAYOUT
-        self.name = None
+        self.name = None        
+        self.max_frame = 0
+        self.cues = set()
 
     def __enter__(self):
         super().__enter__()
@@ -340,7 +350,16 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def serialize(self, serializer):
         result = super().serialize(serializer)
         result["name"] = self.name
+        result["frames"] = self.max_frame + 1
+        if self.cues:
+            result["cues"] = sorted(self.cues)
         return result
+    
+    def get_scene(self):
+        return self
+    
+    def update_max_frame(self, frame):
+        self.max_frame = max(self.max_frame, frame)
 
 
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
@@ -505,8 +524,8 @@ def make_node(cls, *args):
     return item
 
 
-def scene(width: int, height: int):
-    scene = Scene(width, height)
+def scene(width: int | None = None, height: int | None = None, color: str | None = None):
+    scene = Scene(width, height, color)
     ROOT_OBJECTS.get().append(scene)
     return scene
 

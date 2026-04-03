@@ -21,6 +21,9 @@ pub struct SceneInfoMsg {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum BuildProcessMsg {
+    Config {
+        fps: u32,
+    },
     Output {
         text: String,
     },
@@ -42,6 +45,7 @@ pub enum BuildProcessMsg {
 pub async fn run_python(
     source_path: String,
     prologue: Option<std::path::PathBuf>,
+    fps: u32,
     tx: mpsc::Sender<BuildProcessMsg>,
     mut kill_rx: broadcast::Receiver<()>,
     animation_cache: Arc<Mutex<Option<Arc<AnimationDef>>>>,
@@ -55,7 +59,7 @@ pub async fn run_python(
     if let Some(p) = &prologue {
         cmd.arg("--prologue").arg(p);
     }
-    cmd.arg(&source_path).arg(&tree_path);
+    cmd.arg(&source_path).arg(&tree_path).arg(fps.to_string());
 
     let mut child = match cmd
         .env("PYTHONPATH", "crates/alsie/python")
@@ -136,7 +140,7 @@ pub async fn run_python(
             Ok(json_str) => match AnimationDef::from_str(&json_str) {
                 Ok(anim) => {
                     let key_frames: Vec<_> = anim.key_frames(SceneSelection::All).iter().map(|f| f.as_u32()).collect();
-                    let frame_count = key_frames.last().copied().unwrap_or(0) + 1;
+                    let frame_count = anim.frame_count(SceneSelection::All);
                     let scenes: Vec<SceneInfoMsg> = anim.scene_infos().into_iter().map(|si| SceneInfoMsg {
                         name: si.name,
                         key_frames: si.key_frames,

@@ -126,10 +126,7 @@ impl SingleScene {
     }
 
     fn frame_count(&self) -> u32 {
-        self.key_frames()
-            .last()
-            .map(|f| f.as_u32() + 1)
-            .unwrap_or(1)
+        self.scene.frames
     }
 }
 
@@ -183,14 +180,30 @@ impl AnimationDef {
             .iter()
             .map(|s| {
                 let kf = s.key_frames();
-                let fc = kf.last().map(|f| f.as_u32() + 1).unwrap_or(1);
                 SceneInfo {
                     name: s.name.clone(),
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
-                    frame_count: fc,
+                    frame_count: s.frame_count(),
                 }
             })
             .collect()
+    }
+
+    /// Total frame count for the given selection.
+    pub fn frame_count(&self, selection: SceneSelection) -> u32 {
+        match selection {
+            SceneSelection::Single(i) => {
+                let i = i.min(self.scenes.len().saturating_sub(1));
+                self.scenes[i].frame_count()
+            }
+            SceneSelection::All => {
+                if self.scenes.is_empty() {
+                    return 1;
+                }
+                let last = self.scenes.len() - 1;
+                self.frame_offsets[last] + self.scenes[last].frame_count()
+            }
+        }
     }
 
     pub fn scene_count(&self) -> usize {

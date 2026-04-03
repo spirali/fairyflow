@@ -56,7 +56,6 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   const [fps, setFps] = useState(24);
-  const [fpsInput, setFpsInput] = useState('24');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
@@ -264,7 +263,9 @@ export default function App() {
 
       ws.onmessage = (e: MessageEvent<string>) => {
         const msg = JSON.parse(e.data) as ServerMsg;
-        if (msg.type === 'output') {
+        if (msg.type === 'config') {
+          setFps(msg.fps);
+        } else if (msg.type === 'output') {
           setLines((prev) => [...prev, { kind: 'out', text: msg.text }]);
         } else if (msg.type === 'error') {
           setLines((prev) => [...prev, { kind: 'err', text: msg.text }]);
@@ -983,25 +984,6 @@ export default function App() {
                     >
                       {isPrefetching ? '…' : isPlaying ? '■' : '▶ Play'}
                     </button>
-
-                    <label className="tl-fps-label">
-                      FPS
-                      <input
-                        type="number"
-                        className="tl-fps-input"
-                        value={fpsInput}
-                        min={1}
-                        max={120}
-                        disabled={isActive}
-                        onChange={e => setFpsInput(e.target.value)}
-                        onBlur={e => {
-                          const n = parseInt(e.target.value, 10);
-                          const clamped = Number.isFinite(n) && n >= 1 ? Math.min(120, n) : 1;
-                          setFps(clamped);
-                          setFpsInput(String(clamped));
-                        }}
-                      />
-                    </label>
 
                     <span className="tl-sep" />
 

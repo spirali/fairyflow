@@ -9,6 +9,7 @@ def main():
     parser.add_argument("--prologue", metavar="filename")
     parser.add_argument("source_filename")
     parser.add_argument("out_filename")
+    parser.add_argument("fps", type=int)
     args = parser.parse_args()
 
     context = {}

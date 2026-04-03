@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { setToken, loadToken, withToken } from './auth';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
 import type { PanelSize } from 'react-resizable-panels';
 import Editor from '@monaco-editor/react';
@@ -17,6 +18,27 @@ interface Tab { path: string; isDirty: boolean }
 interface RenderedFrameResponse { n: number; png: string }
 
 export default function App() {
+  // ── auth ──────────────────────────────────────────────────────────────────
+  const [authStatus, setAuthStatus] = useState<'pending' | 'ok' | 'error'>('pending');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      setToken(urlToken);
+      params.delete('token');
+      const newSearch = params.toString();
+      history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+    } else {
+      loadToken();
+    }
+    const tok = loadToken();
+    if (!tok) { setAuthStatus('error'); return; }
+    fetch(withToken('/ls'))
+      .then(r => { setAuthStatus(r.status === 401 ? 'error' : 'ok'); })
+      .catch(() => setAuthStatus('error'));
+  }, []);
+
   // ── scene state ──────────────────────────────────────────────────────────
   const [sceneData, setSceneData] = useState<SceneData | null>(null);
   const [prevSceneData, setPrevSceneData] = useState<SceneData | null>(null);
@@ -123,7 +145,7 @@ export default function App() {
     const existing = tabsRef.current.findIndex(t => t.path === path);
     if (existing !== -1) { switchToTab(existing); return; }
 
-    fetch(`/file?path=${encodeURIComponent(path)}`)
+    fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
       .then(r => r.ok ? r.text() : null)
       .then(content => {
         if (content === null) return;
@@ -225,12 +247,13 @@ export default function App() {
 
   // ── websocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (authStatus !== 'ok') return;
     let dead = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const MAX_RETRIES = 3;
 
     function connect() {
-      const ws = new WebSocket(`ws://${window.location.host}/ws`);
+      const ws = new WebSocket(withToken(`ws://${window.location.host}/ws`));
 
       ws.onopen = () => {
         if (dead) { ws.close(); return; }
@@ -283,7 +306,7 @@ export default function App() {
       if (retryTimer !== null) clearTimeout(retryTimer);
       wsRef.current?.close();
     };
-  }, []);
+  }, [authStatus]);
 
   // ── auto-scroll console ────────────────────────────────────────────────────
   useEffect(() => {
@@ -343,7 +366,7 @@ export default function App() {
       const key = `${runId}-${sceneCacheKey}-${n}`;
       const cached = treeCacheRef.current.get(key);
       if (cached) return cached;
-      const r = await fetch(`/tree/${n}?v=${runId}${sceneParam}`, { signal: ctrl.signal });
+      const r = await fetch(withToken(`/tree/${n}?v=${runId}${sceneParam}`), { signal: ctrl.signal });
       if (!r.ok) return null;
       const data = await r.json() as SceneData;
       treeCacheRef.current.set(key, data);
@@ -369,7 +392,7 @@ export default function App() {
     if (imageCacheRef.current.has(key)) return; // already cached
 
     const ctrl = new AbortController();
-    fetch(`/frame/${frame}?scale=${sk}&v=${runId}${sceneParam}`, { signal: ctrl.signal })
+    fetch(withToken(`/frame/${frame}?scale=${sk}&v=${runId}${sceneParam}`), { signal: ctrl.signal })
       .then(r => r.ok ? r.blob() : null)
       .then(blob => {
         if (!blob || ctrl.signal.aborted) return;
@@ -392,7 +415,7 @@ export default function App() {
   useEffect(() => {
     if (selectedNid == null) { setNodeBounds(null); return; }
     const ctrl = new AbortController();
-    fetch(`/node/${selectedNid}?frame=${frame}${sceneParam}`, { signal: ctrl.signal })
+    fetch(withToken(`/node/${selectedNid}?frame=${frame}${sceneParam}`), { signal: ctrl.signal })
       .then(r => r.ok ? r.json() as Promise<NodeBounds> : null)
       .then(data => setNodeBounds(data))
       .catch(() => {});
@@ -437,7 +460,7 @@ export default function App() {
       if (!path?.endsWith('.apy')) return;
       const code = editorRef.current?.getValue();
       if (!code || !wsRef.current) return;
-      fetch(`/file?path=${encodeURIComponent(path)}`, {
+      fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         body: code,
@@ -451,7 +474,7 @@ export default function App() {
       const path = currentFileRef.current;
       if (!path) return;
       const content = editorRef.current?.getValue() ?? '';
-      fetch(`/file?path=${encodeURIComponent(path)}`, {
+      fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         body: content,
@@ -535,7 +558,7 @@ export default function App() {
         await Promise.all([
           // Images: one bulk request
           uncachedImages.length > 0
-            ? fetch(`/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}${sceneParam}`)
+            ? fetch(withToken(`/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}${sceneParam}`))
                 .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<RenderedFrameResponse[]>; })
                 .then(data => {
                   for (const { n, png } of data) storeCachedFrame(n, sk, png);
@@ -544,7 +567,7 @@ export default function App() {
             : Promise.resolve(),
           // Trees: one bulk request
           uncachedTrees.length > 0
-            ? fetch(`/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}${sceneParam}`)
+            ? fetch(withToken(`/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}${sceneParam}`))
                 .then(r => r.ok ? r.json() as Promise<Array<{ n: number; scene: SceneData }>> : null)
                 .then(data => {
                   if (!data) return;
@@ -645,7 +668,7 @@ export default function App() {
 
     let finished = false;
     try {
-      const response = await fetch('/export-video', {
+      const response = await fetch(withToken('/export-video'), {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body),
@@ -700,7 +723,7 @@ export default function App() {
   // ── image src ──────────────────────────────────────────────────────────────
   const scaleKey = canvasLayout?.serverScale.toFixed(3) ?? '1.000';
   const imgSrc = imageCacheRef.current.get(cacheKey(frame, scaleKey))
-    ?? (canvasLayout ? `/frame/${frame}?scale=${scaleKey}&v=${runId}${sceneParam}` : '');
+    ?? (canvasLayout ? withToken(`/frame/${frame}?scale=${scaleKey}&v=${runId}${sceneParam}`) : '');
 
   const isActive = isPlaying || isPrefetching;
 
@@ -773,6 +796,16 @@ export default function App() {
       </div>
     );
   }
+
+  if (authStatus === 'pending') return null;
+  if (authStatus === 'error') return (
+    <div className="ws-overlay">
+      <div className="ws-error-box">
+        <div className="ws-error-title">Access denied</div>
+        <div className="ws-error-body">Invalid or missing token. Open the URL printed by the server.</div>
+      </div>
+    </div>
+  );
 
   return (
     <>

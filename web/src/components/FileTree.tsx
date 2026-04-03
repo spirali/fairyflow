@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { withToken } from '../auth';
 
 export interface FsEntry {
   name: string;
@@ -179,7 +180,7 @@ export default function FileTree({ activeFile, onFileClick }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchTree = () => {
-    fetch('/ls')
+    fetch(withToken('/ls'))
       .then(r => r.json())
       .then(d => setTree(d as FsEntry[]))
       .catch(() => {});
@@ -230,7 +231,7 @@ export default function FileTree({ activeFile, onFileClick }: Props) {
     const endpoint = dialog === 'dir' ? '/new-dir' : '/new-file';
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(withToken(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dir, name }),

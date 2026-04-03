@@ -2,9 +2,10 @@ use crate::config::ProjectConfig;
 use crate::lancher::{BuildProcessMsg, run_python};
 use axum::Router;
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Path, Query, State, WebSocketUpgrade};
+use axum::extract::{Path, Query, Request, State, WebSocketUpgrade};
 use axum::http::{StatusCode, header};
-use axum::response::IntoResponse;
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use engine::{AnimationDef, FrameId, SceneSelection};
@@ -21,6 +22,25 @@ use tracing::{debug, info, warn};
 pub(crate) struct AppState {
     pub(crate) animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
     config: Arc<Mutex<ProjectConfig>>,
+    token: Arc<String>,
+}
+
+#[derive(Deserialize)]
+struct TokenQuery {
+    token: Option<String>,
+}
+
+async fn auth_layer(
+    State(state): State<AppState>,
+    Query(params): Query<TokenQuery>,
+    req: Request,
+    next: Next,
+) -> Response {
+    if params.token.as_deref() == Some(state.token.as_str()) {
+        next.run(req).await
+    } else {
+        StatusCode::UNAUTHORIZED.into_response()
+    }
 }
 
 #[derive(Deserialize)]
@@ -30,7 +50,7 @@ enum ClientMsg {
     Terminate,
 }
 
-pub async fn start_service(directory: &std::path::Path, port: u16, config: ProjectConfig) {
+pub async fn start_service(directory: &std::path::Path, port: u16, config: ProjectConfig, token: String) {
     info!(directory = %directory.display(), "serving project");
 
     let web_dist = match std::fs::canonicalize("../web/dist") {
@@ -44,6 +64,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
     let state = AppState {
         animation: Arc::new(Mutex::new(None)),
         config: Arc::new(Mutex::new(config)),
+        token: Arc::new(token.clone()),
     };
 
     let app = Router::new()
@@ -58,14 +79,15 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/trees", get(trees_handler))
         .route("/node/{id}", get(node_handler))
         .route("/export-video", post(crate::export::export_handler))
+        .route_layer(middleware::from_fn_with_state(state.clone(), auth_layer))
         .fallback_service(ServeDir::new(web_dist))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    info!("http://localhost:{}", port);
-    println!("http://localhost:{}", port);
+    info!("http://localhost:{}/?token={}", port, token);
+    println!("http://localhost:{}/?token={}", port, token);
 
     axum::serve(listener, app).await.unwrap();
 }

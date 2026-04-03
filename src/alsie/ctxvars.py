@@ -8,12 +8,12 @@ FRAME = contextvars.ContextVar[int]("frame", default=0)
 TRANSITION = contextvars.ContextVar[Transition]("transition", default="step")
 
 
-def transition(tr: Transition):
-    TRANSITION.set(tr)
-
-
 def frame(frame: int):
     FRAME.set(frame)
+
+
+def transition(tr: Transition):
+    TRANSITION.set(tr)
 
 
 def step():

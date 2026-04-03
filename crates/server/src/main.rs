@@ -43,6 +43,10 @@ enum Cmd {
         #[arg(short, long, default_value_t = 3000)]
         port: u16,
 
+        /// Authentication token (default: randomly generated)
+        #[arg(long)]
+        token: Option<String>,
+
         /// Project directory to serve (must contain alsie.toml)
         directory: PathBuf,
     },
@@ -95,7 +99,7 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Cmd::Serve { port, directory } => run_serve(port, directory).await,
+        Cmd::Serve { port, token, directory } => run_serve(port, token, directory).await,
         Cmd::RenderJson {
             json_path,
             output_dir,
@@ -120,7 +124,7 @@ async fn main() {
     }
 }
 
-async fn run_serve(port: u16, directory: PathBuf) {
+async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
     let toml_path = directory.join("alsie.toml");
     if !toml_path.exists() {
         eprintln!(
@@ -150,7 +154,16 @@ async fn run_serve(port: u16, directory: PathBuf) {
 
     info!(directory = %directory.display(), "serving project");
 
-    start_service(&directory, port, config).await;
+    let token = token.unwrap_or_else(|| {
+        use rand::Rng;
+        rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect()
+    });
+
+    start_service(&directory, port, config, token).await;
 }
 
 fn parse_resolution(s: &str) -> Result<(u32, u32), String> {

@@ -1,8 +1,10 @@
 from typing import Union, Literal
 import os
 
+
 from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
+from .info import get_info
 from .aobject import AnimatedObject, get_frame
 from .color import Color
 from .exprs import (
@@ -24,11 +26,12 @@ from .config import DEFAULT_SCENE_CONFIG
 class Node(AnimatedObject):
     def __init__(self, parent: Union[None, "Group"], frame: int):
         super().__init__(frame)
-        self._parent = parent
+        self._parent = parent        
         if parent:
             self._id = parent._new_id()
         else:
-            self._id = 0
+            self._id = 0            
+        self.info = get_info(self._id)
 
     def parent_chain(self) -> list["Group"]:
         result = []
@@ -319,7 +322,7 @@ class Group(
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
-    def __init__(self, width, height, color):
+    def __init__(self, width, height, color, cue_at_end):
         super().__init__(None, 0)
         self._init_context_manager()
         if width is None:
@@ -328,12 +331,15 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
             height = DEFAULT_SCENE_CONFIG["height"]
         if color is None:
             color = DEFAULT_SCENE_CONFIG["color"]
+        if cue_at_end is None:
+            cue_at_end = DEFAULT_SCENE_CONFIG["cue_at_end"]            
         self._init_size(width, height)
         self._add_attr("fill_color", color)
         self._id_counter = 0
         self._layout = CENTERING_LAYOUT
         self.name = None        
         self.max_frame = 0
+        self.cue_at_end = cue_at_end
         self.cues = set()
 
     def __enter__(self):
@@ -351,6 +357,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         result = super().serialize(serializer)
         result["name"] = self.name
         result["frames"] = self.max_frame + 1
+        if self.cue_at_end:
+            self.cues.add(self.max_frame)
         if self.cues:
             result["cues"] = sorted(self.cues)
         return result
@@ -524,8 +532,8 @@ def make_node(cls, *args):
     return item
 
 
-def scene(width: int | None = None, height: int | None = None, color: str | None = None):
-    scene = Scene(width, height, color)
+def scene(width: int | None = None, height: int | None = None, color: str | None = None, cue_at_end: bool | None = None):
+    scene = Scene(width, height, color, cue_at_end)
     ROOT_OBJECTS.get().append(scene)
     return scene
 

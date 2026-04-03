@@ -472,5 +472,7 @@ pub struct SceneDef {
     pub fill_color: TopLevelExpr,
     pub frames: u32,
     #[serde(default)]
+    pub cues: Vec<u32>,
+    #[serde(default)]
     pub children: Vec<NodeId>,
 }

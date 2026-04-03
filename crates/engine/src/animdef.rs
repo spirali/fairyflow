@@ -20,6 +20,8 @@ pub struct SceneInfo {
     pub name: String,
     /// Key frames within this scene (local frame numbers, 0-based).
     pub key_frames: Vec<u32>,
+    /// Cue frames within this scene (local frame numbers, 0-based).
+    pub cue_frames: Vec<u32>,
     pub frame_count: u32,
 }
 
@@ -30,6 +32,7 @@ struct SingleScene {
     scene: SceneDef,
     nodes: HashMap<NodeId, Node>,
     animated_values: HashMap<AvId, AnimatedValue>,
+    info: serde_json::Value,
 }
 
 // ──────────────────────────────── Public type ─────────────────────────────────
@@ -47,6 +50,7 @@ struct RawAnimationDef {
     scene: SceneDef,
     nodes: Vec<Node>,
     animated_values: Vec<AnimatedValue>,
+    info: serde_json::Value,
 }
 
 fn check_no_cycles(
@@ -105,6 +109,7 @@ impl SingleScene {
             scene: raw.scene,
             nodes,
             animated_values,
+            info: raw.info,
         })
     }
 
@@ -183,6 +188,7 @@ impl AnimationDef {
                 SceneInfo {
                     name: s.name.clone(),
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
+                    cue_frames: s.scene.cues.clone(),
                     frame_count: s.frame_count(),
                 }
             })

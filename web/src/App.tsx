@@ -44,6 +44,7 @@ export default function App() {
   const [prevSceneData, setPrevSceneData] = useState<SceneData | null>(null);
   const [frames, setFrames] = useState(1);
   const [keyFrames, setKeyFrames] = useState<number[]>([]);
+  const [cueFrames, setCueFrames] = useState<number[]>([]);
   const [frame, setFrame] = useState(0);
   const [runId, setRunId] = useState(0);
   const [scenes, setScenes] = useState<SceneInfo[]>([]);
@@ -56,6 +57,7 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   const [fps, setFps] = useState(24);
+  const [stopOnCue, setStopOnCue] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
@@ -238,8 +240,12 @@ export default function App() {
   // ── derived ───────────────────────────────────────────────────────────────
   const maxFrame = frames - 1;
   const keyFrameSet = new Set(keyFrames);
+  const cueFrameSet = new Set(cueFrames);
   const prevKeyFrame: number | null = keyFrames.filter(kf => kf < frame).at(-1) ?? null;
   const nextKeyFrame: number | null = keyFrames.find(kf => kf > frame) ?? null;
+  const navCueFrames = cueFrames[0] === 0 ? cueFrames : [0, ...cueFrames];
+  const prevCueFrame: number | null = navCueFrames.filter(cf => cf < frame).at(-1) ?? null;
+  const nextCueFrame: number | null = navCueFrames.find(cf => cf > frame) ?? null;
   const hasScene = sceneData != null;
   const sceneWidth  = sceneData?.width  ?? null;
   const sceneHeight = sceneData?.height ?? null;
@@ -275,6 +281,7 @@ export default function App() {
           setSelectedScene('all');
           setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
+          setCueFrames(msg.cue_frames ?? []);
           setFrame(0);
           setRunId(id => id + 1);
         } else if (msg.type === 'done') {
@@ -340,18 +347,23 @@ export default function App() {
       if (scenes.length > 0) {
         let offset = 0;
         const allKf: number[] = [];
+        const allCf: number[] = [];
         for (const s of scenes) {
           for (const kf of s.key_frames) allKf.push(kf + offset);
+          for (const cf of (s.cue_frames ?? [])) allCf.push(cf + offset);
           offset += s.frame_count;
         }
         allKf.sort((a, b) => a - b);
+        allCf.sort((a, b) => a - b);
         setKeyFrames([...new Set(allKf)]);
+        setCueFrames([...new Set(allCf)]);
         setFrames(offset);
       }
     } else {
       const s = scenes[selectedScene as number];
       if (s) {
         setKeyFrames(s.key_frames);
+        setCueFrames(s.cue_frames ?? []);
         setFrames(s.frame_count);
       }
     }
@@ -543,6 +555,8 @@ export default function App() {
     const startFrame = frame;
     const totalFrames = frames;
     const capturedFps = fps;
+    const capturedCueFrames = cueFrames;
+    const capturedStopOnCue = stopOnCue;
     const sk = canvasLayout.serverScale.toFixed(3);
 
     // Find which frames need caching
@@ -597,6 +611,12 @@ export default function App() {
         playIntervalRef.current = null;
         setIsPlaying(false);
         setFrame(playReturnFrameRef.current);
+      } else if (capturedStopOnCue && f > startFrame && capturedCueFrames.includes(f)) {
+        clearInterval(playIntervalRef.current!);
+        playIntervalRef.current = null;
+        setIsPlaying(false);
+        setFrame(f);
+        playReturnFrameRef.current = f;
       } else {
         setFrame(f);
       }
@@ -764,7 +784,11 @@ export default function App() {
           <div className="tl-ov-track" />
           {keyFrames.map(kf => {
             const pct = maxFrame > 0 ? (kf / maxFrame) * 100 : 0;
-            return <div key={kf} className="tl-ov-kf" style={{ left: `${pct}%` }} />;
+            return <div key={`k${kf}`} className="tl-ov-kf" style={{ left: `${pct}%` }} />;
+          })}
+          {cueFrames.map(cf => {
+            const pct = maxFrame > 0 ? (cf / maxFrame) * 100 : 0;
+            return <div key={`c${cf}`} className="tl-ov-cue" style={{ left: `${pct}%` }} />;
           })}
           <div className="tl-ov-window" style={{ left: `${ovWinLeft}%`, width: `${ovWinWidth}%` }} />
           <div className="tl-ov-cursor" style={{ left: `${ovCursorPct}%` }} />
@@ -777,12 +801,15 @@ export default function App() {
             const fi = winStart + i;
             const pct = winSize > 1 ? (i / (winSize - 1)) * 100 : 50;
             const isKey = keyFrameSet.has(fi);
+            const isCue = cueFrameSet.has(fi);
             const showNum = fi === frame || fi % 5 === 0;
+            const tickClass = `timeline-tick${fi === frame ? ' active' : ''}${isCue ? ' cue' : isKey ? ' key' : ''}`;
+            const numClass = `timeline-tick-num${fi === frame ? ' active' : ''}${isCue ? ' cue' : isKey ? ' key' : ''}`;
             return (
               <div key={fi} className="timeline-tick-wrap" style={{ left: `${pct}%` }}>
-                <div className={`timeline-tick${fi === frame ? ' active' : ''}${isKey ? ' key' : ''}`} />
+                <div className={tickClass} />
                 {showNum && (
-                  <div className={`timeline-tick-num${fi === frame ? ' active' : ''}${isKey ? ' key' : ''}`}>{fi}</div>
+                  <div className={numClass}>{fi}</div>
                 )}
               </div>
             );
@@ -985,9 +1012,23 @@ export default function App() {
                       {isPrefetching ? '…' : isPlaying ? '■' : '▶ Play'}
                     </button>
 
+                    <button className="tl-btn" onClick={() => setFrame(prevCueFrame!)} disabled={prevCueFrame === null || isActive} title="Prev cue frame">◂●</button>
+                    <button className="tl-btn" onClick={() => setFrame(nextCueFrame!)} disabled={nextCueFrame === null || isActive} title="Next cue frame">●▸</button>
+
+                    <label className="tl-stop-on-cue" title="Stop playback on the next cue frame">
+                      <input
+                        type="checkbox"
+                        checked={stopOnCue}
+                        onChange={e => setStopOnCue(e.target.checked)}
+                        disabled={isActive}
+                      />
+                      stop on cue
+                    </label>
+
                     <span className="tl-sep" />
 
                     <span className="timeline-label">{frame} / {maxFrame}</span>
+                    {cueFrameSet.has(frame) && <span className="tl-cue-badge">cue</span>}
                     {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
 
                     {scenes.length > 1 && (

@@ -26,6 +26,7 @@ class Serializer:
     def __init__(self):
         self.animated_values = []
         self.nodes = []
+        self.info = []
 
     def add_av(self, av):
         self.animated_values.append(av.serialize())
@@ -33,6 +34,7 @@ class Serializer:
 
     def add_node(self, node):
         self.nodes.append(node.serialize(self))
+        self.info.append(node.info)
         return node._id
 
 
@@ -45,6 +47,7 @@ def create_export(idx, scene):
         "scene": serialized_scene,
         "animated_values": serializer.animated_values,
         "nodes": serializer.nodes,
+        "info": serializer.info
     }
 
 

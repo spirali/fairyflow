@@ -355,6 +355,33 @@
   margin-left: 4px;
 }
 
+.tl-cue-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e0703a;
+  background: #2e1508;
+  border: 1px solid #7a3510;
+  border-radius: 3px;
+  padding: 1px 6px;
+  letter-spacing: 0.06em;
+  margin-left: 4px;
+}
+
+.tl-stop-on-cue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tl-stop-on-cue input[type=checkbox] {
+  accent-color: #e0703a;
+  cursor: pointer;
+}
 
 .timeline-label {
   font-size: 11px;
@@ -468,6 +495,17 @@
   pointer-events: none;
 }
 
+/* Cue frame markers in overview */
+.tl-ov-cue {
+  position: absolute;
+  width: 2px;
+  height: 10px;
+  top: 2px;
+  background: #e0703a;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 /* Window indicator — shows the zoomed region */
 .tl-ov-window {
   position: absolute;
@@ -570,6 +608,26 @@
 
 .timeline-tick-num.key.active {
   color: #c8a84b;
+  font-weight: 600;
+}
+
+.timeline-tick.cue {
+  background: #b85520;
+  border-color: #b85520;
+}
+
+.timeline-tick.cue.active {
+  background: #e0703a;
+  border-color: #e0703a;
+  box-shadow: 0 0 4px 1px rgba(224, 112, 58, 0.5);
+}
+
+.timeline-tick-num.cue {
+  color: #b87a5a;
+}
+
+.timeline-tick-num.cue.active {
+  color: #e0703a;
   font-weight: 600;
 }
 

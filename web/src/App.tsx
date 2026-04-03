@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { setToken, loadToken, withToken } from './auth';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
 import type { PanelSize } from 'react-resizable-panels';
@@ -7,7 +7,7 @@ import type { OnMount, Monaco } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
-import type { ConsoleLine, NodeBounds, SceneData, SceneInfo, ServerMsg, WsStatus } from './types';
+import type { ConsoleLine, InfoEntry, NodeBounds, SceneData, SceneInfo, ServerMsg, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -230,6 +230,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const decorationsRef = useRef<string[]>([]);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const reconnectCount = useRef(0);
 
@@ -249,6 +250,17 @@ export default function App() {
   const hasScene = sceneData != null;
   const sceneWidth  = sceneData?.width  ?? null;
   const sceneHeight = sceneData?.height ?? null;
+
+  // ── node info map (id → stack) built from all scenes' info arrays ─────────
+  const nodeInfoMap = useMemo(() => {
+    const map = new Map<number, InfoEntry>();
+    for (const s of scenes) {
+      for (const entry of (s.info ?? [])) {
+        map.set(entry.id, entry);
+      }
+    }
+    return map;
+  }, [scenes]);
 
   // ── websocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -434,6 +446,27 @@ export default function App() {
       .catch(() => {});
     return () => ctrl.abort();
   }, [selectedNid, frame]);
+
+  // ── source line highlights ────────────────────────────────────────────────
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    // Always clear previous decorations first
+    if (editor && decorationsRef.current.length > 0) {
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+    }
+    if (!editor || !monaco || selectedNid == null || !currentFile) return;
+    const entry = nodeInfoMap.get(selectedNid);
+    if (!entry?.stack?.length) return;
+    const basename = currentFile.split('/').pop() ?? '';
+    const lines = entry.stack.filter(s => s.file === basename).map(s => s.line);
+    if (!lines.length) return;
+    decorationsRef.current = editor.deltaDecorations([], lines.map(line => ({
+      range: new monaco.Range(line, 1, line, 1),
+      options: { isWholeLine: true, className: 'node-source-highlight' },
+    })));
+    editor.revealLineInCenter(lines[0]);
+  }, [selectedNid, currentFile, nodeInfoMap]);
 
   // ── editor ────────────────────────────────────────────────────────────────
   const handleEditorMount: OnMount = (editor, monaco) => {

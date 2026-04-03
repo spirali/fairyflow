@@ -89,11 +89,22 @@ export type ConsoleLine = { kind: 'out' | 'err' | 'sys'; text: string };
 
 export type WsStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
+export interface StackFrame {
+  file: string;
+  line: number;
+}
+
+export interface InfoEntry {
+  id: number;
+  stack: StackFrame[];
+}
+
 export interface SceneInfo {
   name: string;
   key_frames: number[];
   cue_frames: number[];
   frame_count: number;
+  info: InfoEntry[];
 }
 
 export type ServerMsg =

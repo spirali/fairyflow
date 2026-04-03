@@ -17,6 +17,7 @@ pub struct SceneInfoMsg {
     pub key_frames: Vec<u32>,
     pub cue_frames: Vec<u32>,
     pub frame_count: u32,
+    pub info: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -163,6 +164,7 @@ pub async fn run_python(
                         key_frames: si.key_frames,
                         cue_frames: si.cue_frames,
                         frame_count: si.frame_count,
+                        info: si.info,
                     }).collect();
                     info!(run_id = id, frame_count, scenes = scenes.len(), "animation cached");
                     *animation_cache.lock().unwrap() = Some(Arc::new(anim));

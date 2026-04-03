@@ -23,6 +23,8 @@ pub struct SceneInfo {
     /// Cue frames within this scene (local frame numbers, 0-based).
     pub cue_frames: Vec<u32>,
     pub frame_count: u32,
+    /// Raw debug info from the scene JSON, passed through uninterpreted.
+    pub info: serde_json::Value,
 }
 
 // ───────────────────────────── Internal single scene ─────────────────────────
@@ -50,6 +52,7 @@ struct RawAnimationDef {
     scene: SceneDef,
     nodes: Vec<Node>,
     animated_values: Vec<AnimatedValue>,
+    #[serde(default)]
     info: serde_json::Value,
 }
 
@@ -190,6 +193,7 @@ impl AnimationDef {
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
                     cue_frames: s.scene.cues.clone(),
                     frame_count: s.frame_count(),
+                    info: s.info.clone(),
                 }
             })
             .collect()

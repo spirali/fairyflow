@@ -163,39 +163,15 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
         return;
     }
     let output_path = std::path::Path::new("exports").join(&params.filename);
-
-    // ── build ffmpeg command ─────────────────────────────────────────────────
-    let (codec_lib, mut extra): (&str, Vec<String>) = match params.codec.as_str() {
-        "h265" => ("libx265", vec!["-pix_fmt".into(), "yuv420p".into()]),
-        "vp9"  => ("libvpx-vp9", vec!["-b:v".into(), "0".into()]),
-        _      => ("libx264", vec!["-pix_fmt".into(), "yuv420p".into()]),
-    };
-    extra.push("-crf".into());
-    extra.push(params.crf.to_string());
-
-    let input_pattern = temp_dir.join("frame%d.png").to_string_lossy().into_owned();
-    let fps_str = params.fps.to_string();
     let output_str = output_path.to_string_lossy().into_owned();
 
-    let mut cmd = tokio::process::Command::new("ffmpeg");
-    cmd.args(["-y", "-framerate", &fps_str, "-i", &input_pattern, "-c:v", codec_lib]);
-    for arg in &extra { cmd.arg(arg); }
-    cmd.arg(&output_str)
-       .stdout(std::process::Stdio::null())
-       .stderr(std::process::Stdio::piped());
-
-    match cmd.output().await {
-        Ok(out) if out.status.success() => {
+    // ── run ffmpeg ───────────────────────────────────────────────────────────
+    match crate::render::run_ffmpeg(&temp_dir, &output_path, params.fps, &params.codec, params.crf).await {
+        Ok(()) => {
             send(&tx, serde_json::json!({"type":"done","path": output_str}));
         }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let snippet: String = stderr.lines().rev().take(4).collect::<Vec<_>>()
-                .into_iter().rev().collect::<Vec<_>>().join(" | ");
-            send(&tx, serde_json::json!({"type":"error","message": format!("ffmpeg failed: {snippet}")}));
-        }
         Err(e) => {
-            send(&tx, serde_json::json!({"type":"error","message": format!("Failed to run ffmpeg: {e}")}));
+            send(&tx, serde_json::json!({"type":"error","message": e}));
         }
     }
 

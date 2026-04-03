@@ -77,6 +77,23 @@ enum Cmd {
         /// Also write frame{n}.json with the evaluated scene tree for each rendered frame
         #[arg(long)]
         write_tree: bool,
+
+        /// Produce a video file instead of individual PNGs.
+        /// When set, output_dir is treated as the output video file path (e.g. out.mp4).
+        #[arg(long)]
+        video: bool,
+
+        /// Frames per second for video output
+        #[arg(long, default_value_t = 24)]
+        fps: u32,
+
+        /// Video codec: h264, h265, or vp9
+        #[arg(long, default_value = "h264")]
+        codec: String,
+
+        /// Constant rate factor for video quality (lower = better quality)
+        #[arg(long, default_value_t = 23)]
+        crf: u32,
     },
     /// Initialize a new project directory
     Init {
@@ -108,6 +125,10 @@ async fn main() {
             font_dirs,
             target_resolution,
             write_tree,
+            video,
+            fps,
+            codec,
+            crf,
         } => {
             run_render_json(
                 json_path,
@@ -117,6 +138,10 @@ async fn main() {
                 font_dirs,
                 target_resolution,
                 write_tree,
+                video,
+                fps,
+                codec,
+                crf,
             )
             .await
         }
@@ -190,6 +215,10 @@ async fn run_render_json(
     font_dirs: Vec<PathBuf>,
     target_resolution: Option<(u32, u32)>,
     write_tree: bool,
+    video: bool,
+    fps: u32,
+    codec: String,
+    crf: u32,
 ) {
     let json_str = match tokio::fs::read_to_string(&json_path).await {
         Ok(s) => s,
@@ -211,15 +240,28 @@ async fn run_render_json(
         renderer::Resources::get().load_font_directories(&font_dirs);
     }
 
-    render_anim_to_dir(
-        anim,
-        output_dir,
-        threads,
-        frames,
-        target_resolution,
-        write_tree,
-    )
-    .await;
+    if video {
+        crate::render::render_anim_to_video(
+            anim,
+            output_dir,
+            threads,
+            target_resolution,
+            fps,
+            codec,
+            crf,
+        )
+        .await;
+    } else {
+        render_anim_to_dir(
+            anim,
+            output_dir,
+            threads,
+            frames,
+            target_resolution,
+            write_tree,
+        )
+        .await;
+    }
 }
 
 async fn run_init(directory: PathBuf) {

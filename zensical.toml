@@ -304,3 +304,55 @@ toggle.name = "Switch to light mode"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/spirali/fairyflow"
+
+# ----------------------------------------------------------------------------
+# Markdown extensions — replicate all defaults and add the ffpy custom fence.
+# Specifying markdown_extensions replaces the built-in defaults entirely, so
+# every extension used by the theme must be listed here.
+# ----------------------------------------------------------------------------
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions.pymdownx]
+betterem = {}
+caret = {}
+details = {}
+inlinehilite = {}
+keys = {}
+magiclink = {}
+mark = {}
+smartsymbols = {}
+tilde = {}
+
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+    {name = "mermaid", class = "mermaid"},
+    {name = "ffpy", class = "ffpy", format = "fairyflow.zensical_plugin.ffpy_fence", validator = "fairyflow.zensical_plugin.ffpy_validator"},
+]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+combine_header_slug = true
+
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true

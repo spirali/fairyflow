@@ -179,7 +179,20 @@ pub enum CallExpr {
     DefaultY {
         node: NodeRef,
     },
+    FollowPathX {
+        node: NodeRef,
+        start_frame: FrameId,
+        end_frame: FrameId,
+    },
+    FollowPathY {
+        node: NodeRef,
+        start_frame: FrameId,
+        end_frame: FrameId,
+    }
 }
+
+/// Keep the size CallExpr to the size of box + discriminant
+const _: () = assert!(std::mem::size_of::<CallExpr>() == std::mem::size_of::<Box::<()>>() * 2);
 
 // ─────────────────────────── KeyframeValue ─────────────────────────────────
 

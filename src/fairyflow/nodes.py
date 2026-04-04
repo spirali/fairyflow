@@ -12,15 +12,19 @@ from .exprs import (
     expr_default_width,
     expr_default_x,
     expr_default_y,
+    expr_follow_path_x,
+    expr_follow_path_y,
     expr_mul,
     expr_sub,
 )
 from .ctxvars import (
+    fctx,
     get_current_node,
     ROOT_OBJECTS,
     set_current_node,
+    set_frame,
 )
-from .config import DEFAULT_SCENE_CONFIG
+from .config import DEFAULT_SCENE_CONFIG, FPS
 
 
 class Node(AnimatedObject):
@@ -186,6 +190,21 @@ class PositionMixin:
         x = self._get_attr("x")
         y = self._get_attr("y")
         return Position(self._parent, x, y)
+    
+    def follow_path(self, path: "Path", *, frames=None, time=None):
+        assert isinstance(path, Path)
+        if frames is None:
+            if time is None:
+                time = 1
+            frames = FPS * time
+        start = get_frame()
+        end = start + frames
+        self.x(expr_follow_path_x(path, start, end))
+        self.y(expr_follow_path_y(path, start, end))
+        with fctx():
+            set_frame(end)
+            self.hold()
+        return self
 
 
 class StyleMixin(AlphaMixin):
@@ -407,17 +426,17 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         else:
             return (0, 0)
 
-    def move(self):
+    def move_to(self):
         p = PathMove(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
 
-    def line(self):
+    def line_to(self):
         p = PathLine(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
 
-    def cubic(self):
+    def cubic_to(self):
         p = PathCubic(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p

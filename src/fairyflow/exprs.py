@@ -63,3 +63,10 @@ def expr_default_width(node):
 
 def expr_default_height(node):
     return Call("default_height", node=node)
+
+
+def expr_follow_path_x(node, start_frame, end_frame):
+    return Call("follow_path_x", node=node, start_frame=start_frame, end_frame=end_frame)
+
+def expr_follow_path_y(node, start_frame, end_frame):
+    return Call("follow_path_y", node=node, start_frame=start_frame, end_frame=end_frame)

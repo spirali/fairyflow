@@ -66,3 +66,22 @@ def reset_ctx(ctx):
     CURRENT_NODE.set(None)
     FRAME.set(0)
     TRANSITION.set("step")
+
+
+class FContext:
+
+    def __init__(self):
+        self.frame = None
+        self.transition = None
+
+    def __enter__(self):
+        self.frame = FRAME.get()
+        self.transition = TRANSITION.get()
+
+    def __exit__(self, exc_type, exc, tb):
+        FRAME.set(self.frame)
+        TRANSITION.set(self.transition)
+
+
+def fctx():
+    return FContext()

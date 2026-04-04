@@ -1,0 +1,16 @@
+[project]
+name = "fairyflow-zensical"
+version = "0.1.0"
+description = "Zensical plugin for fairyflow ffpy custom fenced code blocks."
+authors = [
+    { name = "Ada Bohm", email = "ada@kreatrix.org" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fairyflow",
+    "pymdown-extensions>=10.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.1,<0.12.0"]
+build-backend = "uv_build"

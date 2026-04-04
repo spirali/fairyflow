@@ -114,3 +114,20 @@ export type ServerMsg =
   | { type: 'error'; text: string }
   | { type: 'tree'; key_frames: number[]; cue_frames: number[]; frame_count: number; scenes: SceneInfo[] }
   | { type: 'done'; exit_code: number | null };
+
+// ── Sequence types ────────────────────────────────────────────────────────────
+
+export interface SequenceSceneResult {
+  path: string;
+  frameCount: number;
+  cueFrames: number[];
+  frames: string[];   // blob URLs, index = local frame number within this scene
+  width: number;
+  height: number;
+}
+
+export interface SequenceRenderResult {
+  scenes: SequenceSceneResult[];
+  totalFrames: number;
+  globalCueFrames: number[];  // in global frame coordinates; always includes 0 and last frame
+}

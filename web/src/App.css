@@ -1387,3 +1387,429 @@
 .export-btn-ok:hover:not(:disabled) { background: #1177bb; }
 .export-btn-ok:disabled { opacity: 0.4; cursor: default; }
 .export-btn-cancel:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Right column sequence mode ─────────────────────────────────────────── */
+.right-column-seq {
+  grid-template-rows: 1fr;
+}
+
+/* ── Sequence editor ─────────────────────────────────────────────────────── */
+.seq-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.seq-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.seq-editor-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.seq-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seq-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+.seq-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: #555;
+}
+.seq-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.seq-btn-render {
+  background: #0e639c;
+  border-color: #1177bb;
+  color: #fff;
+}
+.seq-btn-render:hover:not(:disabled) { background: #1177bb; }
+.seq-btn-render.seq-btn-busy { opacity: 0.7; }
+
+.seq-btn-dim {
+  opacity: 0.45;
+}
+
+.seq-render-status {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  font-style: italic;
+}
+
+.seq-list-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.seq-list {
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.seq-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  padding: 24px;
+  text-align: center;
+  border: 2px dashed var(--border);
+  margin: 12px;
+  border-radius: 6px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.seq-empty:hover {
+  border-color: #555;
+}
+.seq-empty-active {
+  border-color: var(--accent) !important;
+  background: rgba(0, 122, 204, 0.08);
+  color: var(--text-primary);
+}
+
+.seq-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-left: 2px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+  user-select: none;
+}
+.seq-item:hover {
+  background: var(--bg-hover);
+}
+.seq-item-over {
+  border-left-color: var(--accent);
+  background: rgba(0, 122, 204, 0.08);
+}
+.seq-item-dragging {
+  opacity: 0.4;
+}
+
+.seq-item-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 14px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.seq-item-handle:active {
+  cursor: grabbing;
+}
+
+.seq-item-num {
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 20px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.seq-item-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.seq-item-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: 3px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: color 0.1s, opacity 0.1s;
+}
+.seq-item:hover .seq-item-remove {
+  opacity: 1;
+}
+.seq-item-remove:hover {
+  color: #f48771;
+}
+
+.seq-drop-zone {
+  margin: 4px 10px 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.seq-drop-zone-active {
+  border-color: var(--accent);
+  background: rgba(0, 122, 204, 0.08);
+  color: var(--text-primary);
+}
+
+/* ── Sequence no-render placeholder ─────────────────────────────────────── */
+.seq-no-render {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* ── Sequence player ─────────────────────────────────────────────────────── */
+.seqp {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* In browser fullscreen mode */
+.seqp:fullscreen,
+.seqp:-webkit-full-screen {
+  background: #000;
+}
+
+.seqp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  gap: 8px;
+  min-height: 32px;
+}
+
+.seqp-scene-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.seqp-scene-num {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.seqp-scene-path {
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seqp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.seqp-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.1s, background 0.1s;
+}
+.seqp-action-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.seqp-canvas-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  min-height: 0;
+}
+
+.seqp-canvas-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.seqp-canvas-empty {
+  color: #555;
+  font-size: 13px;
+}
+
+.seqp-controls {
+  flex-shrink: 0;
+  padding: 8px 10px 10px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Slider with overlay cue/scene markers */
+.seqp-slider-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seqp-slider-track {
+  position: relative;
+  height: 10px;
+  pointer-events: none;
+}
+
+.seqp-cue-tick {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  background: #f0a040;
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.seqp-scene-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+  opacity: 0.6;
+  transform: translateX(-50%);
+}
+
+.seqp-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  cursor: pointer;
+  outline: none;
+}
+.seqp-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+}
+.seqp-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+}
+
+.seqp-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seqp-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+.seqp-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.seqp-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.seqp-play-btn {
+  background: #0e639c;
+  border-color: #1177bb;
+  color: #fff;
+  min-width: 80px;
+}
+.seqp-play-btn:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.seqp-frame-label {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}

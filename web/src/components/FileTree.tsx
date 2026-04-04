@@ -118,6 +118,11 @@ function TreeNode({ entry, path, depth, expandedDirs, activeFile, contextPath, o
       <div
         className={`filetree-entry${entry.is_dir ? ' filetree-dir' : ' filetree-file'}${isActive ? ' filetree-active' : ''}${isContext ? ' filetree-context' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
+        draggable={!entry.is_dir && entry.name.endsWith('.ffpy')}
+        onDragStart={!entry.is_dir && entry.name.endsWith('.ffpy') ? (e) => {
+          e.dataTransfer.setData('application/ffpy-path', path);
+          e.dataTransfer.effectAllowed = 'copy';
+        } : undefined}
         onClick={() => {
           if (entry.is_dir) {
             onToggleDir(path);

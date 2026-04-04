@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { setToken, loadToken, withToken } from './auth';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
 import type { PanelSize } from 'react-resizable-panels';
@@ -7,13 +7,15 @@ import type { OnMount, Monaco } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
-import type { ConsoleLine, InfoEntry, NodeBounds, SceneData, SceneInfo, ServerMsg, WsStatus } from './types';
+import SequenceEditor from './components/SequenceEditor';
+import SequencePlayer from './components/SequencePlayer';
+import type { ConsoleLine, InfoEntry, NodeBounds, SceneData, SceneInfo, ServerMsg, SequenceRenderResult, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
 type ViewState = ReturnType<MonacoEditor['saveViewState']>;
 
-interface Tab { path: string; isDirty: boolean }
+interface Tab { path: string; isDirty: boolean; isFfsq?: boolean }
 
 interface RenderedFrameResponse { n: number; png: string }
 
@@ -85,6 +87,15 @@ export default function App() {
   const [exportDonePath, setExportDonePath] = useState('');
   const [exportErrorMsg, setExportErrorMsg] = useState('');
 
+  // ── sequence ──────────────────────────────────────────────────────────────
+  const [seqRenderResults, setSeqRenderResults] = useState<Map<string, SequenceRenderResult>>(new Map());
+  const wsMessageOverrideRef = useRef<((msg: ServerMsg) => void) | null>(null);
+  // Stable function — must not be recreated on re-renders so SequenceEditor's
+  // cleanup effect does not clear the override on every state update.
+  const setWsOverride = useCallback((fn: ((msg: ServerMsg) => void) | null) => {
+    wsMessageOverrideRef.current = fn;
+  }, []);
+
   // ── node selection ────────────────────────────────────────────────────────
   const [selectedNid, setSelectedNid] = useState<number | null>(null);
   const [nodeBounds, setNodeBounds] = useState<NodeBounds | null>(null);
@@ -132,12 +143,16 @@ export default function App() {
     }
     const newPath = tabsRef.current[idx]?.path;
     if (!newPath) return;
-    const model = modelsRef.current.get(newPath);
-    if (model) {
-      editor.setModel(model);
-      const vs = viewStatesRef.current.get(newPath);
-      if (vs) editor.restoreViewState(vs);
-      editor.focus();
+    if (tabsRef.current[idx]?.isFfsq) {
+      editor.setModel(null);
+    } else {
+      const model = modelsRef.current.get(newPath);
+      if (model) {
+        editor.setModel(model);
+        const vs = viewStatesRef.current.get(newPath);
+        if (vs) editor.restoreViewState(vs);
+        editor.focus();
+      }
     }
     setActiveTab(idx);
   };
@@ -145,6 +160,22 @@ export default function App() {
   const handleFileClick = (path: string) => {
     const existing = tabsRef.current.findIndex(t => t.path === path);
     if (existing !== -1) { switchToTab(existing); return; }
+
+    if (path.endsWith('.ffsq')) {
+      const editor = editorRef.current;
+      const curIdx = activeTabRef.current;
+      if (editor && curIdx >= 0 && tabsRef.current[curIdx]) {
+        viewStatesRef.current.set(tabsRef.current[curIdx].path, editor.saveViewState());
+      }
+      const newTabs = [...tabsRef.current, { path, isDirty: false, isFfsq: true }];
+      setTabs(newTabs);
+      const newIdx = newTabs.length - 1;
+      activeTabRef.current = newIdx;
+      currentFileRef.current = path;
+      setActiveTabState(newIdx);
+      editor?.setModel(null);
+      return;
+    }
 
     fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
       .then(r => r.ok ? r.text() : null)
@@ -178,8 +209,10 @@ export default function App() {
 
   const handleCloseTab = (idx: number) => {
     const tab = tabsRef.current[idx];
-    modelsRef.current.get(tab.path)?.dispose();
-    modelsRef.current.delete(tab.path);
+    if (!tab.isFfsq) {
+      modelsRef.current.get(tab.path)?.dispose();
+      modelsRef.current.delete(tab.path);
+    }
     viewStatesRef.current.delete(tab.path);
     const newTabs = tabsRef.current.filter((_, i) => i !== idx);
     tabsRef.current = newTabs;
@@ -281,6 +314,10 @@ export default function App() {
 
       ws.onmessage = (e: MessageEvent<string>) => {
         const msg = JSON.parse(e.data) as ServerMsg;
+        if (wsMessageOverrideRef.current) {
+          wsMessageOverrideRef.current(msg);
+          return;
+        }
         if (msg.type === 'config') {
           setFps(msg.fps);
         } else if (msg.type === 'output') {
@@ -774,6 +811,22 @@ export default function App() {
     }
   }
 
+  // ── sequence ──────────────────────────────────────────────────────────────
+  const isFfsqActive = currentFile?.endsWith('.ffsq') ?? false;
+  const currentSeqResult = isFfsqActive ? (seqRenderResults.get(currentFile!) ?? null) : null;
+
+  const handleSeqRenderResult = (path: string, res: SequenceRenderResult) => {
+    setSeqRenderResults(prev => {
+      const old = prev.get(path);
+      if (old) {
+        for (const sc of old.scenes) for (const url of sc.frames) { try { URL.revokeObjectURL(url); } catch {} }
+      }
+      const next = new Map(prev);
+      next.set(path, res);
+      return next;
+    });
+  };
+
   // ── image src ──────────────────────────────────────────────────────────────
   const scaleKey = canvasLayout?.serverScale.toFixed(3) ?? '1.000';
   const imgSrc = imageCacheRef.current.get(cacheKey(frame, scaleKey))
@@ -970,22 +1023,41 @@ export default function App() {
                   </div>
                 )}
                 <div className="panel-fill" style={{ position: 'relative' }}>
-                  <Editor
-                    height="100%"
-                    theme="vs-dark"
-                    onMount={handleEditorMount}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      lineHeight: 20,
-                      scrollBeyondLastLine: false,
-                      renderLineHighlight: 'line',
-                      padding: { top: 10 },
-                    }}
-                  />
-                  {tabs.length === 0 && (
-                    <div className="editor-placeholder">
-                      <span>Open a file from the explorer</span>
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    visibility: isFfsqActive ? 'hidden' : 'visible',
+                    pointerEvents: isFfsqActive ? 'none' : 'auto',
+                  }}>
+                    <Editor
+                      height="100%"
+                      theme="vs-dark"
+                      onMount={handleEditorMount}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        lineHeight: 20,
+                        scrollBeyondLastLine: false,
+                        renderLineHighlight: 'line',
+                        padding: { top: 10 },
+                      }}
+                    />
+                    {tabs.length === 0 && (
+                      <div className="editor-placeholder">
+                        <span>Open a file from the explorer</span>
+                      </div>
+                    )}
+                  </div>
+                  {isFfsqActive && currentFile && (
+                    <div style={{ position: 'absolute', inset: 0 }}>
+                      <SequenceEditor
+                        key={currentFile}
+                        path={currentFile}
+                        wsRef={wsRef}
+                        setWsOverride={setWsOverride}
+                        setLines={setLines}
+                        setRunning={setRunning}
+                        onRenderResult={res => handleSeqRenderResult(currentFile, res)}
+                      />
                     </div>
                   )}
                 </div>
@@ -1017,153 +1089,166 @@ export default function App() {
 
         {/* ── Right column ── */}
         <Panel defaultSize={50} minSize={20}>
-          <div className={`right-column${running ? ' right-column-evaluating' : ''}`}>
+          <div className={`right-column${!isFfsqActive && running ? ' right-column-evaluating' : ''}${isFfsqActive ? ' right-column-seq' : ''}`}>
 
-            {/* Timeline bar */}
-            <div className="timeline-bar">
-              {!hasScene ? (
-                <span className="timeline-no-scene">No scene</span>
+            {isFfsqActive ? (
+              /* ── Sequence player ── */
+              currentSeqResult ? (
+                <SequencePlayer result={currentSeqResult} fps={fps} />
               ) : (
-                <>
-                  <FrameSlider />
-                  <div className="tl-controls">
-                    <button className="tl-btn" onClick={() => setFrame(0)}             disabled={frame === 0 || isActive}>⏮</button>
-                    <button className="tl-btn" onClick={() => setFrame(prevKeyFrame!)} disabled={prevKeyFrame === null || isActive} title="Prev key frame">◂◂</button>
-                    <button className="tl-btn" onClick={() => setFrame(f => f - 1)}    disabled={frame === 0 || isActive}>◀</button>
-                    <button className="tl-btn" onClick={() => setFrame(f => f + 1)}    disabled={frame === maxFrame || isActive}>▶</button>
-                    <button className="tl-btn" onClick={() => setFrame(nextKeyFrame!)} disabled={nextKeyFrame === null || isActive} title="Next key frame">▸▸</button>
-                    <button className="tl-btn" onClick={() => setFrame(maxFrame)}      disabled={frame === maxFrame || isActive}>⏭</button>
+                <div className="seq-no-render">
+                  <span>Press <strong>Render</strong> to preview the sequence</span>
+                </div>
+              )
+            ) : (
+              <>
+                {/* Timeline bar */}
+                <div className="timeline-bar">
+                  {!hasScene ? (
+                    <span className="timeline-no-scene">No scene</span>
+                  ) : (
+                    <>
+                      <FrameSlider />
+                      <div className="tl-controls">
+                        <button className="tl-btn" onClick={() => setFrame(0)}             disabled={frame === 0 || isActive}>⏮</button>
+                        <button className="tl-btn" onClick={() => setFrame(prevKeyFrame!)} disabled={prevKeyFrame === null || isActive} title="Prev key frame">◂◂</button>
+                        <button className="tl-btn" onClick={() => setFrame(f => f - 1)}    disabled={frame === 0 || isActive}>◀</button>
+                        <button className="tl-btn" onClick={() => setFrame(f => f + 1)}    disabled={frame === maxFrame || isActive}>▶</button>
+                        <button className="tl-btn" onClick={() => setFrame(nextKeyFrame!)} disabled={nextKeyFrame === null || isActive} title="Next key frame">▸▸</button>
+                        <button className="tl-btn" onClick={() => setFrame(maxFrame)}      disabled={frame === maxFrame || isActive}>⏭</button>
 
-                    <span className="tl-sep" />
-
-                    <button
-                      className={`tl-btn tl-play-btn${isActive ? ' active' : ''}`}
-                      onClick={isActive ? handleStop : handlePlay}
-                      disabled={!canvasLayout}
-                      title={isActive ? 'Stop' : 'Play animation'}
-                    >
-                      {isPrefetching ? '…' : isPlaying ? '■' : '▶ Play'}
-                    </button>
-
-                    <button className="tl-btn" onClick={() => setFrame(prevCueFrame!)} disabled={prevCueFrame === null || isActive} title="Prev cue frame">◂●</button>
-                    <button className="tl-btn" onClick={() => setFrame(nextCueFrame!)} disabled={nextCueFrame === null || isActive} title="Next cue frame">●▸</button>
-
-                    <label className="tl-stop-on-cue" title="Stop playback on the next cue frame">
-                      <input
-                        type="checkbox"
-                        checked={stopOnCue}
-                        onChange={e => setStopOnCue(e.target.checked)}
-                        disabled={isActive}
-                      />
-                      stop on cue
-                    </label>
-
-                    <span className="tl-sep" />
-
-                    <span className="timeline-label">{frame} / {maxFrame}</span>
-                    {cueFrameSet.has(frame) && <span className="tl-cue-badge">cue</span>}
-                    {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
-
-                    {scenes.length > 1 && (
-                      <>
                         <span className="tl-sep" />
-                        <select
-                          className="tl-scene-select"
-                          value={selectedScene === 'all' ? 'all' : String(selectedScene)}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setSelectedScene(v === 'all' ? 'all' : Number(v));
-                          }}
-                          disabled={isActive}
+
+                        <button
+                          className={`tl-btn tl-play-btn${isActive ? ' active' : ''}`}
+                          onClick={isActive ? handleStop : handlePlay}
+                          disabled={!canvasLayout}
+                          title={isActive ? 'Stop' : 'Play animation'}
                         >
-                          <option value="all">All scenes</option>
-                          {scenes.map((s, i) => (
-                            <option key={i} value={String(i)}>{s.name}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
+                          {isPrefetching ? '…' : isPlaying ? '■' : '▶ Play'}
+                        </button>
 
-                    <span className="tl-sep" />
+                        <button className="tl-btn" onClick={() => setFrame(prevCueFrame!)} disabled={prevCueFrame === null || isActive} title="Prev cue frame">◂●</button>
+                        <button className="tl-btn" onClick={() => setFrame(nextCueFrame!)} disabled={nextCueFrame === null || isActive} title="Next cue frame">●▸</button>
 
-                    <div className="tl-menu-anchor" ref={exportMenuRef}>
-                      <button
-                        className="tl-btn tl-menu-btn"
-                        title="More options"
-                        onClick={() => setExportMenuOpen(v => !v)}
-                      >☰</button>
-                      {exportMenuOpen && (
-                        <div className="tl-dropdown">
+                        <label className="tl-stop-on-cue" title="Stop playback on the next cue frame">
+                          <input
+                            type="checkbox"
+                            checked={stopOnCue}
+                            onChange={e => setStopOnCue(e.target.checked)}
+                            disabled={isActive}
+                          />
+                          stop on cue
+                        </label>
+
+                        <span className="tl-sep" />
+
+                        <span className="timeline-label">{frame} / {maxFrame}</span>
+                        {cueFrameSet.has(frame) && <span className="tl-cue-badge">cue</span>}
+                        {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
+
+                        {scenes.length > 1 && (
+                          <>
+                            <span className="tl-sep" />
+                            <select
+                              className="tl-scene-select"
+                              value={selectedScene === 'all' ? 'all' : String(selectedScene)}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setSelectedScene(v === 'all' ? 'all' : Number(v));
+                              }}
+                              disabled={isActive}
+                            >
+                              <option value="all">All scenes</option>
+                              {scenes.map((s, i) => (
+                                <option key={i} value={String(i)}>{s.name}</option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+
+                        <span className="tl-sep" />
+
+                        <div className="tl-menu-anchor" ref={exportMenuRef}>
                           <button
-                            className="tl-dropdown-item"
-                            onClick={openExportDialog}
-                            disabled={!hasScene}
-                          >Export as video…</button>
+                            className="tl-btn tl-menu-btn"
+                            title="More options"
+                            onClick={() => setExportMenuOpen(v => !v)}
+                          >☰</button>
+                          {exportMenuOpen && (
+                            <div className="tl-dropdown">
+                              <button
+                                className="tl-dropdown-item"
+                                onClick={openExportDialog}
+                                disabled={!hasScene}
+                              >Export as video…</button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Scene tree + canvas */}
-            <PanelGroup orientation="vertical">
-              <Panel defaultSize={40} minSize={15}>
-                <div className="panel-fill">
-                  <TreeView scene={sceneData} prevScene={prevSceneData} selectedNid={selectedNid} onSelect={setSelectedNid} />
-                </div>
-              </Panel>
-
-              <PanelResizeHandle className="resize-handle vertical" />
-
-              <Panel defaultSize={60} minSize={15}>
-                <div className="canvas-panel">
-                  <div ref={canvasContentRef} className="canvas-content">
-                    {hasScene && canvasLayout && (
-                      <div className="canvas-image-wrap" style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}>
-                        <img
-                          src={imgSrc}
-                          style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}
-                          className="canvas-image"
-                          alt="rendered frame"
-                        />
-                        {nodeBounds && sceneWidth != null && sceneHeight != null && (() => {
-                          const sx = canvasLayout.cssWidth / sceneWidth;
-                          const sy = canvasLayout.cssHeight / sceneHeight;
-                          const bx = nodeBounds.x * sx;
-                          const by = nodeBounds.y * sy;
-                          const bw = nodeBounds.width * sx;
-                          const bh = nodeBounds.height * sy;
-                          const isPoint = bw < 2 && bh < 2;
-                          if (isPoint) return (
-                            <>
-                              <div className="nh-vline" style={{ left: bx }} />
-                              <div className="nh-hline" style={{ top: by }} />
-                              <div className="nh-dot" style={{ left: bx, top: by }} />
-                            </>
-                          );
-                          return (
-                            <>
-                              <div className="nh-vline" style={{ left: bx }} />
-                              <div className="nh-vline" style={{ left: bx + bw }} />
-                              <div className="nh-hline" style={{ top: by }} />
-                              <div className="nh-hline" style={{ top: by + bh }} />
-                              <div className="nh-rect" style={{ left: bx, top: by, width: bw, height: bh }} />
-                            </>
-                          );
-                        })()}
                       </div>
-                    )}
-                  </div>
-                  <div className="canvas-statusbar">
-                    {canvasLayout
-                      ? `Rendered as ${canvasLayout.pngWidth}×${canvasLayout.pngHeight}`
-                      : ''}
-                  </div>
+                    </>
+                  )}
                 </div>
-              </Panel>
-            </PanelGroup>
+
+                {/* Scene tree + canvas */}
+                <PanelGroup orientation="vertical">
+                  <Panel defaultSize={40} minSize={15}>
+                    <div className="panel-fill">
+                      <TreeView scene={sceneData} prevScene={prevSceneData} selectedNid={selectedNid} onSelect={setSelectedNid} />
+                    </div>
+                  </Panel>
+
+                  <PanelResizeHandle className="resize-handle vertical" />
+
+                  <Panel defaultSize={60} minSize={15}>
+                    <div className="canvas-panel">
+                      <div ref={canvasContentRef} className="canvas-content">
+                        {hasScene && canvasLayout && (
+                          <div className="canvas-image-wrap" style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}>
+                            <img
+                              src={imgSrc}
+                              style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}
+                              className="canvas-image"
+                              alt="rendered frame"
+                            />
+                            {nodeBounds && sceneWidth != null && sceneHeight != null && (() => {
+                              const sx = canvasLayout.cssWidth / sceneWidth;
+                              const sy = canvasLayout.cssHeight / sceneHeight;
+                              const bx = nodeBounds.x * sx;
+                              const by = nodeBounds.y * sy;
+                              const bw = nodeBounds.width * sx;
+                              const bh = nodeBounds.height * sy;
+                              const isPoint = bw < 2 && bh < 2;
+                              if (isPoint) return (
+                                <>
+                                  <div className="nh-vline" style={{ left: bx }} />
+                                  <div className="nh-hline" style={{ top: by }} />
+                                  <div className="nh-dot" style={{ left: bx, top: by }} />
+                                </>
+                              );
+                              return (
+                                <>
+                                  <div className="nh-vline" style={{ left: bx }} />
+                                  <div className="nh-vline" style={{ left: bx + bw }} />
+                                  <div className="nh-hline" style={{ top: by }} />
+                                  <div className="nh-hline" style={{ top: by + bh }} />
+                                  <div className="nh-rect" style={{ left: bx, top: by, width: bw, height: bh }} />
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="canvas-statusbar">
+                        {canvasLayout
+                          ? `Rendered as ${canvasLayout.pngWidth}×${canvasLayout.pngHeight}`
+                          : ''}
+                      </div>
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              </>
+            )}
           </div>
         </Panel>
         </PanelGroup>

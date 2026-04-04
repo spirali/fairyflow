@@ -24,4 +24,8 @@ dev = [
     "pillow>=11.0.0",
     "numpy>=2.0.0",
     "zensical>=0.0.31",
+    "fairyflow-zensical",
 ]
+
+[tool.uv.sources]
+fairyflow-zensical = { path = "fairyflow-zensical", editable = true }

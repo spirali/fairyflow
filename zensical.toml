@@ -347,7 +347,7 @@ pygments_lang_class = true
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [
     {name = "mermaid", class = "mermaid"},
-    {name = "ffpy", class = "ffpy", format = "fairyflow.zensical_plugin.ffpy_fence", validator = "fairyflow.zensical_plugin.ffpy_validator"},
+    {name = "ffpy", class = "ffpy", format = "fairyflow_zensical.ffpy_fence", validator = "fairyflow_zensical.ffpy_validator"},
 ]
 
 [project.markdown_extensions.pymdownx.tabbed]

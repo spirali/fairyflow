@@ -51,7 +51,7 @@ with scene():
    r = rect().size(20, 20).color("green")
    linear()
    jump_time(1)
-   r.color("blue")
+   r.color("orange")
 ```
 
 Press again ++ctrl+s++ to evalute the scene, you will get the following result:

@@ -42,6 +42,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fairyflow-zensical" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pytest" },
@@ -53,10 +54,26 @@ requires-dist = [{ name = "tinycss2", specifier = ">=1.4.0" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fairyflow-zensical", editable = "fairyflow-zensical" },
     { name = "numpy", specifier = ">=2.0.0" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "zensical", specifier = ">=0.0.31" },
+]
+
+[[package]]
+name = "fairyflow-zensical"
+version = "0.1.0"
+source = { editable = "fairyflow-zensical" }
+dependencies = [
+    { name = "fairyflow" },
+    { name = "pymdown-extensions" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fairyflow" },
+    { name = "pymdown-extensions", specifier = ">=10.0" },
 ]
 
 [[package]]

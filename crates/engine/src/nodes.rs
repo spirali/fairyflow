@@ -385,6 +385,7 @@ pub enum NodeKind {
         c2_x: TopLevelExpr,
         c2_y: TopLevelExpr,
     },
+    Close,
 
     /// An image (SVG for now).  `path` is resolved relative to the project directory.
     Image {

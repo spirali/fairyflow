@@ -444,7 +444,12 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         p = PathCubic(self, get_frame(), *self._prev_coords())
         self._children.append(p)
         return p
-
+    
+    def close(self):
+        p = PathClose()
+        self._children.append(p)
+        return p
+    
 
 class PathMove(Node, PositionMixin):
     kind = "move"
@@ -460,6 +465,10 @@ class PathLine(Node, PositionMixin):
     def __init__(self, parent, frame, x, y):
         super().__init__(parent, frame)
         self._init_position(x, y)
+
+
+class PathClose(Node):
+    kind = "close"
 
 
 class PathCubic(Node, PositionMixin):

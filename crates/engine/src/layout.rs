@@ -14,7 +14,8 @@ impl Node {
             | NodeKind::Image { position, .. }
             | NodeKind::Layer { position, .. }
             | NodeKind::Cubic { position, .. } => Some(&position),
-            NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } | NodeKind::Path { .. } => None,
+            NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } | NodeKind::Path { .. } | NodeKind::Close => None,
+
         }
     }
 
@@ -31,7 +32,8 @@ impl Node {
             | NodeKind::Cubic { .. }
             | NodeKind::TextGroup { .. }
             | NodeKind::TextSpan { .. }
-            | NodeKind::Path { .. } => None,
+            | NodeKind::Path { .. }
+            | NodeKind::Close => None,
         }
     }
 
@@ -161,7 +163,7 @@ impl Node {
     pub fn default_x(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
             // Layers live inside an Image, not a Group, so layout doesn't apply.
-            NodeKind::Layer { .. } => 0.0,
+            NodeKind::Layer { .. } | NodeKind::Close => 0.0,
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }
@@ -212,7 +214,7 @@ impl Node {
     pub fn default_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
             // Layers live inside an Image, not a Group, so layout doesn't apply.
-            NodeKind::Layer { .. } => 0.0,
+            NodeKind::Layer { .. } | NodeKind::Close => 0.0,
             NodeKind::Group { .. }
             | NodeKind::Rect { .. }
             | NodeKind::Ellipse { .. }

@@ -39,7 +39,7 @@ struct Args {
 #[derive(Subcommand)]
 enum Cmd {
     /// Run the HTTP server for a project directory
-    Serve {
+    Open {
         #[arg(short, long, default_value_t = 3000)]
         port: u16,
 
@@ -116,7 +116,7 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Cmd::Serve { port, token, directory } => run_serve(port, token, directory).await,
+        Cmd::Open { port, token, directory } => run_serve(port, token, directory).await,
         Cmd::RenderJson {
             json_path,
             output_dir,

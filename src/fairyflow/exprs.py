@@ -3,7 +3,11 @@ from fairyflow.color import Color
 
 class Expr:
     def __add__(self, other):
-        return Expr("+", a=self, b=other)
+        return expr_add(self, other)
+    def __sub__(self, other):
+        return expr_sub(self, other)    
+    def __mul__(self, other):
+        return expr_mul(self, other)
 
 
 class Call(Expr):

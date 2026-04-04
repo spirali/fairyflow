@@ -199,8 +199,12 @@ class PositionMixin:
             frames = FPS * time
         start = get_frame()
         end = start + frames
-        self.x(expr_follow_path_x(path, start, end))
-        self.y(expr_follow_path_y(path, start, end))
+        x = expr_follow_path_x(path, start, end)
+        y = expr_follow_path_y(path, start, end)
+        if self._has_attr("width"):
+            x = x - expr_mul(self._get_attr("width"), 0.5)
+            y = y - expr_mul(self._get_attr("height"), 0.5)
+        self.xy(x, y)
         with fctx():
             set_frame(end)
             self.hold()
@@ -475,7 +479,7 @@ class PathCubic(Node, PositionMixin):
 
     def c1_y(self, px):
         """Set y-coordinate of control point 1. It is relative to the start point of the path"""
-        self._set_attr("c1_x", px)
+        self._set_attr("c1_y", px)
 
     def c2_x(self, px):
         """Set x-coordinate of control point 1. It is relative to the end point of the path"""

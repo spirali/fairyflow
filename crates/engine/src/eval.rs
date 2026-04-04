@@ -10,6 +10,7 @@ use by_address::ByAddress;
 use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use crate::paths::follow_path;
 
 const EVAL_DEPTH_MAX: u32 = 64;
 
@@ -630,18 +631,4 @@ impl SceneDef {
             children,
         })
     }
-}
-
-// Follow path
-
-fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end_frame: FrameId) -> anyhow::Result<(f64, f64)> {
-    let node = ctx.node(node)?;
-    let NodeKind::Path { .. } = node.kind else {
-        anyhow::bail!("expected path node, got {:?}", node.kind);
-    };
-    // TODO:
-    // Return (x, y) coordinate in path. Follow path defined by node. If current frame is start_frame then return the initial point on path
-    // If current frame is end_frame on the path, then return position of the last point of the path.
-    // If current frame is in between start and end frame then return the interpolation of point on path, remember that path may containing only children PathMove, PathLine, PathCubic. Correctly interpolate points, especially in case of Cubic Path
-    todo!()
 }

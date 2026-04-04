@@ -23,6 +23,9 @@ class AnimatedObject:
 
     def _get_attr(self, name):
         return self._attrs[name]
+    
+    def _has_attr(self, name):
+        return name in self._attrs
 
     def remove(self):
         self._end = get_frame()

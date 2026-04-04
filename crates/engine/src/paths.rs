@@ -32,7 +32,7 @@ fn cubic_arc_length(
     c2x: f64, c2y: f64,
     p1x: f64, p1y: f64,
 ) -> f64 {
-    const STEPS: usize = 64;
+    const STEPS: usize = 32;
     let mut len = 0.0;
     let mut prev = (p0x, p0y);
     for i in 1..=STEPS {
@@ -58,9 +58,10 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
         Cubic(f64, f64, f64, f64, f64, f64, f64, f64),
     }
 
-    let mut segments: Vec<Seg> = Vec::new();
+    let mut segments: Vec<Seg> = Vec::with_capacity(children.len());
     let mut cur_x = 0.0f64;
     let mut cur_y = 0.0f64;
+    let mut subpath_start: Option<(f64, f64)> = None;
     let mut first_point: Option<(f64, f64)> = None;
 
     for &child_id in children {
@@ -69,6 +70,7 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
             NodeKind::Move { position } => {
                 cur_x = position.x.eval_f64(ctx)?;
                 cur_y = position.y.eval_f64(ctx)?;
+                subpath_start = Some((cur_x, cur_y));
                 if first_point.is_none() {
                     first_point = Some((cur_x, cur_y));
                 }
@@ -98,6 +100,14 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
                 cur_x = x;
                 cur_y = y;
             }
+            NodeKind::Close => {
+                let (sx, sy) = subpath_start.unwrap_or((0.0, 0.0));
+                if cur_x != sx || cur_y != sy {
+                    segments.push(Seg::Line(cur_x, cur_y, sx, sy));
+                }
+                cur_x = sx;
+                cur_y = sy;
+            }
             _ => bail!("unexpected node kind in path children: {:?}", child.id),
         }
     }
@@ -109,7 +119,7 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
         return Ok(first);
     }
 
-    // Compute t ∈ [0, 1] from current frame.
+    // Compute t \in [0, 1] from current frame.
     let t = if end_frame <= start_frame {
         0.0f64
     } else {

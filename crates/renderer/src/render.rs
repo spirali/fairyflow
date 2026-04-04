@@ -602,6 +602,7 @@ fn search_path_cmd(cmd: &PathCommand, node_id: u64, parent: Transform) -> Option
         PathCommand::Move { id, position } => (id, position),
         PathCommand::Line { id, position } => (id, position),
         PathCommand::Cubic { id, position, .. } => (id, position),
+        PathCommand::Close => return None,
     };
     if *id == node_id {
         let mut pts = [Point::from_xy(pos.x as f32, pos.y as f32)];
@@ -620,13 +621,14 @@ fn search_path_cmd(cmd: &PathCommand, node_id: u64, parent: Transform) -> Option
 fn path_bounds(cmds: &[PathCommand], t: Transform) -> Option<NodeBounds> {
     let mut pts: Vec<Point> = cmds
         .iter()
-        .map(|cmd| {
+        .filter_map(|cmd| {
             let pos = match cmd {
                 PathCommand::Move { position, .. } => position,
                 PathCommand::Line { position, .. } => position,
                 PathCommand::Cubic { position, .. } => position,
+                PathCommand::Close => return None,
             };
-            Point::from_xy(pos.x as f32, pos.y as f32)
+            Some(Point::from_xy(pos.x as f32, pos.y as f32))
         })
         .collect();
     if pts.is_empty() {
@@ -707,6 +709,9 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
                 let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
                 pb.cubic_to(c1.0, c1.1, c2.0, c2.1, end.0, end.1);
                 cur = end;
+            }
+            PathCommand::Close => {
+                pb.close();
             }
         }
     }

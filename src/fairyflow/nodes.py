@@ -446,7 +446,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         return p
     
     def close(self):
-        p = PathClose()
+        p = PathClose(self, get_frame())
         self._children.append(p)
         return p
     

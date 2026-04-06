@@ -455,24 +455,24 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         if len(self._children) < 2:
             return None        
         child0 = self._children[0]
-        x = child0._get_attr("x")
-        y = child0._get_attr("y")        
         child1 = self._children[1]
         if isinstance(child1, PathCubic):
             vx = child1._get_attr("c1_x")
             vy = child1._get_attr("c1_y")
         else:
-            vx = expr_sub(child1._get_attr("x"), x)
-            vy = expr_sub(child1._get_attr("y"), y)
-        return (x, y, vx, vy)
+            p = child0.get_pos()
+            vx = expr_sub(child1._get_attr("x"), p.x)
+            vy = expr_sub(child1._get_attr("y"), p.y)
+        return (child0, vx, vy)
 
 
-    def _create_arrow(self, x, y, vx, vy, length, width):                
+    def _create_arrow(self, child, vx, vy, length, width):                
         nx = expr_norm(vx, vy)
         ny = expr_norm(vy, vx)
         
-        px = x + nx * length
-        py = y + ny * length
+        pos = child.get_pos()
+        px = pos.x + nx * length
+        py = pos.y + ny * length
                 
         dx = nx * width * 0.5
         dy = ny * width * 0.5
@@ -480,13 +480,21 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         path = Path(self._parent, get_frame())
         self._parent._children.append(path)
         path.move_to().xy(px - dy, py + dx)
-        path.line_to().xy(x, y)
+        path.line_to().pos(pos)
         path.line_to().xy(px + dy, py - dx)
         path.close()
+
+        #child.xy(px, py)
+
         return path
         
 
     def triangle_arrow(self, placement: Literal["start", "end"]="end", *, length=None, width=None):
+        """
+        Creates a triangle arrow on the path. 
+
+        Important: It will move start/end point of the `self` to not overlap with arrow
+        """
         dir = self._get_start_direction()
         if dir is None:
             return None

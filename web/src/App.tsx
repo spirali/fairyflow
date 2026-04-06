@@ -47,10 +47,21 @@ export default function App() {
   const [frames, setFrames] = useState(1);
   const [keyFrames, setKeyFrames] = useState<number[]>([]);
   const [cueFrames, setCueFrames] = useState<number[]>([]);
-  const [frame, setFrame] = useState(0);
+  const [frame, setFrame_] = useState(0);
+  const frameRef = useRef(0);
+  const pendingFrameRef = useRef<number | null>(null);
+  const setFrame = (f: number | ((prev: number) => number)) => {
+    const next = typeof f === 'function' ? f(frameRef.current) : f;
+    frameRef.current = next;
+    setFrame_(next);
+  };
   const [runId, setRunId] = useState(0);
-  const [scenes, setScenes] = useState<SceneInfo[]>([]);
-  const [selectedScene, setSelectedScene] = useState<number | 'all'>('all');
+  const [scenes, setScenes_] = useState<SceneInfo[]>([]);
+  const scenesRef = useRef<SceneInfo[]>([]);
+  const setScenes = (sc: SceneInfo[]) => { scenesRef.current = sc; setScenes_(sc); };
+  const [selectedScene, setSelectedScene_] = useState<number | 'all'>('all');
+  const selectedSceneRef = useRef<number | 'all'>('all');
+  const setSelectedScene = (v: number | 'all') => { selectedSceneRef.current = v; setSelectedScene_(v); };
 
   // ── canvas layout ─────────────────────────────────────────────────────────
   interface CanvasLayout { serverScale: number; cssWidth: number; cssHeight: number; pngWidth: number; pngHeight: number }
@@ -327,11 +338,14 @@ export default function App() {
         } else if (msg.type === 'tree') {
           const sc = msg.scenes ?? [];
           setScenes(sc);
-          setSelectedScene('all');
+          const prevSel = selectedSceneRef.current;
+          const prevName = typeof prevSel === 'number' ? scenesRef.current[prevSel]?.name : null;
+          const restoredIdx = prevName != null ? sc.findIndex(s => s.name === prevName) : -1;
+          pendingFrameRef.current = frameRef.current < msg.frame_count ? frameRef.current : 0;
+          setSelectedScene(restoredIdx >= 0 ? restoredIdx : 'all');
           setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
           setCueFrames(msg.cue_frames ?? []);
-          setFrame(0);
           setRunId(id => id + 1);
         } else if (msg.type === 'done') {
           setRunning(false);
@@ -390,7 +404,9 @@ export default function App() {
     imgCache.clear();
     treeCacheRef.current.clear();
     setCacheVersion(0);
-    setFrame(0);
+    const targetFrame = pendingFrameRef.current ?? 0;
+    pendingFrameRef.current = null;
+    setFrame(targetFrame);
     if (selectedScene === 'all') {
       // Recompute from all scenes combined
       if (scenes.length > 0) {
@@ -417,7 +433,7 @@ export default function App() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedScene]);
+  }, [selectedScene, runId]);
 
   // ── fetch scene tree on demand (with cache) ────────────────────────────────
   useEffect(() => {

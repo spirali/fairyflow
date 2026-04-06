@@ -70,6 +70,54 @@ export function PathIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function MoveToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="8" y1="24" x2="24" y2="8" strokeDasharray="3 2.5"/>
+      <circle cx="8" cy="24" r="2.5"/>
+      <circle cx="24" cy="8" r="2.5" fill={c} stroke="none"/>
+    </svg>
+  );
+}
+
+export function LineToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="7" y1="25" x2="25" y2="7"/>
+      <rect x="5" y="23" width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <rect x="23" y="5"  width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+    </svg>
+  );
+}
+
+export function CubicToIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <path d="M6 25 C6 10, 26 22, 26 7"/>
+      <rect x="4" y="23" width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <rect x="24" y="5"  width="4" height="4" rx="0.5" fill={c} stroke="none"/>
+      <circle cx="6"  cy="10" r="2"/>
+      <circle cx="26" cy="22" r="2"/>
+      <line x1="6"  y1="25" x2="6"  y2="10" strokeDasharray="2 2"/>
+      <line x1="26" y1="7"  x2="26" y2="22" strokeDasharray="2 2"/>
+    </svg>
+  );
+}
+
+export function ClosePathIcon({ size = 16 }: IconProps) {
+  const c = '#E8608A';
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" {...STROKE} stroke={c}>
+      <line x1="7"  y1="9"  x2="25" y2="9"/>
+      <line x1="25" y1="9"  x2="7"  y2="23"/>
+      <line x1="7"  y1="23" x2="25" y2="23"/>
+    </svg>
+  );
+}
+
 export function ImageIcon({ size = 16 }: IconProps) {
   const c = '#95CC35';
   return (
@@ -146,9 +194,10 @@ const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = 
   rect:    RectIcon,
   ellipse: EllipseIcon,
   path:    PathIcon,
-  move:    PathIcon,
-  line:    PathIcon,
-  cubic:   PathIcon,
+  move:    MoveToIcon,
+  line:    LineToIcon,
+  cubic:   CubicToIcon,
+  close:   ClosePathIcon,
   image:   ImageIcon,
   layer:   ImageLayerIcon,
   text:    TextIcon,

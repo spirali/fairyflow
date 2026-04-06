@@ -8,7 +8,10 @@ class Color:
         self.value = value
 
     @staticmethod
-    def parse(value):
+    def parse(value):        
+        from .exprs import Expr
+        if isinstance(value, Expr):
+            return value
         return Color(value)
 
     def __repr__(self):

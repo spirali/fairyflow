@@ -9,7 +9,6 @@ class Expr:
     def __mul__(self, other):
         return expr_mul(self, other)
 
-
 class Call(Expr):
     def __init__(self, name, **kwargs):
         self.name = name
@@ -74,3 +73,6 @@ def expr_follow_path_x(node, start_frame, end_frame):
 
 def expr_follow_path_y(node, start_frame, end_frame):
     return Call("follow_path_y", node=node, start_frame=start_frame, end_frame=end_frame)
+
+def expr_norm(a, b):
+    return Call("norm", a=a, b=b)

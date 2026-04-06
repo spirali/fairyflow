@@ -15,6 +15,7 @@ from .exprs import (
     expr_follow_path_x,
     expr_follow_path_y,
     expr_mul,
+    expr_norm,
     expr_sub,
 )
 from .ctxvars import (
@@ -449,6 +450,49 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         p = PathClose(self, get_frame())
         self._children.append(p)
         return p
+
+    def _get_start_direction(self):
+        if len(self._children) < 2:
+            return None        
+        child0 = self._children[0]
+        x = child0._get_attr("x")
+        y = child0._get_attr("y")        
+        child1 = self._children[1]
+        if isinstance(child1, PathCubic):
+            vx = child1._get_attr("c1_x")
+            vy = child1._get_attr("c1_y")
+        else:
+            vx = expr_sub(child1._get_attr("x"), x)
+            vy = expr_sub(child1._get_attr("y"), y)
+        return (x, y, vx, vy)
+
+
+    def _create_arrow(self, x, y, vx, vy, length, width):                
+        nx = expr_norm(vx, vy)
+        ny = expr_norm(vy, vx)
+        
+        px = x + nx * length
+        py = y + ny * length
+                
+        dx = nx * width * 0.5
+        dy = ny * width * 0.5
+
+        path = Path(self._parent, get_frame())
+        self._parent._children.append(path)
+        path.move_to().xy(px - dy, py + dx)
+        path.line_to().xy(x, y)
+        path.line_to().xy(px + dy, py - dx)
+        path.close()
+        return path
+        
+
+    def triangle_arrow(self, placement: Literal["start", "end"]="end", *, length=None, width=None):
+        dir = self._get_start_direction()
+        if dir is None:
+            return None
+        path = self._create_arrow(*dir, length, width)
+        path.color(self._get_attr("stroke_color"))
+        return path
     
 
 class PathMove(Node, PositionMixin):

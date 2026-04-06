@@ -167,6 +167,7 @@ pub enum CallExpr {
     Sub(Box<CallParamsPair>),
     #[serde(rename = "*")]
     Mul(Box<CallParamsPair>),
+    Norm(Box<CallParamsPair>),
     DefaultWidth {
         node: NodeRef,
     },
@@ -188,7 +189,7 @@ pub enum CallExpr {
         node: NodeRef,
         start_frame: FrameId,
         end_frame: FrameId,
-    }
+    },
 }
 
 /// Keep the size CallExpr to the size of box + discriminant

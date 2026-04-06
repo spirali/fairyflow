@@ -1,5 +1,4 @@
 from .exprs import Expr
-from .avalue import AnimatedValue
 from .color import Color
 from .nodes import Node
 
@@ -10,11 +9,6 @@ import os as os
 def serialize_expr(obj):
     if isinstance(obj, Expr):
         return obj.serialize_expr()
-    if isinstance(obj, AnimatedValue):
-        if obj.is_single_value():
-            return serialize_expr(obj.get_first_value())
-        else:
-            return {"av": id(obj)}
     if isinstance(obj, Node):
         return {"id": obj._id}
     if isinstance(obj, Color):

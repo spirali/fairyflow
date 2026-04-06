@@ -1,10 +1,7 @@
 use crate::FrameId;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::nodes::{
-    CallExpr, CallParamsNodeTransform, Expr, Node, NodeKind, Position, SceneDef, Size, Style,
-    TextStyle, TopLevelExpr, Value,
-};
+use crate::nodes::{CallExpr, CallParamsNodeTransform, CallParamsPair, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr, Value};
 use anyhow::bail;
 use by_address::ByAddress;
 use renderer::Inheritable;
@@ -246,6 +243,14 @@ impl TopLevelExpr {
     }
 }
 
+impl CallParamsPair {
+    pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
+        let va = self.a.eval(ctx)?.as_f64()?;
+        let vb = self.b.eval(ctx)?.as_f64()?;
+        Ok((va, vb))
+    }
+}
+
 impl Expr {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
         match self {
@@ -270,24 +275,33 @@ impl CallExpr {
         match self {
             CallExpr::Add(pair) => {
                 tracing::trace!("Call::Add");
-                let va = pair.a.eval(ctx)?.as_f64()?;
-                let vb = pair.b.eval(ctx)?.as_f64()?;
+                let (va, vb) = pair.eval_f64(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va + vb, "Call::Add result");
                 Ok(Value::Float(va + vb))
             }
             CallExpr::Sub(pair) => {
                 tracing::trace!("Call::Sub");
-                let va = pair.a.eval(ctx)?.as_f64()?;
-                let vb = pair.b.eval(ctx)?.as_f64()?;
+                let (va, vb) = pair.eval_f64(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va - vb, "Call::Sub result");
                 Ok(Value::Float(va - vb))
             }
             CallExpr::Mul(pair) => {
                 tracing::trace!("Call::Mul");
-                let va = pair.a.eval(ctx)?.as_f64()?;
-                let vb = pair.b.eval(ctx)?.as_f64()?;
+                let (va, vb) = pair.eval_f64(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va * vb, "Call::Mul result");
                 Ok(Value::Float(va * vb))
+            }
+            CallExpr::Norm(pair) => {
+                tracing::trace!("Call::Mul");
+                let (va, vb) = pair.eval_f64(ctx)?;
+                let d = va * va + vb * vb;
+                let result = if d < 0.0001 {
+                    0.0
+                } else {
+                    va / d.sqrt()
+                };
+                tracing::trace!(a = va, b = vb, result = result, "Call::Norm result");
+                Ok(Value::Float(result))
             }
             CallExpr::NodeTransformX(params) => {
                 tracing::trace!(

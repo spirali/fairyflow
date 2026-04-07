@@ -1,19 +1,19 @@
 from typing import Union, Literal
 import os
 
-
 from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .info import get_info
 from .aobject import AnimatedObject, get_frame
+from .avalue import AnimatedValue
 from .color import Color
 from .exprs import (
     expr_default_height,
     expr_default_width,
     expr_default_x,
     expr_default_y,
-    expr_follow_path_x,
-    expr_follow_path_y,
+    expr_path_x,
+    expr_path_y,
     expr_mul,
     expr_norm,
     expr_sub,
@@ -197,15 +197,16 @@ class PositionMixin:
             frames = FPS * time
         start = get_frame()
         end = start + frames
-        x = expr_follow_path_x(path, start, end)
-        y = expr_follow_path_y(path, start, end)
+        av = AnimatedValue(0, get_frame())
+        av.set(end, 1, "linear")
+        x = expr_path_x(path, av)
+        y = expr_path_y(path, av)
         if self._has_attr("width"):
             x = x - expr_mul(self._get_attr("width"), 0.5)
             y = y - expr_mul(self._get_attr("height"), 0.5)
         self.xy(x, y)
-        with fctx():
-            set_frame(end)
-            self.hold()
+        set_frame(end)
+        self.hold()
         return self
 
 

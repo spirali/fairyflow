@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use crate::paths::follow_path;
-use crate::values::{Eval, Expr, FloatCall, FloatParamsPair, Value};
+use crate::paths::{point_in_path, path_length};
+use crate::values::{CallParamsPathPoint, Eval, Expr, FloatCall, FloatParamsPair, Value};
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
@@ -313,11 +313,16 @@ impl Eval<f64> for FloatCall {
                 let node = ctx.node(*node)?;
                 Ok(node.default_y(ctx)?)
             }
-            FloatCall::FollowPathX { node, start_frame, end_frame } => {
-                Ok(follow_path(ctx, *node, *start_frame, *end_frame)?.0)
+            FloatCall::PathX(p) => {
+                let t = p.t.eval(ctx)?;
+                Ok(point_in_path(ctx, p.node, t)?.0)
             }
-            FloatCall::FollowPathY { node, start_frame, end_frame } => {
-                Ok(follow_path(ctx, *node, *start_frame, *end_frame)?.1)
+            FloatCall::PathY(p) => {
+                let t = p.t.eval(ctx)?;
+                Ok(point_in_path(ctx, p.node, t)?.1)
+            }
+            FloatCall::PathLength { node } => {
+                path_length(ctx, *node)
             }
         }
     }

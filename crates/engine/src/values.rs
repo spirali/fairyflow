@@ -58,6 +58,8 @@ pub enum Expr<T: Value + DeserializeOwned> {
     Inherited { expr: Box<Expr<T>> },
 }
 
+// const _ASSERT_SIZE: () = assert!(std::mem::size_of::<Expr<f64>>() == 24);
+
 impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
     fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<T> {
         match self {
@@ -114,6 +116,12 @@ pub struct CallParamsNodeTransform {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CallParamsPathPoint {
+    pub node: NodeId,
+    pub t: Expr<f64>,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "fn", rename_all = "snake_case")]
 pub enum FloatCall {
     NodeTransformX(Box<CallParamsNodeTransform>),
@@ -137,16 +145,11 @@ pub enum FloatCall {
     DefaultY {
         node: NodeId,
     },
-    FollowPathX {
+    PathLength {
         node: NodeId,
-        start_frame: FrameId,
-        end_frame: FrameId,
     },
-    FollowPathY {
-        node: NodeId,
-        start_frame: FrameId,
-        end_frame: FrameId,
-    },
+    PathX(Box<CallParamsPathPoint>),
+    PathY(Box<CallParamsPathPoint>),
 }
 
 #[derive(Debug, Clone, Deserialize)]

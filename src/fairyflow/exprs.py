@@ -68,11 +68,13 @@ def expr_default_height(node):
     return Call("default_height", node=node)
 
 
-def expr_follow_path_x(node, start_frame, end_frame):
-    return Call("follow_path_x", node=node, start_frame=start_frame, end_frame=end_frame)
+def expr_path_x(node, t):
+    return Call("path_x", node=node, t=t)
 
-def expr_follow_path_y(node, start_frame, end_frame):
-    return Call("follow_path_y", node=node, start_frame=start_frame, end_frame=end_frame)
+
+def expr_path_y(node, t):
+    return Call("path_y", node=node, t=t)
+
 
 def expr_norm(a, b):
     return Call("norm", a=a, b=b)

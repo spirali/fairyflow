@@ -1,7 +1,6 @@
 use anyhow::bail;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
-use crate::FrameId;
 use crate::nodes::NodeKind;
 use crate::values::Eval;
 
@@ -47,17 +46,37 @@ fn cubic_arc_length(
     len
 }
 
-pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end_frame: FrameId) -> anyhow::Result<(f64, f64)> {
+enum Seg {
+    Line(f64, f64, f64, f64),
+    Cubic(f64, f64, f64, f64, f64, f64, f64, f64),
+}
+
+impl Seg {
+    fn arc_length(&self) -> f64 {
+        match self {
+            Seg::Line(x0, y0, x1, y1) => {
+                let dx = x1 - x0;
+                let dy = y1 - y0;
+                (dx * dx + dy * dy).sqrt()
+            }
+            Seg::Cubic(p0x, p0y, c1x, c1y, c2x, c2y, p1x, p1y) => {
+                cubic_arc_length(*p0x, *p0y, *c1x, *c1y, *c2x, *c2y, *p1x, *p1y)
+            }
+        }
+    }
+}
+
+struct PathSegments {
+    segments: Vec<Seg>,
+    first: (f64, f64),
+    last: (f64, f64),
+}
+
+fn build_segments(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<PathSegments> {
     let node = ctx.node(node)?;
     let NodeKind::Path { children, .. } = &node.kind else {
         anyhow::bail!("expected path node, got {:?}", node.kind);
     };
-
-    // Enumerate path segments as (start_point, end_point, optional cubic control points).
-    enum Seg {
-        Line(f64, f64, f64, f64),
-        Cubic(f64, f64, f64, f64, f64, f64, f64, f64),
-    }
 
     let mut segments: Vec<Seg> = Vec::with_capacity(children.len());
     let mut cur_x = 0.0f64;
@@ -113,22 +132,25 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
         }
     }
 
-    let first = first_point.unwrap_or((0.0, 0.0));
-    let last = (cur_x, cur_y);
+    Ok(PathSegments {
+        first: first_point.unwrap_or((0.0, 0.0)),
+        last: (cur_x, cur_y),
+        segments,
+    })
+}
+
+pub(crate) fn path_length(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<f64> {
+    let path = build_segments(ctx, node)?;
+    Ok(path.segments.iter().map(|s| s.arc_length()).sum())
+}
+
+pub(crate) fn point_in_path(ctx: &EvalCtx, node: NodeId, t: f64) -> anyhow::Result<(f64, f64)> {
+    let path = build_segments(ctx, node)?;
+    let PathSegments { segments, first, last } = path;
 
     if segments.is_empty() {
         return Ok(first);
     }
-
-    // Compute t \in [0, 1] from current frame.
-    let t = if end_frame <= start_frame {
-        0.0f64
-    } else {
-        let cf = ctx.frame().as_u32() as f64;
-        let sf = start_frame.as_u32() as f64;
-        let ef = end_frame.as_u32() as f64;
-        ((cf - sf) / (ef - sf)).clamp(0.0, 1.0)
-    };
 
     if t <= 0.0 {
         return Ok(first);
@@ -138,19 +160,7 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
     }
 
     // Compute arc length of each segment.
-    let seg_lengths: Vec<f64> = segments
-        .iter()
-        .map(|seg| match seg {
-            Seg::Line(x0, y0, x1, y1) => {
-                let dx = x1 - x0;
-                let dy = y1 - y0;
-                (dx * dx + dy * dy).sqrt()
-            }
-            Seg::Cubic(p0x, p0y, c1x, c1y, c2x, c2y, p1x, p1y) => {
-                cubic_arc_length(*p0x, *p0y, *c1x, *c1y, *c2x, *c2y, *p1x, *p1y)
-            }
-        })
-        .collect();
+    let seg_lengths: Vec<f64> = segments.iter().map(|s| s.arc_length()).collect();
 
     let total_len: f64 = seg_lengths.iter().sum();
     if total_len == 0.0 {

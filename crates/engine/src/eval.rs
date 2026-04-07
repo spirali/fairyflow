@@ -443,6 +443,8 @@ impl Node {
             } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?,
+                crop_start: crop_start.eval(ctx)?,
+                crop_end: crop_end.eval(ctx)?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))

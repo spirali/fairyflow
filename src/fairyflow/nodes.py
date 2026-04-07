@@ -430,6 +430,12 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             return (c._get_attr("y"), c._get_attr("y"))
         else:
             return (0, 0)
+        
+    def crop_start(self, value):
+        self._set_attr("crop_start", value)
+
+    def crop_end(self, value):
+        self._set_attr("crop_end", value)
 
     def move_to(self):
         p = PathMove(self, get_frame(), *self._prev_coords())

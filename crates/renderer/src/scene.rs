@@ -188,6 +188,8 @@ pub enum NodeKind {
         style: Style,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
+        crop_start: f64,
+        crop_end: f64,
         children: Vec<PathCommand>,
     },
     /// Python: Text — positioned block of text lines.

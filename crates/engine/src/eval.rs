@@ -1,7 +1,7 @@
 use crate::FrameId;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::nodes::{Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr};
+use crate::nodes::{Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, AttrExpr};
 use anyhow::bail;
 use by_address::ByAddress;
 use renderer::Inheritable;
@@ -213,7 +213,7 @@ fn node_transform(
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
-impl<T: Value + DeserializeOwned + Clone> Eval<T> for TopLevelExpr<T> {
+impl<T: Value + DeserializeOwned + Clone> Eval<T> for AttrExpr<T> {
     fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<T> {
         let expr = self.get_expr();
         if !ctx.begin_eval(expr) {
@@ -225,7 +225,7 @@ impl<T: Value + DeserializeOwned + Clone> Eval<T> for TopLevelExpr<T> {
     }
 }
 
-impl<T: Value + DeserializeOwned + Debug + Clone> TopLevelExpr<T> {
+impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
     fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<T>> {
         Ok(match self.get_expr() {
             Expr::Inherited { .. } => Inheritable::Inherited(self.eval(ctx)?),
@@ -438,6 +438,8 @@ impl Node {
                 style,
                 z_level,
                 children,
+                crop_start,
+                crop_end,
             } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?,

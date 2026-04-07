@@ -1,5 +1,5 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
-use crate::nodes::{Node, TopLevelExpr, Transition};
+use crate::nodes::{Node, AttrExpr, Transition};
 use crate::eval::EvalCtx;
 use anyhow::bail;
 use serde::{Deserialize, Deserializer};

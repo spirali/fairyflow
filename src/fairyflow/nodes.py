@@ -421,6 +421,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         super().__init__(parent, frame)
         self._init_style()
         self._init_z()
+        self._add_attr("crop_start", 0.0)
+        self._add_attr("crop_end", 1.0)
 
     def _prev_coords(self):
         if self._children:

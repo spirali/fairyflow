@@ -17,9 +17,9 @@ pub enum Transition {
 #[derive(Debug, Deserialize)]
 #[serde(transparent)]
 #[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub struct TopLevelExpr<T: Value + DeserializeOwned>(Expr<T>);
+pub struct AttrExpr<T: Value + DeserializeOwned>(Expr<T>);
 
-impl<T: Value + DeserializeOwned> TopLevelExpr<T> {
+impl<T: Value + DeserializeOwned> AttrExpr<T> {
     #[inline]
     pub fn get_expr(&self) -> &Expr<T> {
         &self.0
@@ -31,24 +31,24 @@ impl<T: Value + DeserializeOwned> TopLevelExpr<T> {
 /// Mirrors `PositionMixin` in Python.
 #[derive(Debug, Deserialize)]
 pub struct Position {
-    pub x: TopLevelExpr<f64>,
-    pub y: TopLevelExpr<f64>,
+    pub x: AttrExpr<f64>,
+    pub y: AttrExpr<f64>,
 }
 
 /// Mirrors `SizeMixin` in Python.
 #[derive(Debug, Deserialize)]
 pub struct Size {
-    pub width: TopLevelExpr<f64>,
-    pub height: TopLevelExpr<f64>,
+    pub width: AttrExpr<f64>,
+    pub height: AttrExpr<f64>,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
 #[derive(Debug, Deserialize)]
 pub struct Style {
-    pub fill_color: TopLevelExpr<Option<Color>>,
-    pub stroke_color: TopLevelExpr<Option<Color>>,
-    pub stroke_width: TopLevelExpr<f64>,
-    pub alpha: TopLevelExpr<f64>,
+    pub fill_color: AttrExpr<Option<Color>>,
+    pub stroke_color: AttrExpr<Option<Color>>,
+    pub stroke_width: AttrExpr<f64>,
+    pub alpha: AttrExpr<f64>,
 }
 
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
@@ -56,9 +56,9 @@ pub struct Style {
 pub struct TextStyle {
     #[serde(flatten)]
     pub style: Style,
-    pub font: TopLevelExpr<Arc<String>>,
-    pub font_size: TopLevelExpr<f64>,
-    pub italic: TopLevelExpr<bool>,
+    pub font: AttrExpr<Arc<String>>,
+    pub font_size: AttrExpr<f64>,
+    pub italic: AttrExpr<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,12 +66,12 @@ pub struct TextStyle {
 pub enum Layout {
     Center,
     Column {
-        gap: TopLevelExpr<f64>,
-        align: TopLevelExpr<f64>,
+        gap: AttrExpr<f64>,
+        align: AttrExpr<f64>,
     },
     Row {
-        gap: TopLevelExpr<f64>,
-        align: TopLevelExpr<f64>,
+        gap: AttrExpr<f64>,
+        align: AttrExpr<f64>,
     },
 }
 
@@ -84,13 +84,13 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        alpha: TopLevelExpr<f64>,
-        rotation: TopLevelExpr<f64>,
-        pivot_x: TopLevelExpr<f64>,
-        pivot_y: TopLevelExpr<f64>,
-        scale_x: TopLevelExpr<f64>,
-        scale_y: TopLevelExpr<f64>,
-        z_level: TopLevelExpr<f64>,
+        alpha: AttrExpr<f64>,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
+        z_level: AttrExpr<f64>,
         layout: Layout,
         #[serde(default)]
         children: Vec<NodeId>,
@@ -101,7 +101,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: TopLevelExpr<f64>,
+        z_level: AttrExpr<f64>,
         #[serde(flatten)]
         style: Style,
     },
@@ -111,7 +111,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: TopLevelExpr<f64>,
+        z_level: AttrExpr<f64>,
         #[serde(flatten)]
         style: Style,
     },
@@ -119,7 +119,9 @@ pub enum NodeKind {
     Path {
         #[serde(flatten)]
         style: Style,
-        z_level: TopLevelExpr<f64>,
+        z_level: AttrExpr<f64>,
+        crop_start: AttrExpr<f64>,
+        crop_end: AttrExpr<f64>,
         #[serde(default)]
         children: Vec<NodeId>,
     },
@@ -130,7 +132,7 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         text_style: TextStyle,
-        z_level: TopLevelExpr<f64>,
+        z_level: AttrExpr<f64>,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
         #[serde(default)]
@@ -149,7 +151,7 @@ pub enum NodeKind {
     TextSpan {
         #[serde(flatten)]
         text_style: TextStyle,
-        text: TopLevelExpr<Arc<String>>,
+        text: AttrExpr<Arc<String>>,
     },
 
     /// Path commands; They always have Path as parent
@@ -164,10 +166,10 @@ pub enum NodeKind {
     Cubic {
         #[serde(flatten)]
         position: Position,
-        c1_x: TopLevelExpr<f64>,
-        c1_y: TopLevelExpr<f64>,
-        c2_x: TopLevelExpr<f64>,
-        c2_y: TopLevelExpr<f64>,
+        c1_x: AttrExpr<f64>,
+        c1_y: AttrExpr<f64>,
+        c2_x: AttrExpr<f64>,
+        c2_y: AttrExpr<f64>,
     },
     Close,
 
@@ -177,12 +179,12 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: TopLevelExpr<f64>,
-        alpha: TopLevelExpr<f64>,
-        path: TopLevelExpr<Arc<String>>,
+        z_level: AttrExpr<f64>,
+        alpha: AttrExpr<f64>,
+        path: AttrExpr<Arc<String>>,
         /// When true, scale the image to fit inside the node box while
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
-        keep_aspect: TopLevelExpr<bool>,
+        keep_aspect: AttrExpr<bool>,
         /// Optional child layer nodes (kind = "layer").
         #[serde(default)]
         children: Vec<NodeId>,
@@ -194,8 +196,8 @@ pub enum NodeKind {
         position: Position,
         #[serde(flatten)]
         size: Size,
-        z_level: TopLevelExpr<f64>,
-        alpha: TopLevelExpr<f64>,
+        z_level: AttrExpr<f64>,
+        alpha: AttrExpr<f64>,
         /// Matches the SVG group `id` attribute.
         layer_name: Arc<String>,
         #[serde(default)]
@@ -267,7 +269,7 @@ pub struct SceneDef {
     pub name: Option<String>,
     #[serde(flatten)]
     pub size: Size,
-    pub fill_color: TopLevelExpr<Option<Color>>,
+    pub fill_color: AttrExpr<Option<Color>>,
     pub frames: u32,
     #[serde(default)]
     pub cues: Vec<u32>,

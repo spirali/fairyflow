@@ -1120,7 +1120,7 @@ export default function App() {
 
             {isFfsqActive ? (
               /* ── Sequence player ── */
-              <SequencePlayer result={currentSeqResult} fps={fps} canvasAreaRef={seqCanvasAreaRef} onRequestRerender={handleSeqRerender} />
+              <SequencePlayer result={currentSeqResult} fps={fps} canvasAreaRef={seqCanvasAreaRef} onRequestRerender={handleSeqRerender} isRendering={running} />
             ) : (
               <>
                 {/* Timeline bar */}

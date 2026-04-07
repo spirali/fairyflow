@@ -12,11 +12,13 @@ from .exprs import (
     expr_default_width,
     expr_default_x,
     expr_default_y,
+    expr_path_length,
     expr_path_x,
     expr_path_y,
     expr_mul,
     expr_norm,
     expr_sub,
+    to_expr,
 )
 from .ctxvars import (
     fctx,
@@ -489,9 +491,6 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         path.line_to().pos(pos)
         path.line_to().xy(px + dy, py - dx)
         path.close()
-
-        #child.xy(px, py)
-
         return path
         
 
@@ -499,13 +498,19 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         """
         Creates a triangle arrow on the path. 
 
-        Important: It will move start/end point of the `self` to not overlap with arrow
+        Important: It sets `crop_start` of the `self` to not overlap with arrow.
         """
         dir = self._get_start_direction()
-        if dir is None:
+        if dir is None:            
             return None
+        if length is None:
+            self._get_attr("width") * 5
+        if width is None:
+            width  = length
         path = self._create_arrow(*dir, length, width)
         path.color(self._get_attr("stroke_color"))
+
+        self.crop_start(to_expr(length) / expr_path_length(self))
         return path
     
 

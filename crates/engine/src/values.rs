@@ -13,14 +13,10 @@ pub struct Color(RendererColor);
 
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        struct Helper {
-            color: String,
-        }
-        let h = Helper::deserialize(d)?;
-        RendererColor::from_html(&h.color)
+        let s = String::deserialize(d)?;
+        RendererColor::from_html(&s)
             .map(Color)
-            .ok_or_else(|| de::Error::custom(format!("invalid color '{}'", h.color)))
+            .ok_or_else(|| de::Error::custom(format!("invalid color '{}'", s)))
     }
 }
 
@@ -132,6 +128,8 @@ pub enum FloatCall {
     Sub(Box<FloatParamsPair>),
     #[serde(rename = "*")]
     Mul(Box<FloatParamsPair>),
+    #[serde(rename = "/")]
+    Div(Box<FloatParamsPair>),
     Norm(Box<FloatParamsPair>),
     DefaultWidth {
         node: NodeId,

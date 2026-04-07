@@ -12,7 +12,7 @@ def serialize_expr(obj):
     if isinstance(obj, Node):
         return obj._id
     if isinstance(obj, Color):
-        return {"color": obj.value}
+        return obj.value
     return obj
 
 

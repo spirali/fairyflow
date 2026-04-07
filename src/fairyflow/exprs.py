@@ -8,6 +8,8 @@ class Expr:
         return expr_sub(self, other)    
     def __mul__(self, other):
         return expr_mul(self, other)
+    def __truediv__(self, other):
+        return expr_div(self, other)    
 
 class Call(Expr):
     def __init__(self, name, **kwargs):
@@ -24,6 +26,15 @@ class Call(Expr):
 
     def __repr__(self):
         return f"<Call {self.name} {self.args}>"
+    
+
+class Const(Expr):
+
+    def __init__(self, value):
+        self.value = value
+
+    def serialize_expr(self):
+        return self.value
 
 
 class InheritedExprs(Expr):
@@ -36,6 +47,12 @@ class InheritedExprs(Expr):
         return {"kind": "inherited", "expr": serialize_expr(self.expr)}
 
 
+def to_expr(obj):
+    if isinstance(obj, Expr):
+        return obj
+    return Const(obj)
+
+
 def expr_add(a, b):
     return Call("+", a=a, b=b)
 
@@ -46,6 +63,10 @@ def expr_sub(a, b):
 
 def expr_mul(a, b):
     return Call("*", a=a, b=b)
+
+
+def expr_div(a, b):
+    return Call("/", a=a, b=b)
 
 
 def expr_hold(av):
@@ -78,3 +99,7 @@ def expr_path_y(node, t):
 
 def expr_norm(a, b):
     return Call("norm", a=a, b=b)
+
+
+def expr_path_length(path):
+    return Call("path_length", node=path._id)

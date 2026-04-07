@@ -261,6 +261,17 @@ impl Eval<f64> for FloatCall {
                 tracing::trace!(a = va, b = vb, result = va * vb, "Call::Mul result");
                 Ok(va * vb)
             }
+            FloatCall::Div(pair) => {
+                tracing::trace!("Call::Div");
+                let (va, vb) = pair.eval(ctx)?;
+                let result = if vb.abs() < 0.000001 {
+                    0.0
+                } else {
+                    va / vb
+                };
+                tracing::trace!(a = va, b = vb, result = result, "Call::Div result");
+                Ok(result)
+            }
             FloatCall::Norm(pair) => {
                 tracing::trace!("Call::Mul");
                 let (va, vb) = pair.eval(ctx)?;

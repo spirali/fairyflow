@@ -259,12 +259,12 @@ mod tests {
     /// A minimal single-scene JSON using the current inline-expression format.
     const SCENE_JSON: &str = r#"{
   "scene": {"kind": "scene", "id": 0, "width": 200, "height": 200,
-            "fill_color": {"color": "white"}, "children": [1], "name": "Test"},
+            "fill_color": "white", "children": [1], "name": "Test"},
   "animated_values": [],
   "nodes": [
     {"kind": "rect", "id": 1,
      "x": 10, "y": 10, "width": 50, "height": 50,
-     "fill_color": {"color": "green"}, "stroke_color": null,
+     "fill_color": "green", "stroke_color": null,
      "stroke_width": 1, "alpha": 1,
      "z_level": {"kind": "inherited", "expr": 0}}
   ]

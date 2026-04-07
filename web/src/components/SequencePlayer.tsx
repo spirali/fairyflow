@@ -6,6 +6,7 @@ interface Props {
   fps: number;
   canvasAreaRef: RefObject<HTMLDivElement | null>;
   onRequestRerender?: () => void;
+  isRendering?: boolean;
 }
 
 function globalToScene(result: SequenceRenderResult, frame: number) {
@@ -21,7 +22,7 @@ function globalToScene(result: SequenceRenderResult, frame: number) {
   return { sceneIdx: last, localFrame: (result.scenes[last]?.frameCount ?? 1) - 1 };
 }
 
-export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRerender }: Props) {
+export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRerender, isRendering = false }: Props) {
   const [frame, setFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -60,17 +61,27 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
     if (nextCue !== null) setFrame(nextCue);
   }, [nextCue]);
 
-  // Keyboard handler — Left = prev cue, Right = next cue
+  // Refs so the keyboard handler never needs re-registering as state changes
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const gotoPrevCueRef = useRef(gotoPrevCue);
+  gotoPrevCueRef.current = gotoPrevCue;
+  const gotoNextCueRef = useRef(gotoNextCue);
+  gotoNextCueRef.current = gotoNextCue;
+  const handlePlayStopRef = useRef<() => void>(() => {});
+
+  // Keyboard handler — PageUp = prev cue, PageDown = next cue, ArrowRight = play/resume
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); gotoPrevCue(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); gotoNextCue(); }
+      if (e.key === 'PageUp')   { e.preventDefault(); gotoPrevCueRef.current(); }
+      if (e.key === 'PageDown') { e.preventDefault(); gotoNextCueRef.current(); }
+      if (e.key === 'ArrowRight' && !isPlayingRef.current) { e.preventDefault(); handlePlayStopRef.current(); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [gotoPrevCue, gotoNextCue]);
+  }, []);
 
   // Keep a ref so the fullscreen handler can read the latest result/callback without
   // needing them as effect dependencies (avoids re-registering the listener).
@@ -97,7 +108,7 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
     };
   }, []);
 
-  // Play/stop
+  // Play/stop — always stops at cue frames; ArrowRight resumes from current position
   const handlePlayStop = () => {
     if (isPlaying) {
       clearInterval(playIntervalRef.current!);
@@ -107,18 +118,25 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
     }
     setIsPlaying(true);
     let f = frame >= maxFrame ? 0 : frame;
+    const capturedCueFrames = cueFrames;
+    const stop = (at: number) => {
+      clearInterval(playIntervalRef.current!);
+      playIntervalRef.current = null;
+      setIsPlaying(false);
+      setFrame(at);
+    };
     playIntervalRef.current = setInterval(() => {
       f++;
-      if (f > maxFrame) {
-        clearInterval(playIntervalRef.current!);
-        playIntervalRef.current = null;
-        setIsPlaying(false);
-        setFrame(maxFrame);
+      if (capturedCueFrames.includes(f)) {
+        stop(f);
+      } else if (f > maxFrame) {
+        stop(maxFrame);
       } else {
         setFrame(f);
       }
     }, 1000 / Math.max(1, fps));
   };
+  handlePlayStopRef.current = handlePlayStop;
 
   useEffect(() => {
     return () => { if (playIntervalRef.current) clearInterval(playIntervalRef.current); };
@@ -172,6 +190,11 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
             />
           : <div className="seqp-canvas-empty">{result ? 'No frames' : ''}</div>
         }
+        {isRendering && result && (
+          <div className="seqp-rendering-overlay">
+            <div className="seqp-rendering-spinner" />
+          </div>
+        )}
       </div>
 
       {/* Controls */}
@@ -212,7 +235,7 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
             className="seqp-btn"
             onClick={gotoPrevCue}
             disabled={prevCue === null || !result}
-            title="Previous cue (←)"
+            title="Previous cue (Page Up)"
           >◀ Prev</button>
 
           <button
@@ -225,7 +248,7 @@ export default function SequencePlayer({ result, fps, canvasAreaRef, onRequestRe
             className="seqp-btn"
             onClick={gotoNextCue}
             disabled={nextCue === null || !result}
-            title="Next cue (→)"
+            title="Next cue (Page Down)"
           >Next ▶</button>
 
           <span className="seqp-frame-label">{result ? `${frame} / ${maxFrame}` : '—'}</span>

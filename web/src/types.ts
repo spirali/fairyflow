@@ -124,6 +124,8 @@ export interface SequenceSceneResult {
   frames: string[];   // blob URLs, index = local frame number within this scene
   width: number;
   height: number;
+  pngWidth: number;   // actual rendered PNG width (server-side resolution)
+  pngHeight: number;  // actual rendered PNG height
 }
 
 export interface SequenceRenderResult {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { withToken } from '../auth';
 import type { ConsoleLine, SceneData, ServerMsg, SequenceRenderResult, SequenceSceneResult } from '../types';
 
@@ -9,10 +9,12 @@ interface Props {
   setLines: React.Dispatch<React.SetStateAction<ConsoleLine[]>>;
   setRunning: React.Dispatch<React.SetStateAction<boolean>>;
   onRenderResult: (result: SequenceRenderResult) => void;
+  getPlayerAreaSize: () => { width: number; height: number } | null;
+  renderTrigger?: number;
 }
 
 export default function SequenceEditor({
-  path, wsRef, setWsOverride, setLines, setRunning, onRenderResult
+  path, wsRef, setWsOverride, setLines, setRunning, onRenderResult, getPlayerAreaSize, renderTrigger
 }: Props) {
   const [sceneFiles, setSceneFiles] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -168,29 +170,41 @@ export default function SequenceEditor({
           }
 
           const v = Date.now();
-          const fetchFrames = frameCount > 0
-            ? fetch(withToken(`/frames?from=0&to=${frameCount - 1}&scale=1&v=${v}`))
-                .then(r => r.ok ? r.json() as Promise<{ n: number; png: string }[]> : Promise.reject('frames request failed'))
-            : Promise.resolve([] as { n: number; png: string }[]);
 
           const fetchScene = fetch(withToken(`/tree/0?v=${v}`))
             .then(r => r.ok ? r.json() as Promise<SceneData> : Promise.reject('tree request failed'));
 
-          Promise.all([fetchFrames, fetchScene])
-            .then(([frameData, scene]) => {
-              const frames = new Array<string>(frameCount).fill('');
-              for (const { n, png } of frameData) {
-                const bytes = Uint8Array.from(atob(png), c => c.charCodeAt(0));
-                const blob = new Blob([bytes], { type: 'image/png' });
-                frames[n] = URL.createObjectURL(blob);
-              }
-              setWsOverride(null);
-              resolve({ path: filePath, frameCount, cueFrames, frames, width: scene.width, height: scene.height });
-            })
-            .catch(err => {
-              setWsOverride(null);
-              reject(err);
-            });
+          fetchScene.then(scene => {
+            // Compute render scale to match the player canvas area
+            const containerSize = getPlayerAreaSize();
+            const dpr = window.devicePixelRatio || 1;
+            let serverScale = dpr; // default: 1 CSS pixel = 1 PNG pixel at dpr scale
+            if (containerSize && containerSize.width > 0 && containerSize.height > 0 && scene.width > 0 && scene.height > 0) {
+              const cssScale = Math.min(containerSize.width / scene.width, containerSize.height / scene.height);
+              serverScale = cssScale * dpr;
+            }
+            serverScale = Math.max(0.01, Math.min(256, serverScale));
+            const pngWidth = Math.round(scene.width * serverScale);
+            const pngHeight = Math.round(scene.height * serverScale);
+
+            const fetchFrames = frameCount > 0
+              ? fetch(withToken(`/frames?from=0&to=${frameCount - 1}&scale=${serverScale.toFixed(3)}&v=${v}`))
+                  .then(r => r.ok ? r.json() as Promise<{ n: number; png: string }[]> : Promise.reject('frames request failed'))
+              : Promise.resolve([] as { n: number; png: string }[]);
+
+            fetchFrames
+              .then(frameData => {
+                const frames = new Array<string>(frameCount).fill('');
+                for (const { n, png } of frameData) {
+                  const bytes = Uint8Array.from(atob(png), c => c.charCodeAt(0));
+                  const blob = new Blob([bytes], { type: 'image/png' });
+                  frames[n] = URL.createObjectURL(blob);
+                }
+                setWsOverride(null);
+                resolve({ path: filePath, frameCount, cueFrames, frames, width: scene.width, height: scene.height, pngWidth, pngHeight });
+              })
+              .catch(err => { setWsOverride(null); reject(err); });
+          }).catch(err => { setWsOverride(null); reject(err); });
         }
       };
 
@@ -249,6 +263,13 @@ export default function SequenceEditor({
     setRunning(false);
     setRenderStatus('');
   };
+
+  // ── External render trigger (e.g. fullscreen resize) ──────────────────────
+  const handleRenderRef = useRef(handleRender);
+  handleRenderRef.current = handleRender;
+  useEffect(() => {
+    if (renderTrigger && renderTrigger > 0) handleRenderRef.current();
+  }, [renderTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────────
 

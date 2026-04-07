@@ -106,6 +106,15 @@ export default function App() {
   const setWsOverride = useCallback((fn: ((msg: ServerMsg) => void) | null) => {
     wsMessageOverrideRef.current = fn;
   }, []);
+  const seqCanvasAreaRef = useRef<HTMLDivElement>(null);
+  const getSeqPlayerAreaSize = useCallback(() => {
+    const el = seqCanvasAreaRef.current;
+    if (!el) return null;
+    const { width, height } = el.getBoundingClientRect();
+    return width > 0 && height > 0 ? { width, height } : null;
+  }, []);
+  const [seqRenderTrigger, setSeqRenderTrigger] = useState(0);
+  const handleSeqRerender = useCallback(() => setSeqRenderTrigger(t => t + 1), []);
 
   // ── node selection ────────────────────────────────────────────────────────
   const [selectedNid, setSelectedNid] = useState<number | null>(null);
@@ -1073,6 +1082,8 @@ export default function App() {
                         setLines={setLines}
                         setRunning={setRunning}
                         onRenderResult={res => handleSeqRenderResult(currentFile, res)}
+                        getPlayerAreaSize={getSeqPlayerAreaSize}
+                        renderTrigger={seqRenderTrigger}
                       />
                     </div>
                   )}
@@ -1109,13 +1120,7 @@ export default function App() {
 
             {isFfsqActive ? (
               /* ── Sequence player ── */
-              currentSeqResult ? (
-                <SequencePlayer result={currentSeqResult} fps={fps} />
-              ) : (
-                <div className="seq-no-render">
-                  <span>Press <strong>Render</strong> to preview the sequence</span>
-                </div>
-              )
+              <SequencePlayer result={currentSeqResult} fps={fps} canvasAreaRef={seqCanvasAreaRef} onRequestRerender={handleSeqRerender} />
             ) : (
               <>
                 {/* Timeline bar */}

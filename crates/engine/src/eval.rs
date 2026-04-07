@@ -399,7 +399,7 @@ impl Node {
                 pivot_y,
                 scale_x,
                 scale_y,
-                layout,
+                clip_x, clip_y, clip_w, clip_h, layout,
                 children,
                 z_level,
             } => renderer::NodeKind::Group {
@@ -411,6 +411,10 @@ impl Node {
                 pivot_y: pivot_y.eval(ctx)?,
                 scale_x: scale_x.eval(ctx)?,
                 scale_y: scale_y.eval(ctx)?,
+                clip_x: clip_x.eval(ctx)?,
+                clip_y: clip_y.eval(ctx)?,
+                clip_w: clip_w.eval(ctx)?,
+                clip_h: clip_h.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?,
                 children: {
                     let mut result = Vec::new();

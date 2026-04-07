@@ -156,6 +156,11 @@ pub enum NodeKind {
         rotation: f64,
         pivot_x: f64,
         pivot_y: f64,
+        /// Relative clip region. Values outside [0,1] mean no clipping on that axis.
+        clip_x: f64,
+        clip_y: f64,
+        clip_w: f64,
+        clip_h: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         children: Vec<Node>,

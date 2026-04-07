@@ -5,6 +5,7 @@ use crate::nodes::{Node, SceneDef};
 use crate::eval::EvalCtx;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Select which scene(s) to use for rendering / key-frame queries.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +43,16 @@ pub struct AnimationDef {
     scenes: Vec<SingleScene>,
     /// `frame_offsets[i]` = absolute start frame of scene `i` in "All" mode.
     frame_offsets: Vec<u32>,
+}
+
+impl AnimationDef {
+    pub fn collect_images(&self, image_paths: &mut HashSet<Arc<String>>) {
+        for scene in &self.scenes {
+            for node in scene.nodes.values() {
+                node.collect_images(image_paths);
+            }
+        }
+    }
 }
 
 // ────────────────────────── Deserialization helpers ──────────────────────────

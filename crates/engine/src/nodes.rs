@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::basictypes::{AvId, FrameId, NodeId};
 use crate::eval::EvalCtx;
 use renderer::Color as RendererColor;
@@ -91,6 +92,10 @@ pub enum NodeKind {
         scale_x: AttrExpr<f64>,
         scale_y: AttrExpr<f64>,
         z_level: AttrExpr<f64>,
+        clip_x: AttrExpr<f64>,
+        clip_y: AttrExpr<f64>,
+        clip_w: AttrExpr<f64>,
+        clip_h: AttrExpr<f64>,
         layout: Layout,
         #[serde(default)]
         children: Vec<NodeId>,
@@ -259,11 +264,22 @@ impl Node {
             current = node.parent;
         }
     }
+
+    pub fn collect_images(&self, image_paths: &mut HashSet<Arc<String>>) {
+        match &self.kind {
+            NodeKind::Image {
+                path, ..
+            } => {
+                todo!()
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Root of the scene definition. Mirrors `Scene(SizeMixin)` in Python.
 #[derive(Debug, Deserialize)]
-pub struct SceneDef {
+pub(crate) struct SceneDef {
     pub id: NodeId,
     #[serde(default)]
     pub name: Option<String>,

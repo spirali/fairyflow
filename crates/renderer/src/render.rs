@@ -17,7 +17,7 @@ use skrifa::{
 use std::cell::RefCell;
 use std::sync::Arc;
 use tiny_skia::{
-    FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform,
+    FillRule, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform,
 };
 
 thread_local! {
@@ -87,6 +87,10 @@ impl Renderer {
                 rotation,
                 pivot_x,
                 pivot_y,
+                clip_x,
+                clip_y,
+                clip_w,
+                clip_h,
                 z_level,
                 children,
             } => {
@@ -97,7 +101,41 @@ impl Renderer {
                 let alpha = parent_alpha * *alpha as f32;
                 // Clone to avoid holding a borrow on node.kind while calling self methods.
                 let children = children.clone();
-                self.render_children(&children, pixmap, transform, alpha);
+
+                let needs_clip = *clip_x > 0.0 || *clip_y > 0.0 || *clip_w < 1.0 || *clip_h < 1.0;
+                if !needs_clip {
+                    self.render_children(&children, pixmap, transform, alpha);
+                } else {
+                    // Render children into an offscreen pixmap of the same dimensions.
+                    let w = pixmap.width();
+                    let h = pixmap.height();
+                    let mut offscreen = Pixmap::new(w, h).expect("offscreen pixmap");
+                    self.render_children(&children, &mut offscreen, transform, alpha);
+
+                    // Build the clip rectangle in group-local space and transform it to
+                    // screen space to create a mask.
+                    let lw = size.width as f32;
+                    let lh = size.height as f32;
+                    if let Some(clip_rect) = Rect::from_xywh(
+                        *clip_x as f32 * lw,
+                        *clip_y as f32 * lh,
+                        *clip_w as f32 * lw,
+                        *clip_h as f32 * lh,
+                    ) {
+                        let clip_path = PathBuilder::from_rect(clip_rect);
+                        if let Some(mut mask) = Mask::new(w, h) {
+                            mask.fill_path(&clip_path, FillRule::Winding, true, transform);
+                            pixmap.draw_pixmap(
+                                0,
+                                0,
+                                offscreen.as_ref(),
+                                &PixmapPaint::default(),
+                                Transform::identity(),
+                                Some(&mask),
+                            );
+                        }
+                    }
+                }
             }
             NodeKind::Rect {
                 position,
@@ -563,6 +601,7 @@ fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBound
             pivot_y,
             children,
             z_level,
+            ..
         } => {
             let pivot_x_abs = (pivot_x * size.width) as f32;
             let pivot_y_abs = (pivot_y * size.height) as f32;

@@ -325,6 +325,10 @@ class Group(
         self._init_alpha()
         self._init_z()
         self._init_rot_and_scale()
+        self._add_attr("clip_x", 0)
+        self._add_attr("clip_y", 0)
+        self._add_attr("clip_w", 1)
+        self._add_attr("clip_h", 1)
 
         self._init_position()
         self._layout = CENTERING_LAYOUT
@@ -341,6 +345,22 @@ class Group(
         result = super().serialize(serializer)
         result["layout"] = self._layout.serialize(serializer)
         return result
+    
+    def clip_x(self, value):
+        self._set_attr("clip_x", value)
+        return self
+    
+    def clip_y(self, value):
+        self._set_attr("clip_y", value)
+        return self
+
+    def clip_w(self, value):
+        self._set_attr("clip_w", value)
+        return self
+
+    def clip_h(self, value):
+        self._set_attr("clip_h", value)
+        return self            
 
 
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
@@ -472,6 +492,20 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             vx = expr_sub(child1._get_attr("x"), p.x)
             vy = expr_sub(child1._get_attr("y"), p.y)
         return (child0, vx, vy)
+    
+    def _get_end_direction(self):
+        if len(self._children) < 2:
+            return None        
+        child0 = self._children[-1]
+        child1 = self._children[-2]
+        if isinstance(child0, PathCubic):
+            vx = child0._get_attr("c2_x")
+            vy = child0._get_attr("c2_y")
+        else:
+            p = child0.get_pos()
+            vx = expr_sub(child1._get_attr("x"), p.x)
+            vy = expr_sub(child1._get_attr("y"), p.y)
+        return (child0, vx, vy)    
 
 
     def _create_arrow(self, child, vx, vy, length, width):                
@@ -500,17 +534,23 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
 
         Important: It sets `crop_start` of the `self` to not overlap with arrow.
         """
-        dir = self._get_start_direction()
+        if placement == "start":
+            dir = self._get_start_direction()
+        else:
+            dir = self._get_end_direction()
         if dir is None:            
             return None
         if length is None:
-            self._get_attr("width") * 5
+            length = self._get_attr("stroke_width") * 5
         if width is None:
             width  = length
         path = self._create_arrow(*dir, length, width)
         path.color(self._get_attr("stroke_color"))
 
-        self.crop_start(to_expr(length) / expr_path_length(self))
+        if placement == "start":
+            self.crop_start((to_expr(length) * 0.5) / expr_path_length(self))
+        else:
+            self.crop_end(to_expr(1.0) - ((to_expr(length) * 0.5) / expr_path_length(self)))
         return path
     
 

@@ -1,4 +1,6 @@
+use std::collections::HashSet;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -54,7 +56,24 @@ pub enum Expr<T: Value + DeserializeOwned> {
     Inherited { expr: Box<Expr<T>> },
 }
 
-// const _ASSERT_SIZE: () = assert!(std::mem::size_of::<Expr<f64>>() == 24);
+impl<T: Clone + Hash + Eq + PartialEq + DeserializeOwned + Value> Expr<T> {
+    pub fn collect_all_values(&self, values: &mut HashSet<T>) {
+        match self {
+            Expr::Const(v) => {
+                values.insert(v.clone());
+            }
+            Expr::Call(_) => {
+                todo!()
+            }
+            Expr::AnimValue(av) => {
+                todo!()
+            }
+            Expr::Inherited { expr } => {
+                expr.collect_all_values(values);
+            }
+        }
+    }
+}
 
 impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
     fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<T> {

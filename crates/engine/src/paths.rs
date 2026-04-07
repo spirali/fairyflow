@@ -32,7 +32,7 @@ fn cubic_arc_length(
     c2x: f64, c2y: f64,
     p1x: f64, p1y: f64,
 ) -> f64 {
-    const STEPS: usize = 32;
+    const STEPS: usize = 64;
     let mut len = 0.0;
     let mut prev = (p0x, p0y);
     for i in 1..=STEPS {

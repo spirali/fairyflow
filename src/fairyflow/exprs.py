@@ -17,7 +17,7 @@ class Call(Expr):
     def serialize_expr(self):
         from .serializer import serialize_expr
 
-        r = {"kind": "call", "fn": self.name}
+        r = {"fn": self.name}
         for k in self.args:
             r[k] = serialize_expr(self.args[k])
         return r

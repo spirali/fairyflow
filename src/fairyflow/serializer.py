@@ -10,7 +10,7 @@ def serialize_expr(obj):
     if isinstance(obj, Expr):
         return obj.serialize_expr()
     if isinstance(obj, Node):
-        return {"id": obj._id}
+        return obj._id
     if isinstance(obj, Color):
         return {"color": obj.value}
     return obj
@@ -18,13 +18,8 @@ def serialize_expr(obj):
 
 class Serializer:
     def __init__(self):
-        self.animated_values = []
         self.nodes = []
         self.info = []
-
-    def add_av(self, av):
-        self.animated_values.append(av.serialize())
-        return id(av)
 
     def add_node(self, node):
         self.nodes.append(node.serialize(self))
@@ -39,7 +34,6 @@ def create_export(idx, scene):
     serialized_scene = scene.serialize(serializer)    
     return {
         "scene": serialized_scene,
-        "animated_values": serializer.animated_values,
         "nodes": serializer.nodes,
         "info": serializer.info
     }

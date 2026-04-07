@@ -70,10 +70,7 @@ class Node(AnimatedObject):
             result["end"] = self._end
         attrs = self._attrs
         for name in attrs:
-            v = attrs[name]
-            if not v.is_single_value():
-                serializer.add_av(attrs[name])
-            result[name] = serialize_expr(v)
+            result[name] = serialize_expr(attrs[name])
         return result
 
     def _get_parent(self):

@@ -45,15 +45,16 @@ pub trait Eval<T> {
 pub trait Value: Sized {
     type Call: Eval<Self> + DeserializeOwned + Debug;
     fn recursive_value() -> Self;
+    fn interpolate(&self, other: &Self, t: f64) -> Self;
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 #[serde(bound(deserialize = "T: DeserializeOwned"))]
 pub enum Expr<T: Value + DeserializeOwned> {
     Const(T),
     Call(T::Call),
-    //AnimValue(AnimatedValue<T>),
+    AnimValue(AnimatedValue<T>),
     Inherited { expr: Box<Expr<T>> },
 }
 
@@ -63,6 +64,7 @@ impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
             Expr::Const(v) => Ok(v.clone()),
             Expr::Call(call) => call.eval(ctx),
             Expr::Inherited { expr } => expr.eval(ctx),
+            Expr::AnimValue(av) => av.eval(ctx),
         }
     }
 }
@@ -73,24 +75,37 @@ impl Value for f64 {
     fn recursive_value() -> Self {
         0.0f64
     }
+    fn interpolate(&self, other: &Self, t: f64) -> Self {
+        self + t * (*other - *self)
+    }
 }
 
 impl Expr<f64> {
     pub fn is_default_width_of(&self, node: NodeId) -> bool {
-        todo!()
+        match self {
+            Expr::Call(FloatCall::DefaultWidth { node: n }) => {
+                node == *n
+            }
+            _ => false
+        }
     }
     pub fn is_default_height_of(&self, node: NodeId) -> bool {
-        todo!()
+        match self {
+            Expr::Call(FloatCall::DefaultHeight { node: n }) => {
+                node == *n
+            }
+            _ => false
+        }
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct FloatParamsPair {
     pub a: Expr<f64>,
     pub b: Expr<f64>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct CallParamsNodeTransform {
     pub source: NodeId,
     pub target: NodeId,
@@ -98,8 +113,8 @@ pub struct CallParamsNodeTransform {
     pub y: Expr<f64>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug, Deserialize)]
+#[serde(tag = "fn", rename_all = "snake_case")]
 pub enum FloatCall {
     NodeTransformX(Box<CallParamsNodeTransform>),
     NodeTransformY(Box<CallParamsNodeTransform>),
@@ -160,6 +175,22 @@ impl Value for Option<Color> {
     fn recursive_value() -> Self {
         None
     }
+    fn interpolate(&self, other: &Self, t: f64) -> Self {
+        match (self, other) {
+            (None, None) => None,
+            (Some(a), Some(b)) => Some(Color::interpolate(a, b, t)),
+            (None, Some(rc)) => {
+                let mut lc = rc.clone();
+                lc.set_alpha(0.0);
+                Some(Color::interpolate(&lc, &rc, t))
+            },
+            (Some(lc), None) => {
+                let mut rc = lc.clone();
+                rc.set_alpha(0.0);
+                Some(Color::interpolate(&lc, &rc, t))
+            },
+        }
+    }
 }
 
 impl Value for Arc<String> {
@@ -167,11 +198,19 @@ impl Value for Arc<String> {
     fn recursive_value() -> Self {
         Arc::new(String::new())
     }
+
+    fn interpolate(&self, other: &Self, t: f64) -> Self {
+        self.clone()
+    }
 }
 
 impl Value for bool {
     type Call = NoCall;
     fn recursive_value() -> Self {
         false
+    }
+
+    fn interpolate(&self, other: &Self, t: f64) -> Self {
+        *self
     }
 }

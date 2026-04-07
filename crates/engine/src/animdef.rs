@@ -50,7 +50,6 @@ pub struct AnimationDef {
 struct RawAnimationDef {
     scene: SceneDef,
     nodes: Vec<Node>,
-    animated_values: Vec<AnimatedValue>,
     #[serde(default)]
     info: serde_json::Value,
 }
@@ -93,12 +92,6 @@ impl SingleScene {
         for (node_id, parent_id) in parents {
             nodes.get_mut(&node_id).unwrap().parent = Some(parent_id);
         }
-
-        let animated_values: HashMap<AvId, AnimatedValue> = raw
-            .animated_values
-            .into_iter()
-            .map(|av| (av.id, av))
-            .collect();
 
         let name = raw
             .scene

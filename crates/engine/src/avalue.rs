@@ -1,5 +1,5 @@
 use crate::basictypes::{AvId, FrameId, NodeId};
-use crate::nodes::{Expr, Node, TopLevelExpr, Transition, Value};
+use crate::nodes::{Node, TopLevelExpr, Transition};
 use crate::eval::EvalCtx;
 use anyhow::bail;
 use serde::{Deserialize, Deserializer};
@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KeyFrame {
-    pub value: TopLevelExpr,
+    //pub value: TopLevelExpr,
     pub tr: Transition,
 }
 
@@ -28,7 +28,8 @@ fn deserialize_keyframes<'de, D>(d: D) -> Result<BTreeMap<FrameId, FrameValue>, 
 where
     D: Deserializer<'de>,
 {
-    use serde::de::Error;
+    todo!()
+    /*use serde::de::Error;
 
     #[derive(Deserialize)]
     struct RawKeyFrame {
@@ -57,11 +58,11 @@ where
             };
             Ok((kf.frame, fv))
         })
-        .collect::<Result<BTreeMap<_, _>, D::Error>>()
+        .collect::<Result<BTreeMap<_, _>, D::Error>>()*/
 }
 
 impl AnimatedValue {
-    pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
+    /*pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
         let _span = tracing::trace_span!("av.eval", av_id = %self.id).entered();
         let frame = ctx.frame();
         let Some((left_f, left_fv)) = self.scan_left(frame) else {
@@ -148,5 +149,5 @@ impl AnimatedValue {
             .range(frame_id..)
             .map(|(frame_id, value)| (*frame_id, value))
             .next()
-    }
+    }*/
 }

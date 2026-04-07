@@ -1,22 +1,23 @@
 use crate::FrameId;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::nodes::{CallExpr, CallParamsNodeTransform, CallParamsPair, Expr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr, Value};
+use crate::nodes::{Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, TopLevelExpr};
 use anyhow::bail;
 use by_address::ByAddress;
 use renderer::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use crate::paths::follow_path;
-
-const EVAL_DEPTH_MAX: u32 = 64;
+use crate::values::{Eval, Expr, FloatCall, FloatParamsPair, Value};
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
     scene_def: &'a SceneDef,
     nodes: &'a HashMap<NodeId, Node>,
-    animated_values: &'a HashMap<AvId, AnimatedValue>,
-    evaluating_exprs: RefCell<HashSet<*const Expr>>,
+    evaluating_exprs: RefCell<HashSet<usize>>,
 }
 
 impl<'a> EvalCtx<'a> {
@@ -24,23 +25,21 @@ impl<'a> EvalCtx<'a> {
         frame: FrameId,
         scene_def: &'a SceneDef,
         nodes: &'a HashMap<NodeId, Node>,
-        animated_values: &'a HashMap<AvId, AnimatedValue>,
     ) -> Self {
         Self {
             frame,
             scene_def,
             nodes,
-            animated_values,
             evaluating_exprs: RefCell::new(HashSet::new()),
         }
     }
 
     pub fn scene_width(&self) -> anyhow::Result<f64> {
-        self.scene_def.size.width.eval_f64(self)
+        self.scene_def.size.width.eval(self)
     }
 
     pub fn scene_height(&self) -> anyhow::Result<f64> {
-        self.scene_def.size.height.eval_f64(self)
+        self.scene_def.size.height.eval(self)
     }
 
     #[inline]
@@ -48,22 +47,16 @@ impl<'a> EvalCtx<'a> {
         self.frame
     }
 
-    pub fn av(&self, av_id: AvId) -> anyhow::Result<&AnimatedValue> {
-        self.animated_values
-            .get(&av_id)
-            .ok_or_else(|| anyhow::anyhow!("Av {} not found", av_id))
-    }
-
     #[must_use]
-    pub(crate) fn begin_eval(&self, expr: &'a Expr) -> bool {
-        self.evaluating_exprs.borrow_mut().insert(expr)
+    pub(crate) fn begin_eval<T: Value + DeserializeOwned>(&self, expr: &'a Expr<T>) -> bool {
+        self.evaluating_exprs.borrow_mut().insert(expr as *const _ as usize)
     }
 
-    pub(crate) fn end_eval(&self, expr: &'a Expr) {
+    pub(crate) fn end_eval<T: Value + DeserializeOwned>(&self, expr: &'a Expr<T>) {
         assert!(
             self.evaluating_exprs
                 .borrow_mut()
-                .remove(&(expr as *const Expr))
+                .remove(&(expr as *const _ as usize))
         )
     }
 
@@ -107,15 +100,15 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64,
             pivot_y,
             ..
         } => {
-            let tx = position.x.eval_f64(ctx)?;
-            let ty = position.y.eval_f64(ctx)?;
-            let sx = scale_x.eval_f64(ctx)?;
-            let sy = scale_y.eval_f64(ctx)?;
-            let r = rotation.eval_f64(ctx)?.to_radians();
-            let w = size.width.eval_f64(ctx)?;
-            let h = size.height.eval_f64(ctx)?;
-            let pvx = pivot_x.eval_f64(ctx)? * w;
-            let pvy = pivot_y.eval_f64(ctx)? * h;
+            let tx = position.x.eval(ctx)?;
+            let ty = position.y.eval(ctx)?;
+            let sx = scale_x.eval(ctx)?;
+            let sy = scale_y.eval(ctx)?;
+            let r = rotation.eval(ctx)?.to_radians();
+            let w = size.width.eval(ctx)?;
+            let h = size.height.eval(ctx)?;
+            let pvx = pivot_x.eval(ctx)? * w;
+            let pvy = pivot_y.eval(ctx)? * h;
             Ok((tx, ty, sx, sy, r.cos(), r.sin(), pvx, pvy))
         }
         _ => anyhow::bail!("node {:?} has no group transform (not a group)", node.id),
@@ -220,22 +213,20 @@ fn node_transform(
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
-impl TopLevelExpr {
-    pub fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<Value> {
+impl<T: Value + DeserializeOwned + Clone> Eval<T> for TopLevelExpr<T> {
+    fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<T> {
         let expr = self.get_expr();
         if !ctx.begin_eval(expr) {
-            return Ok(Value::Recursive);
+            return Ok(T::recursive_value());
         }
         let result = expr.eval(ctx);
         ctx.end_eval(expr);
         result
     }
+}
 
-    pub fn eval_f64<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<f64> {
-        self.eval(ctx)?.as_f64()
-    }
-
-    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<Value>> {
+impl<T: Value + DeserializeOwned + Debug + Clone> TopLevelExpr<T> {
+    fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<T>> {
         Ok(match self.get_expr() {
             Expr::Inherited { .. } => Inheritable::Inherited(self.eval(ctx)?),
             _ => Inheritable::Own(self.eval(ctx)?),
@@ -243,57 +234,36 @@ impl TopLevelExpr {
     }
 }
 
-impl CallParamsPair {
-    pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
-        let va = self.a.eval(ctx)?.as_f64()?;
-        let vb = self.b.eval(ctx)?.as_f64()?;
-        Ok((va, vb))
+impl Eval<(f64, f64)> for FloatParamsPair {
+    fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
+        Ok((self.a.eval(ctx)?, self.b.eval(ctx)?))
     }
 }
 
-impl Expr {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
+impl Eval<f64> for FloatCall {
+    fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         match self {
-            Expr::Const(v) => Ok(v.clone()),
-            Expr::Call(call) => call.eval(ctx),
-            Expr::Av(av_id) => {
-                tracing::trace!(av_id = %av_id.get_id(), "Expr::Av");
-                ctx.av(av_id.get_id())?.eval(ctx)
-            }
-            Expr::Inherited { expr } => expr.eval(ctx),
-        }
-    }
-
-    /// Shortcut for the most used eval
-    pub fn eval_f64(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
-        self.eval(ctx)?.as_f64()
-    }
-}
-
-impl CallExpr {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Value> {
-        match self {
-            CallExpr::Add(pair) => {
+            FloatCall::Add(pair) => {
                 tracing::trace!("Call::Add");
-                let (va, vb) = pair.eval_f64(ctx)?;
+                let (va, vb) = pair.eval(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va + vb, "Call::Add result");
-                Ok(Value::Float(va + vb))
+                Ok(va + vb)
             }
-            CallExpr::Sub(pair) => {
+            FloatCall::Sub(pair) => {
                 tracing::trace!("Call::Sub");
-                let (va, vb) = pair.eval_f64(ctx)?;
+                let (va, vb) = pair.eval(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va - vb, "Call::Sub result");
-                Ok(Value::Float(va - vb))
+                Ok(va - vb)
             }
-            CallExpr::Mul(pair) => {
+            FloatCall::Mul(pair) => {
                 tracing::trace!("Call::Mul");
-                let (va, vb) = pair.eval_f64(ctx)?;
+                let (va, vb) = pair.eval(ctx)?;
                 tracing::trace!(a = va, b = vb, result = va * vb, "Call::Mul result");
-                Ok(Value::Float(va * vb))
+                Ok(va * vb)
             }
-            CallExpr::Norm(pair) => {
+            FloatCall::Norm(pair) => {
                 tracing::trace!("Call::Mul");
-                let (va, vb) = pair.eval_f64(ctx)?;
+                let (va, vb) = pair.eval(ctx)?;
                 let d = va * va + vb * vb;
                 let result = if d < 0.0001 {
                     0.0
@@ -301,53 +271,53 @@ impl CallExpr {
                     va / d.sqrt()
                 };
                 tracing::trace!(a = va, b = vb, result = result, "Call::Norm result");
-                Ok(Value::Float(result))
+                Ok(result)
             }
-            CallExpr::NodeTransformX(params) => {
+            FloatCall::NodeTransformX(params) => {
                 tracing::trace!(
-                    source = params.source.get_id().as_u64(),
-                    target = params.target.get_id().as_u64(),
+                    source = params.source.as_u64(),
+                    target = params.target.as_u64(),
                     "Call::NodeTransformX"
                 );
-                let xv = params.x.eval(ctx)?.as_f64()?;
-                let yv = params.y.eval(ctx)?.as_f64()?;
+                let xv = params.x.eval(ctx)?;
+                let yv = params.y.eval(ctx)?;
                 let (px, _py) =
-                    node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
-                Ok(Value::Float(px))
+                    node_transform(params.source, params.target, xv, yv, ctx)?;
+                Ok(px)
             }
-            CallExpr::NodeTransformY(params) => {
+            FloatCall::NodeTransformY(params) => {
                 tracing::trace!(
-                    source = params.source.get_id().as_u64(),
-                    target = params.target.get_id().as_u64(),
+                    source = params.source.as_u64(),
+                    target = params.target.as_u64(),
                     "Call::NodeTransformY"
                 );
-                let xv = params.x.eval(ctx)?.as_f64()?;
-                let yv = params.y.eval(ctx)?.as_f64()?;
+                let xv = params.x.eval(ctx)?;
+                let yv = params.y.eval(ctx)?;
                 let (_px, py) =
-                    node_transform(params.source.get_id(), params.target.get_id(), xv, yv, ctx)?;
-                Ok(Value::Float(py))
+                    node_transform(params.source, params.target, xv, yv, ctx)?;
+                Ok(py)
             }
-            CallExpr::DefaultWidth { node } => {
-                let node = ctx.node(node.get_id())?;
-                Ok(Value::Float(node.default_width(ctx)?))
+            FloatCall::DefaultWidth { node } => {
+                let node = ctx.node(*node)?;
+                Ok(node.default_width(ctx)?)
             }
-            CallExpr::DefaultHeight { node } => {
-                let node = ctx.node(node.get_id())?;
-                Ok(Value::Float(node.default_height(ctx)?))
+            FloatCall::DefaultHeight { node } => {
+                let node = ctx.node(*node)?;
+                Ok(node.default_height(ctx)?)
             }
-            CallExpr::DefaultX { node } => {
-                let node = ctx.node(node.get_id())?;
-                Ok(Value::Float(node.default_x(ctx)?))
+            FloatCall::DefaultX { node } => {
+                let node = ctx.node(*node)?;
+                Ok(node.default_x(ctx)?)
             }
-            CallExpr::DefaultY { node } => {
-                let node = ctx.node(node.get_id())?;
-                Ok(Value::Float(node.default_y(ctx)?))
+            FloatCall::DefaultY { node } => {
+                let node = ctx.node(*node)?;
+                Ok(node.default_y(ctx)?)
             }
-            CallExpr::FollowPathX { node, start_frame, end_frame } => {
-                Ok(Value::Float(follow_path(ctx, node.get_id(), *start_frame, *end_frame)?.0))
+            FloatCall::FollowPathX { node, start_frame, end_frame } => {
+                Ok(follow_path(ctx, *node, *start_frame, *end_frame)?.0)
             }
-            CallExpr::FollowPathY { node, start_frame, end_frame } => {
-                Ok(Value::Float(follow_path(ctx, node.get_id(), *start_frame, *end_frame)?.1))
+            FloatCall::FollowPathY { node, start_frame, end_frame } => {
+                Ok(follow_path(ctx, *node, *start_frame, *end_frame)?.1)
             }
         }
     }
@@ -358,8 +328,8 @@ impl CallExpr {
 impl Position {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Position> {
         Ok(renderer::Position {
-            x: self.x.eval_f64(ctx)?,
-            y: self.y.eval_f64(ctx)?,
+            x: self.x.eval(ctx)?,
+            y: self.y.eval(ctx)?,
         })
     }
 }
@@ -367,8 +337,8 @@ impl Position {
 impl Size {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Size> {
         Ok(renderer::Size {
-            width: self.width.eval_f64(ctx)?,
-            height: self.height.eval_f64(ctx)?,
+            width: self.width.eval(ctx)?,
+            height: self.height.eval(ctx)?,
         })
     }
 }
@@ -376,10 +346,10 @@ impl Size {
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Style> {
         Ok(renderer::Style {
-            fill_color: self.fill_color.eval(ctx)?.into_color(),
-            stroke_color: self.stroke_color.eval(ctx)?.into_color(),
-            stroke_width: self.stroke_width.eval_f64(ctx)?,
-            alpha: self.alpha.eval_f64(ctx)?,
+            fill_color: self.fill_color.eval(ctx)?.map(|c| c.into_inner()),
+            stroke_color: self.stroke_color.eval(ctx)?.map(|c| c.into_inner()),
+            stroke_width: self.stroke_width.eval(ctx)?,
+            alpha: self.alpha.eval(ctx)?,
         })
     }
 }
@@ -387,13 +357,13 @@ impl Style {
 impl TextStyle {
     pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextStyle> {
         Ok(renderer::TextStyle {
-            fill_color: self.style.fill_color.eval_as_inheritable(ctx)?.map(|v| -> anyhow::Result<_> { Ok(v.clone().into_color()) })?,
-            stroke_color: self.style.stroke_color.eval_as_inheritable(ctx)?.map(|v| -> anyhow::Result<_> { Ok(v.clone().into_color()) })?,
-            stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
-            alpha: self.style.alpha.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
-            font_family: self.font.eval_as_inheritable(ctx)?.map(|v| v.as_string_ref())?,
-            font_size: self.font_size.eval_as_inheritable(ctx)?.map(|v| v.as_f64())?,
-            italic: self.italic.eval_as_inheritable(ctx)?.map(|v| v.as_bool())?,
+            fill_color: self.style.fill_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+            stroke_color: self.style.stroke_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+            stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?,
+            alpha: self.style.alpha.eval_as_inheritable(ctx)?,
+            font_family: self.font.eval_as_inheritable(ctx)?,
+            font_size: self.font_size.eval_as_inheritable(ctx)?,
+            italic: self.italic.eval_as_inheritable(ctx)?,
         })
     }
 }
@@ -419,13 +389,13 @@ impl Node {
             } => renderer::NodeKind::Group {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
-                alpha: alpha.eval_f64(ctx)?,
-                rotation: rotation.eval_f64(ctx)?,
-                pivot_x: pivot_x.eval_f64(ctx)?,
-                pivot_y: pivot_y.eval_f64(ctx)?,
-                scale_x: scale_x.eval_f64(ctx)?,
-                scale_y: scale_y.eval_f64(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                alpha: alpha.eval(ctx)?,
+                rotation: rotation.eval(ctx)?,
+                pivot_x: pivot_x.eval(ctx)?,
+                pivot_y: pivot_y.eval(ctx)?,
+                scale_x: scale_x.eval(ctx)?,
+                scale_y: scale_y.eval(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
                 children: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -446,7 +416,7 @@ impl Node {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
             },
             NodeKind::Ellipse {
                 position,
@@ -457,7 +427,7 @@ impl Node {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
             },
             NodeKind::Path {
                 style,
@@ -465,7 +435,7 @@ impl Node {
                 children,
             } => renderer::NodeKind::Path {
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))
@@ -483,7 +453,7 @@ impl Node {
                 text_style: text_style.eval_as_inheritable(ctx)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
                 lines: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
@@ -500,10 +470,10 @@ impl Node {
             } => renderer::NodeKind::Image {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
-                alpha: alpha.eval_f64(ctx)?,
-                path: path.eval(ctx)?.as_string_ref()?,
-                keep_aspect: keep_aspect.eval(ctx)?.as_bool()?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
+                alpha: alpha.eval(ctx)?,
+                path: path.eval(ctx)?,
+                keep_aspect: keep_aspect.eval(ctx)?,
                 layers: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -526,7 +496,7 @@ impl Node {
                     }
                     result
                 },
-                all_svg_layers: renderer::svg_image_layers(&path.eval(ctx)?.as_string_ref()?),
+                all_svg_layers: renderer::svg_image_layers(&path.eval(ctx)?),
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"
@@ -557,10 +527,10 @@ impl Node {
             } => Ok(renderer::PathCommand::Cubic {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
-                c1_x: c1_x.eval_f64(ctx)?,
-                c1_y: c1_y.eval_f64(ctx)?,
-                c2_x: c2_x.eval_f64(ctx)?,
-                c2_y: c2_y.eval_f64(ctx)?,
+                c1_x: c1_x.eval(ctx)?,
+                c1_y: c1_y.eval(ctx)?,
+                c2_x: c2_x.eval(ctx)?,
+                c2_y: c2_y.eval(ctx)?,
             }),
             NodeKind::Close => {
                 Ok(renderer::PathCommand::Close)
@@ -609,8 +579,8 @@ impl Node {
                 layer_name: layer_name.clone(),
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?.map(|x| x.as_f64())?,
-                alpha: alpha.eval_f64(ctx)?,
+                z_level: z_level.eval_as_inheritable(ctx)?,
+                alpha: alpha.eval(ctx)?,
             }),
             _ => anyhow::bail!("expected layer node, got {:?}", self.id),
         }
@@ -620,7 +590,7 @@ impl Node {
         match &self.kind {
             NodeKind::TextSpan { text_style, text } => Ok(renderer::TextSpan {
                 id: self.id.as_u64(),
-                text: text.eval(ctx)?.as_string_ref()?,
+                text: text.eval(ctx)?,
                 text_style: text_style.eval_as_inheritable(ctx)?,
             }),
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
@@ -633,7 +603,7 @@ impl Node {
 impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
-        let fill_color = self.fill_color.eval(ctx)?.into_color().unwrap_or_default();
+        let fill_color = self.fill_color.eval(ctx)?.map(|x| x.into_inner()).unwrap_or_default();
         let mut children = Vec::with_capacity(self.children.len());
         for &id in &self.children {
             let node = ctx.node(id)?;
@@ -642,8 +612,8 @@ impl SceneDef {
             }
         }
         Ok(renderer::Scene {
-            width: self.size.width.eval_f64(ctx)?,
-            height: self.size.height.eval_f64(ctx)?,
+            width: self.size.width.eval(ctx)?,
+            height: self.size.height.eval(ctx)?,
             fill_color,
             children,
         })

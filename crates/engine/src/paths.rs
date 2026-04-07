@@ -3,6 +3,7 @@ use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::FrameId;
 use crate::nodes::NodeKind;
+use crate::values::Eval;
 
 /// Evaluate a cubic Bézier at parameter `u` ∈ [0, 1].
 /// p0/c1/c2/p1 are all absolute coordinates.
@@ -68,16 +69,16 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
         let child = ctx.node(child_id)?;
         match &child.kind {
             NodeKind::Move { position } => {
-                cur_x = position.x.eval_f64(ctx)?;
-                cur_y = position.y.eval_f64(ctx)?;
+                cur_x = position.x.eval(ctx)?;
+                cur_y = position.y.eval(ctx)?;
                 subpath_start = Some((cur_x, cur_y));
                 if first_point.is_none() {
                     first_point = Some((cur_x, cur_y));
                 }
             }
             NodeKind::Line { position } => {
-                let x = position.x.eval_f64(ctx)?;
-                let y = position.y.eval_f64(ctx)?;
+                let x = position.x.eval(ctx)?;
+                let y = position.y.eval(ctx)?;
                 if first_point.is_none() {
                     first_point = Some((cur_x, cur_y));
                 }
@@ -86,13 +87,13 @@ pub(crate) fn follow_path(ctx: &EvalCtx, node: NodeId, start_frame: FrameId, end
                 cur_y = y;
             }
             NodeKind::Cubic { position, c1_x, c1_y, c2_x, c2_y } => {
-                let x = position.x.eval_f64(ctx)?;
-                let y = position.y.eval_f64(ctx)?;
+                let x = position.x.eval(ctx)?;
+                let y = position.y.eval(ctx)?;
                 // c1 is relative to the start point, c2 is relative to the end point
-                let c1x = cur_x + c1_x.eval_f64(ctx)?;
-                let c1y = cur_y + c1_y.eval_f64(ctx)?;
-                let c2x = x + c2_x.eval_f64(ctx)?;
-                let c2y = y + c2_y.eval_f64(ctx)?;
+                let c1x = cur_x + c1_x.eval(ctx)?;
+                let c1y = cur_y + c1_y.eval(ctx)?;
+                let c2x = x + c2_x.eval(ctx)?;
+                let c2y = y + c2_y.eval(ctx)?;
                 if first_point.is_none() {
                     first_point = Some((cur_x, cur_y));
                 }

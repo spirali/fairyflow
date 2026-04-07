@@ -1,6 +1,7 @@
 use crate::basictypes::NodeId;
 use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::eval::EvalCtx;
+use crate::values::Eval;
 
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
@@ -41,28 +42,28 @@ impl Node {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        p.x.eval_f64(ctx)
+        p.x.eval(ctx)
     }
 
     pub fn get_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        p.y.eval_f64(ctx)
+        p.y.eval(ctx)
     }
 
     pub fn get_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.default_width(ctx);
         };
-        s.width.eval_f64(ctx)
+        s.width.eval(ctx)
     }
 
     pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.default_height(ctx);
         };
-        s.height.eval_f64(ctx)
+        s.height.eval(ctx)
     }
 
     /// Returns `(offset_x, offset_y)`: the position of the AABB's top-left corner
@@ -71,13 +72,13 @@ impl Node {
     pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
         match &self.kind {
             NodeKind::Group { size, scale_x, scale_y, rotation, pivot_x, pivot_y, .. } => {
-                let w = size.width.eval_f64(ctx)?;
-                let h = size.height.eval_f64(ctx)?;
-                let sx = scale_x.eval_f64(ctx)?;
-                let sy = scale_y.eval_f64(ctx)?;
-                let r = rotation.eval_f64(ctx)?.to_radians();
-                let pvx = pivot_x.eval_f64(ctx)? * w;
-                let pvy = pivot_y.eval_f64(ctx)? * h;
+                let w = size.width.eval(ctx)?;
+                let h = size.height.eval(ctx)?;
+                let sx = scale_x.eval(ctx)?;
+                let sy = scale_y.eval(ctx)?;
+                let r = rotation.eval(ctx)?.to_radians();
+                let pvx = pivot_x.eval(ctx)? * w;
+                let pvy = pivot_y.eval(ctx)? * h;
 
                 // final_x = pvx + cx*(lx−pvx) + dx*(ly−pvy)  where cx=cos r·sx, dx=−sin r·sy
                 // min over lx ∈ {0,w}: if cx≥0 → cx*(0−pvx) = −cx*pvx, else cx*(w−pvx)
@@ -104,9 +105,9 @@ impl Node {
         let width = self.get_width(ctx)?;
         Ok(match &self.kind {
             NodeKind::Group { scale_x, scale_y, rotation, .. } => {
-                let sx = scale_x.eval_f64(ctx)?;
-                let sy = scale_y.eval_f64(ctx)?;
-                let r = rotation.eval_f64(ctx)?.to_radians();
+                let sx = scale_x.eval(ctx)?;
+                let sy = scale_y.eval(ctx)?;
+                let r = rotation.eval(ctx)?.to_radians();
                 let height = self.get_height(ctx)?;
                 r.cos().abs() * sx * width + r.sin().abs() * sy * height
             }
@@ -118,9 +119,9 @@ impl Node {
         let height = self.get_height(ctx)?;
         Ok(match &self.kind {
             NodeKind::Group { scale_x, scale_y, rotation, .. } => {
-                let sx = scale_x.eval_f64(ctx)?;
-                let sy = scale_y.eval_f64(ctx)?;
-                let r = rotation.eval_f64(ctx)?.to_radians();
+                let sx = scale_x.eval(ctx)?;
+                let sy = scale_y.eval(ctx)?;
+                let r = rotation.eval(ctx)?.to_radians();
                 let width = self.get_width(ctx)?;
                 r.sin().abs() * sx * width + r.cos().abs() * sy * height
             }
@@ -179,7 +180,7 @@ impl Node {
                     Layout::Column { align, .. } => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) * align.eval_f64(ctx)? - off_x
+                        (parent_w - self_w) * align.eval(ctx)? - off_x
                     }
                     Layout::Row { gap, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
@@ -187,7 +188,7 @@ impl Node {
                             unreachable!()
                         };
                         let mut x = 0.0f64;
-                        let gap = gap.eval_f64(ctx)?;
+                        let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
                                 return Ok(x - off_x);
@@ -233,7 +234,7 @@ impl Node {
                             unreachable!()
                         };
                         let mut y = 0.0f64;
-                        let gap = gap.eval_f64(ctx)?;
+                        let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
                                 return Ok(y - off_y);
@@ -248,7 +249,7 @@ impl Node {
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) * align.eval_f64(ctx)? - off_y
+                        (parent_h - self_h) * align.eval(ctx)? - off_y
                     }
                 }
             }
@@ -270,7 +271,7 @@ impl Node {
                 let parent = ctx.node(parent_id)?;
                 let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
                 let path_val = path.eval(ctx)?;
-                let Some((nw, _nh)) = renderer::measure_image(path_val.as_str()?) else {
+                let Some((nw, _nh)) = renderer::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nw as f64
@@ -296,7 +297,7 @@ impl Node {
                             }
                         }
                         if count > 0 {
-                            w += (count - 1) as f64 * gap.eval_f64(ctx)?;
+                            w += (count - 1) as f64 * gap.eval(ctx)?;
                         }
                         w
                     }
@@ -315,7 +316,7 @@ impl Node {
             }
             NodeKind::Image { path, size, .. } => {
                 let path_val = path.eval(ctx)?;
-                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 if size.height.get_expr().is_default_height_of(self.id) {
@@ -323,7 +324,7 @@ impl Node {
                     nw as f64
                 } else {
                     // Height is explicit → scale width to preserve aspect ratio.
-                    let h = size.height.eval_f64(ctx)?;
+                    let h = size.height.eval(ctx)?;
                     if nh == 0.0 { 0.0 } else { h * nw as f64 / nh as f64 }
                 }
             }
@@ -339,7 +340,7 @@ impl Node {
                 let parent = ctx.node(parent_id)?;
                 let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
                 let path_val = path.eval(ctx)?;
-                let Some((_nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                let Some((_nw, nh)) = renderer::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nh as f64
@@ -365,7 +366,7 @@ impl Node {
                             }
                         }
                         if count > 0 {
-                            h += (count - 1) as f64 * gap.eval_f64(ctx)?;
+                            h += (count - 1) as f64 * gap.eval(ctx)?;
                         }
                         h
                     }
@@ -384,7 +385,7 @@ impl Node {
             }
             NodeKind::Image { path, size, .. } => {
                 let path_val = path.eval(ctx)?;
-                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()?) else {
+                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 if size.width.get_expr().is_default_width_of(self.id) {
@@ -392,7 +393,7 @@ impl Node {
                     nh as f64
                 } else {
                     // Width is explicit → scale height to preserve aspect ratio.
-                    let w = size.width.eval_f64(ctx)?;
+                    let w = size.width.eval(ctx)?;
                     if nw == 0.0 { 0.0 } else { w * nh as f64 / nw as f64 }
                 }
             }

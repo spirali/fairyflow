@@ -33,7 +33,6 @@ struct SingleScene {
     name: String,
     scene: SceneDef,
     nodes: HashMap<NodeId, Node>,
-    animated_values: HashMap<AvId, AnimatedValue>,
     info: serde_json::Value,
 }
 
@@ -111,16 +110,12 @@ impl SingleScene {
             name,
             scene: raw.scene,
             nodes,
-            animated_values,
             info: raw.info,
         })
     }
 
     fn key_frames(&self) -> Vec<FrameId> {
         let mut frames: HashSet<FrameId> = Default::default();
-        for av in self.animated_values.values() {
-            av.collect_key_frames(&mut frames);
-        }
         for node in self.nodes.values() {
             frames.insert(node.start);
             if let Some(end) = node.end {
@@ -157,7 +152,7 @@ impl AnimationDef {
         selection: SceneSelection,
     ) -> anyhow::Result<renderer::Scene> {
         let (s, local_frame) = self.resolve(frame_id, selection);
-        let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes, &s.animated_values);
+        let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes);
         s.scene.eval(&ctx)
     }
 

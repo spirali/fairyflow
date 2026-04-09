@@ -9,6 +9,6 @@ renderer = { path = "../renderer" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-zip = "2"
+zip = "8"
 winit = "0.30"
 softbuffer = "0.4"

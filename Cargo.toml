@@ -4,6 +4,7 @@ members = [
     "crates/engine",
     "crates/renderer-core",
     "crates/renderer-skia",
+    "crates/renderer-pdf",
     "crates/player",
 ]
 resolver = "3"

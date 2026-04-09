@@ -28,6 +28,7 @@ mod config;
 mod export;
 mod lancher;
 mod package;
+mod pdf_export;
 mod render;
 mod service;
 

@@ -1691,6 +1691,21 @@
   font-family: monospace;
 }
 
+.seq-dialog-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.seq-dialog-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
 /* ── Sequence player ─────────────────────────────────────────────────────── */
 .seqp {
   display: flex;

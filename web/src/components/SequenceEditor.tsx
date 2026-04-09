@@ -34,6 +34,15 @@ export default function SequenceEditor({
   const [exportResultPath, setExportResultPath] = useState('');
   const [exportError, setExportError] = useState('');
 
+  // Export-to-PDF dialog
+  type FrameSelection = 'cue_frames' | 'cue_plus_key_frames' | 'all_frames';
+  const [pdfExportOpen, setPdfExportOpen] = useState(false);
+  const [pdfFilename, setPdfFilename] = useState('');
+  const [pdfFrameSelection, setPdfFrameSelection] = useState<FrameSelection>('cue_frames');
+  const [pdfExportStatus, setPdfExportStatus] = useState<ExportStatus>('idle');
+  const [pdfExportResultPath, setPdfExportResultPath] = useState('');
+  const [pdfExportError, setPdfExportError] = useState('');
+
   // Load .ffsq file
   useEffect(() => {
     fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
@@ -309,6 +318,40 @@ export default function SequenceEditor({
     }
   };
 
+  // ── Export to PDF ──────────────────────────────────────────────────────────
+
+  const openPdfExportDialog = () => {
+    const base = path.replace(/\\/g, '/').split('/').pop() ?? path;
+    const suggested = base.endsWith('.ffsq') ? base.slice(0, -5) + '.pdf' : base + '.pdf';
+    setPdfFilename(suggested);
+    setPdfExportStatus('idle');
+    setPdfExportError('');
+    setPdfExportResultPath('');
+    setPdfExportOpen(true);
+  };
+
+  const doPdfExport = async () => {
+    setPdfExportStatus('exporting');
+    try {
+      const res = await fetch(withToken('/export-pdf'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seq_path: path, filename: pdfFilename, fps, frame_selection: pdfFrameSelection }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPdfExportResultPath(data.path ?? pdfFilename);
+        setPdfExportStatus('done');
+      } else {
+        setPdfExportError(data.error ?? 'Unknown error');
+        setPdfExportStatus('error');
+      }
+    } catch (e) {
+      setPdfExportError(String(e));
+      setPdfExportStatus('error');
+    }
+  };
+
   // ── External render trigger (e.g. fullscreen resize) ──────────────────────
   const handleRenderRef = useRef(handleRender);
   handleRenderRef.current = handleRender;
@@ -338,6 +381,11 @@ export default function SequenceEditor({
             onClick={openExportDialog}
             disabled={isRendering || sceneFiles.length === 0}
           >Export to Player</button>
+          <button
+            className="seq-btn"
+            onClick={openPdfExportDialog}
+            disabled={isRendering || sceneFiles.length === 0}
+          >Export to PDF</button>
           <button className="seq-btn seq-btn-dim" disabled title="Not yet implemented">Export as Video</button>
         </div>
       </div>
@@ -450,6 +498,87 @@ export default function SequenceEditor({
                 <div className="seq-dialog-footer">
                   <button className="seq-btn" onClick={() => setExportStatus('idle')}>Back</button>
                   <button className="seq-btn" onClick={() => setExportOpen(false)}>Close</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {pdfExportOpen && (
+        <div className="seq-dialog-backdrop" onClick={() => { if (pdfExportStatus !== 'exporting') setPdfExportOpen(false); }}>
+          <div className="seq-dialog" onClick={e => e.stopPropagation()}>
+            <div className="seq-dialog-title">Export to PDF</div>
+
+            {pdfExportStatus === 'idle' && (
+              <>
+                <div className="seq-dialog-body">
+                  <label className="seq-dialog-label">Output filename</label>
+                  <input
+                    className="seq-dialog-input"
+                    value={pdfFilename}
+                    onChange={e => setPdfFilename(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') doPdfExport(); if (e.key === 'Escape') setPdfExportOpen(false); }}
+                    autoFocus
+                    spellCheck={false}
+                  />
+                  <label className="seq-dialog-label" style={{ marginTop: 10 }}>Frames to export</label>
+                  <div className="seq-dialog-radio-group">
+                    <label className="seq-dialog-radio-label">
+                      <input type="radio" name="pdfFrameSelection" value="cue_frames"
+                        checked={pdfFrameSelection === 'cue_frames'}
+                        onChange={() => setPdfFrameSelection('cue_frames')} />
+                      Cue frames
+                    </label>
+                    <label className="seq-dialog-radio-label">
+                      <input type="radio" name="pdfFrameSelection" value="cue_plus_key_frames"
+                        checked={pdfFrameSelection === 'cue_plus_key_frames'}
+                        onChange={() => setPdfFrameSelection('cue_plus_key_frames')} />
+                      Cue + key frames
+                    </label>
+                    <label className="seq-dialog-radio-label">
+                      <input type="radio" name="pdfFrameSelection" value="all_frames"
+                        checked={pdfFrameSelection === 'all_frames'}
+                        onChange={() => setPdfFrameSelection('all_frames')} />
+                      All frames
+                    </label>
+                  </div>
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn" onClick={() => setPdfExportOpen(false)}>Cancel</button>
+                  <button
+                    className="seq-btn seq-btn-render"
+                    onClick={doPdfExport}
+                    disabled={!pdfFilename.trim()}
+                  >Export</button>
+                </div>
+              </>
+            )}
+
+            {pdfExportStatus === 'exporting' && (
+              <div className="seq-dialog-body seq-dialog-status">
+                Exporting PDF…
+              </div>
+            )}
+
+            {pdfExportStatus === 'done' && (
+              <>
+                <div className="seq-dialog-body seq-dialog-status seq-dialog-ok">
+                  PDF created: <span className="seq-dialog-path">{pdfExportResultPath}</span>
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn seq-btn-render" onClick={() => setPdfExportOpen(false)}>Close</button>
+                </div>
+              </>
+            )}
+
+            {pdfExportStatus === 'error' && (
+              <>
+                <div className="seq-dialog-body seq-dialog-status seq-dialog-err">
+                  {pdfExportError}
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn" onClick={() => setPdfExportStatus('idle')}>Back</button>
+                  <button className="seq-btn" onClick={() => setPdfExportOpen(false)}>Close</button>
                 </div>
               </>
             )}

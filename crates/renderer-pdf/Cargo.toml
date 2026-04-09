@@ -1,0 +1,13 @@
+[package]
+name = "renderer-pdf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+renderer-core = { path = "../renderer-core" }
+krilla = "0.7"
+krilla-svg = "0.7"
+# usvg 0.45 is required by krilla-svg 0.7; re-parse raw SVG bytes here
+usvg = "0.45"
+anyhow = { workspace = true }
+tracing = { workspace = true }

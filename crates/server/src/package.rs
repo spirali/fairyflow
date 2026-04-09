@@ -112,7 +112,7 @@ pub async fn export_player_handler(
     }
 }
 
-async fn run_python_to_json(
+pub(crate) async fn run_python_to_json(
     source_path: &str,
     prologue: &Option<PathBuf>,
     fps: u32,

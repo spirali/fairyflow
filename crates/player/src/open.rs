@@ -128,6 +128,7 @@ struct PlayerApp {
     // Playback state
     current_frame: u32,
     paused: bool,
+    backward: bool,
     last_frame_time: Instant,
     // Window/surface (created in `resumed`)
     window: Option<Arc<Window>>,
@@ -142,14 +143,53 @@ impl PlayerApp {
     }
 
     fn advance_frame(&mut self) {
-        let total = self.total_frames();
-        if total == 0 || self.current_frame + 1 >= total {
-            return;
+        if self.backward {
+            if self.current_frame == 0 {
+                self.paused = true;
+                return;
+            }
+            self.current_frame -= 1;
+            if self.current_frame == 0 || self.cue_frames.contains(&self.current_frame) {
+                self.paused = true;
+            }
+        } else {
+            let total = self.total_frames();
+            if total == 0 || self.current_frame + 1 >= total {
+                self.paused = true;
+                return;
+            }
+            self.current_frame += 1;
+            if self.cue_frames.contains(&self.current_frame) {
+                self.paused = true;
+            }
         }
-        self.current_frame += 1;
-        if self.cue_frames.contains(&self.current_frame) {
-            self.paused = true;
-        }
+    }
+
+    /// Jump to the nearest cue frame strictly after `current_frame`, or to the
+    /// last frame if none exists. Pauses and sets direction to forward.
+    fn jump_to_next_cue(&mut self) {
+        let last = self.total_frames().saturating_sub(1);
+        let target = self.cue_frames.iter()
+            .filter(|&&cf| cf > self.current_frame)
+            .min()
+            .copied()
+            .unwrap_or(last);
+        self.current_frame = target;
+        self.backward = false;
+        self.paused = true;
+    }
+
+    /// Jump to the nearest cue frame strictly before `current_frame`, or to
+    /// frame 0 if none exists. Pauses and sets direction to backward.
+    fn jump_to_prev_cue(&mut self) {
+        let target = self.cue_frames.iter()
+            .filter(|&&cf| cf < self.current_frame)
+            .max()
+            .copied()
+            .unwrap_or(0);
+        self.current_frame = target;
+        self.backward = true;
+        self.paused = true;
     }
 
     fn render(&mut self) {
@@ -251,9 +291,36 @@ impl ApplicationHandler for PlayerApp {
                         w.set_fullscreen(Some(Fullscreen::Borderless(None)));
                     }
                 }
-                KeyCode::ArrowRight if self.paused => {
-                    self.paused = false;
-                    self.advance_frame();
+                KeyCode::ArrowRight => {
+                    if self.paused {
+                        // Resume forward playback
+                        self.backward = false;
+                        self.paused = false;
+                        self.advance_frame();
+                    } else if !self.backward {
+                        // Playing forward → jump to next cue and pause
+                        self.jump_to_next_cue();
+                    } else {
+                        // Playing backward → reverse direction to forward
+                        self.backward = false;
+                    }
+                    if let Some(w) = &self.window {
+                        w.request_redraw();
+                    }
+                }
+                KeyCode::ArrowLeft => {
+                    if self.paused {
+                        // Resume backward playback
+                        self.backward = true;
+                        self.paused = false;
+                        self.advance_frame();
+                    } else if self.backward {
+                        // Playing backward → jump to previous cue and pause
+                        self.jump_to_prev_cue();
+                    } else {
+                        // Playing forward → reverse direction to backward
+                        self.backward = true;
+                    }
                     if let Some(w) = &self.window {
                         w.request_redraw();
                     }
@@ -331,6 +398,7 @@ pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
         scene_height,
         current_frame: 0,
         paused: start_paused,
+        backward: false,
         last_frame_time: Instant::now(),
         window: None,
         surface: None,

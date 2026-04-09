@@ -16,7 +16,7 @@ export interface RawImageLayer {
 
 export interface RawNode {
   id: number;
-  kind: 'group' | 'rect' | 'ellipse' | 'path' | 'move' | 'line' | 'cubic' | 'text' | 't_group' | 't_span' | 'image' | 'layer';
+  kind: 'group' | 'rect' | 'ellipse' | 'path' | 'move' | 'line' | 'cubic' | 'close' | 'text' | 't_group' | 't_span' | 'image' | 'layer';
   // position (group, rect, ellipse, move, line, cubic, text, image, layer)
   x?: number;
   y?: number;

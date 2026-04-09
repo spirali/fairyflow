@@ -465,7 +465,7 @@ fn build_path(commands: &[PathCommand]) -> Option<tiny_skia::Path> {
                 pb.cubic_to(c1.0, c1.1, c2.0, c2.1, end.0, end.1);
                 cur = end;
             }
-            PathCommand::Close => {
+            PathCommand::Close { .. } => {
                 pb.close();
             }
         }
@@ -578,7 +578,7 @@ fn build_cropped_path(commands: &[PathCommand], crop_start: f64, crop_end: f64) 
                 segs.push(Seg { sx: cur.0, sy: cur.1, kind: SegKind::Cubic { c1x: c1.0, c1y: c1.1, c2x: c2.0, c2y: c2.1, ex: end.0, ey: end.1 }, len });
                 cur = end;
             }
-            PathCommand::Close => {
+            PathCommand::Close { .. } => {
                 let (sx, sy) = subpath_start;
                 if cur.0 != sx || cur.1 != sy {
                     let dx = sx - cur.0;

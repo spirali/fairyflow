@@ -557,7 +557,7 @@ impl Node {
                 c2_y: c2_y.eval(ctx)?,
             }),
             NodeKind::Close => {
-                Ok(renderer_core::PathCommand::Close)
+                Ok(renderer_core::PathCommand::Close { id: self.id.as_u64() })
             },
             _ => anyhow::bail!("expected path command node, got {:?}", self.id),
         }

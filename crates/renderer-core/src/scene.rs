@@ -136,7 +136,9 @@ pub enum PathCommand {
         c2_x: f64,
         c2_y: f64,
     },
-    Close,
+    Close {
+        id: u64,
+    },
 }
 
 /// Kind-specific data for a scene node.

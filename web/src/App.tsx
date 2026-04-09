@@ -9,7 +9,7 @@ import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
 import SequenceEditor from './components/SequenceEditor';
 import SequencePlayer from './components/SequencePlayer';
-import type { ConsoleLine, InfoEntry, NodeBounds, SceneData, SceneInfo, ServerMsg, SequenceRenderResult, WsStatus } from './types';
+import type { ConsoleLine, InfoEntry, NodeBounds, RawNode, SceneData, SceneInfo, ServerMsg, SequenceRenderResult, WsStatus } from './types';
 import './App.css';
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -18,6 +18,26 @@ type ViewState = ReturnType<MonacoEditor['saveViewState']>;
 interface Tab { path: string; isDirty: boolean; isFfsq?: boolean }
 
 interface RenderedFrameResponse { n: number; png: string }
+
+/** Depth-first hit-test against the scene tree.
+ *  `bounds` values are parent-relative, so `clickX/Y` must also be in the
+ *  parent's local space at each recursion level.
+ *  `tol` expands the hit region on all sides (in scene units), making
+ *  zero-size and very small elements still selectable. */
+function hitTest(nodes: RawNode[], clickX: number, clickY: number, bounds: Record<string, NodeBounds>, tol: number): number | null {
+  for (const node of nodes) {
+    const b = bounds[node.id];
+    if (!b) continue;
+    if (clickX >= b.x - tol && clickX <= b.x + b.width + tol && clickY >= b.y - tol && clickY <= b.y + b.height + tol) {
+      if (node.kind === 'group') {
+        const child = hitTest(node.children ?? [], clickX - b.x, clickY - b.y, bounds, tol);
+        if (child != null) return child;
+      }
+      return node.id;
+    }
+  }
+  return null;
+}
 
 export default function App() {
   // ── auth ──────────────────────────────────────────────────────────────────
@@ -1230,7 +1250,18 @@ export default function App() {
                     <div className="canvas-panel">
                       <div ref={canvasContentRef} className="canvas-content">
                         {hasScene && canvasLayout && (
-                          <div className="canvas-image-wrap" style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}>
+                          <div
+                            className="canvas-image-wrap"
+                            style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight, cursor: 'crosshair' }}
+                            onClick={(e) => {
+                              if (!sceneData || sceneWidth == null || sceneHeight == null) return;
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const sceneX = (e.clientX - rect.left) * sceneWidth / canvasLayout.cssWidth;
+                              const sceneY = (e.clientY - rect.top) * sceneHeight / canvasLayout.cssHeight;
+                              const tol = 5 * sceneWidth / canvasLayout.cssWidth;
+                              setSelectedNid(hitTest(sceneData.children, sceneX, sceneY, allNodeBounds, tol));
+                            }}
+                          >
                             <img
                               src={imgSrc}
                               style={{ width: canvasLayout.cssWidth, height: canvasLayout.cssHeight }}

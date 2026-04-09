@@ -101,6 +101,11 @@ enum Cmd {
         /// Directory to create the project in
         directory: PathBuf,
     },
+    /// Open a .ffpkg package file in the native player window
+    Play {
+        /// Path to the .ffpkg package file
+        package: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -147,6 +152,12 @@ async fn main() {
             .await
         }
         Cmd::Init { directory } => run_init(directory).await,
+        Cmd::Play { package } => {
+            if let Err(e) = player::open_player(&package) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 

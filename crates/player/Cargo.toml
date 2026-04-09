@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 engine = { path = "../engine" }
+renderer = { path = "../renderer" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 zip = "2"
+winit = "0.30"
+softbuffer = "0.4"

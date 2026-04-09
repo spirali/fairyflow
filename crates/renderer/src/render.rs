@@ -557,6 +557,18 @@ pub fn render_scene_fitted(scene: &Scene, target_w: u32, target_h: u32) -> Pixma
     canvas
 }
 
+/// Renders `scene` fitted (letterboxed) into `width × height` and writes the
+/// result into `buffer` as `0x00RRGGBB` u32 values (softbuffer-compatible format).
+/// `buffer` must have exactly `width * height` elements.
+pub fn render_scene_to_buffer(scene: &Scene, width: u32, height: u32, buffer: &mut [u32]) {
+    let pixmap = render_scene_fitted(scene, width, height);
+    for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
+        *dst = ((src.red() as u32) << 16)
+            | ((src.green() as u32) << 8)
+            | (src.blue() as u32);
+    }
+}
+
 /// Measure the natural (unwrapped) dimensions of a text block.
 /// Returns `(width, height)` in logical pixels (scale = 1).
 pub fn measure_text(lines: &[TextChild]) -> (f32, f32) {

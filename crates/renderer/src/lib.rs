@@ -11,7 +11,7 @@ pub use glyph_cache::prune_text_cache;
 pub use image_cache::clear_image_cache;
 pub use render::{
     NodeBounds, Renderer, find_node_bounds, measure_image, measure_text, measure_text_node_pos,
-    render_scene, render_scene_fitted, svg_image_layers,
+    render_scene, render_scene_fitted, render_scene_to_buffer, svg_image_layers,
 };
 pub use resources::Resources;
 pub use scene::{

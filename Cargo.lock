@@ -1776,6 +1776,7 @@ dependencies = [
  "clap",
  "engine",
  "futures-util",
+ "player",
  "rand 0.8.5",
  "rayon",
  "renderer",

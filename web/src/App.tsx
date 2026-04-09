@@ -140,6 +140,8 @@ export default function App() {
   // ── file tree panel ───────────────────────────────────────────────────────
   const fileTreePanelRef = usePanelRef();
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
+  const [fileTreeRefresh, setFileTreeRefresh] = useState(0);
+  const refreshFileTree = () => setFileTreeRefresh(n => n + 1);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const sidebarMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1015,7 +1017,7 @@ export default function App() {
           collapsedSize={0}
           onResize={handleFileTreeResize}
         >
-          <FileTree activeFile={currentFile} onFileClick={handleFileClick} />
+          <FileTree activeFile={currentFile} onFileClick={handleFileClick} refreshTrigger={fileTreeRefresh} />
         </Panel>
 
         <PanelResizeHandle className="resize-handle horizontal" />
@@ -1077,6 +1079,7 @@ export default function App() {
                       <SequenceEditor
                         key={currentFile}
                         path={currentFile}
+                        fps={fps}
                         wsRef={wsRef}
                         setWsOverride={setWsOverride}
                         setLines={setLines}
@@ -1084,6 +1087,7 @@ export default function App() {
                         onRenderResult={res => handleSeqRenderResult(currentFile, res)}
                         getPlayerAreaSize={getSeqPlayerAreaSize}
                         renderTrigger={seqRenderTrigger}
+                        onExportDone={refreshFileTree}
                       />
                     </div>
                   )}

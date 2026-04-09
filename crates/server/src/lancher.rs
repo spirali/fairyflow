@@ -9,7 +9,26 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 use tracing::warn;
 
-static RUN_ID: AtomicU64 = AtomicU64::new(0);
+pub(crate) static RUN_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Builds the base `python3 -m fairyflow` command with the standard arguments
+/// and `PYTHONPATH`. The caller is responsible for configuring stdio and spawning.
+pub(crate) fn build_python_cmd(
+    source_path: &str,
+    prologue: &Option<std::path::PathBuf>,
+    fps: u32,
+    output_path: &std::path::Path,
+) -> Command {
+    let mut cmd = Command::new("python3");
+    cmd.args(["-m", "fairyflow"]);
+    if let Some(p) = prologue {
+        cmd.arg("--prologue").arg(p);
+    }
+    cmd.arg(source_path)
+        .arg(output_path)
+        .arg(fps.to_string());
+    cmd
+}
 
 #[derive(Serialize)]
 pub struct SceneInfoMsg {
@@ -58,15 +77,7 @@ pub async fn run_python(
     info!(run_id = id, path = source_path, "run_python started");
     let tree_path = std::env::temp_dir().join(format!("fairyflow_{id}_tree.json"));
 
-    let mut cmd = Command::new("python3");
-    cmd.args(["-m", "fairyflow"]);
-    if let Some(p) = &prologue {
-        cmd.arg("--prologue").arg(p);
-    }
-    cmd.arg(&source_path).arg(&tree_path).arg(fps.to_string());
-
-    let mut child = match cmd
-        .env("PYTHONPATH", "crates/fairyflow/python")
+    let mut child = match build_python_cmd(&source_path, &prologue, fps, &tree_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

@@ -173,9 +173,10 @@ const DIALOG_LABELS: Record<DialogKind, { title: string; placeholder: string; ex
 interface Props {
   activeFile: string | null;
   onFileClick: (path: string) => void;
+  refreshTrigger?: number;
 }
 
-export default function FileTree({ activeFile, onFileClick }: Props) {
+export default function FileTree({ activeFile, onFileClick, refreshTrigger }: Props) {
   const [tree, setTree] = useState<FsEntry[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [contextItem, setContextItem] = useState<{ path: string; isDir: boolean } | null>(null);
@@ -192,6 +193,7 @@ export default function FileTree({ activeFile, onFileClick }: Props) {
   };
 
   useEffect(() => { fetchTree(); }, []);
+  useEffect(() => { if (refreshTrigger) fetchTree(); }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (dialog !== null) {

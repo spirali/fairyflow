@@ -27,6 +27,7 @@ use tracing::{debug, info, warn};
 mod config;
 mod export;
 mod lancher;
+mod package;
 mod render;
 mod service;
 

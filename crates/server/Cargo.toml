@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+player = { path = "../player" }
 base64 = "0.22"
 toml = "0.8"
 rayon = "1"

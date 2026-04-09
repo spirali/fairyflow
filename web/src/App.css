@@ -1607,6 +1607,90 @@
   font-style: italic;
 }
 
+/* ── Sequence export dialog ──────────────────────────────────────────────── */
+.seq-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.seq-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.seq-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.seq-dialog-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seq-dialog-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.seq-dialog-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 5px 8px;
+  outline: none;
+}
+.seq-dialog-input:focus {
+  border-color: var(--accent);
+}
+
+.seq-dialog-footer {
+  padding: 10px 16px 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.seq-dialog-status {
+  font-size: 13px;
+  min-height: 40px;
+  align-items: flex-start;
+}
+
+.seq-dialog-ok {
+  color: #4ec9b0;
+}
+
+.seq-dialog-err {
+  color: #f48771;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.seq-dialog-path {
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
 /* ── Sequence player ─────────────────────────────────────────────────────── */
 .seqp {
   display: flex;

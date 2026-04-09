@@ -1,0 +1,11 @@
+[package]
+name = "player"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine = { path = "../engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+zip = "2"

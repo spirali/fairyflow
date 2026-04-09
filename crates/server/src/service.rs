@@ -21,7 +21,7 @@ use tracing::{debug, info, warn};
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
-    config: Arc<Mutex<ProjectConfig>>,
+    pub(crate) config: Arc<Mutex<ProjectConfig>>,
     config_tx: broadcast::Sender<ProjectConfig>,
     token: Arc<String>,
 }
@@ -99,6 +99,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/trees", get(trees_handler))
         .route("/node/{id}", get(node_handler))
         .route("/export-video", post(crate::export::export_handler))
+        .route("/export-player", post(crate::package::export_player_handler))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_layer))
         .fallback_service(ServeDir::new(web_dist))
         .with_state(state);

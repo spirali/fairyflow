@@ -4,6 +4,7 @@ import type { ConsoleLine, SceneData, ServerMsg, SequenceRenderResult, SequenceS
 
 interface Props {
   path: string;
+  fps: number;
   wsRef: React.RefObject<WebSocket | null>;
   setWsOverride: (fn: ((msg: ServerMsg) => void) | null) => void;
   setLines: React.Dispatch<React.SetStateAction<ConsoleLine[]>>;
@@ -11,10 +12,11 @@ interface Props {
   onRenderResult: (result: SequenceRenderResult) => void;
   getPlayerAreaSize: () => { width: number; height: number } | null;
   renderTrigger?: number;
+  onExportDone?: () => void;
 }
 
 export default function SequenceEditor({
-  path, wsRef, setWsOverride, setLines, setRunning, onRenderResult, getPlayerAreaSize, renderTrigger
+  path, fps, wsRef, setWsOverride, setLines, setRunning, onRenderResult, getPlayerAreaSize, renderTrigger, onExportDone
 }: Props) {
   const [sceneFiles, setSceneFiles] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -23,6 +25,14 @@ export default function SequenceEditor({
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
   const [dropZoneActive, setDropZoneActive] = useState(false);
+
+  // Export-to-player dialog
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFilename, setExportFilename] = useState('');
+  type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
+  const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
+  const [exportResultPath, setExportResultPath] = useState('');
+  const [exportError, setExportError] = useState('');
 
   // Load .ffsq file
   useEffect(() => {
@@ -264,6 +274,41 @@ export default function SequenceEditor({
     setRenderStatus('');
   };
 
+  // ── Export to player ───────────────────────────────────────────────────────
+
+  const openExportDialog = () => {
+    const base = path.replace(/\\/g, '/').split('/').pop() ?? path;
+    const suggested = base.endsWith('.ffsq') ? base.slice(0, -5) + '.ffpkg' : base + '.ffpkg';
+    setExportFilename(suggested);
+    setExportStatus('idle');
+    setExportError('');
+    setExportResultPath('');
+    setExportOpen(true);
+  };
+
+  const doExport = async () => {
+    setExportStatus('exporting');
+    try {
+      const res = await fetch(withToken('/export-player'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seq_path: path, filename: exportFilename, fps }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExportResultPath(data.path ?? exportFilename);
+        setExportStatus('done');
+        onExportDone?.();
+      } else {
+        setExportError(data.error ?? 'Unknown error');
+        setExportStatus('error');
+      }
+    } catch (e) {
+      setExportError(String(e));
+      setExportStatus('error');
+    }
+  };
+
   // ── External render trigger (e.g. fullscreen resize) ──────────────────────
   const handleRenderRef = useRef(handleRender);
   handleRenderRef.current = handleRender;
@@ -288,7 +333,11 @@ export default function SequenceEditor({
           >
             {isRendering ? '…' : '▶ Render'}
           </button>
-          <button className="seq-btn seq-btn-dim" disabled title="Not yet implemented">Export to Player</button>
+          <button
+            className="seq-btn"
+            onClick={openExportDialog}
+            disabled={isRendering || sceneFiles.length === 0}
+          >Export to Player</button>
           <button className="seq-btn seq-btn-dim" disabled title="Not yet implemented">Export as Video</button>
         </div>
       </div>
@@ -346,6 +395,67 @@ export default function SequenceEditor({
           </div>
         )}
       </div>
+
+      {exportOpen && (
+        <div className="seq-dialog-backdrop" onClick={() => { if (exportStatus !== 'exporting') setExportOpen(false); }}>
+          <div className="seq-dialog" onClick={e => e.stopPropagation()}>
+            <div className="seq-dialog-title">Export to Player</div>
+
+            {exportStatus === 'idle' && (
+              <>
+                <div className="seq-dialog-body">
+                  <label className="seq-dialog-label">Output filename</label>
+                  <input
+                    className="seq-dialog-input"
+                    value={exportFilename}
+                    onChange={e => setExportFilename(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') doExport(); if (e.key === 'Escape') setExportOpen(false); }}
+                    autoFocus
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn" onClick={() => setExportOpen(false)}>Cancel</button>
+                  <button
+                    className="seq-btn seq-btn-render"
+                    onClick={doExport}
+                    disabled={!exportFilename.trim()}
+                  >Export</button>
+                </div>
+              </>
+            )}
+
+            {exportStatus === 'exporting' && (
+              <div className="seq-dialog-body seq-dialog-status">
+                Exporting package…
+              </div>
+            )}
+
+            {exportStatus === 'done' && (
+              <>
+                <div className="seq-dialog-body seq-dialog-status seq-dialog-ok">
+                  Package created: <span className="seq-dialog-path">{exportResultPath}</span>
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn seq-btn-render" onClick={() => setExportOpen(false)}>Close</button>
+                </div>
+              </>
+            )}
+
+            {exportStatus === 'error' && (
+              <>
+                <div className="seq-dialog-body seq-dialog-status seq-dialog-err">
+                  {exportError}
+                </div>
+                <div className="seq-dialog-footer">
+                  <button className="seq-btn" onClick={() => setExportStatus('idle')}>Back</button>
+                  <button className="seq-btn" onClick={() => setExportOpen(false)}>Close</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

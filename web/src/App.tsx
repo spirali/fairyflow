@@ -118,7 +118,8 @@ export default function App() {
 
   // ── node selection ────────────────────────────────────────────────────────
   const [selectedNid, setSelectedNid] = useState<number | null>(null);
-  const [nodeBounds, setNodeBounds] = useState<NodeBounds | null>(null);
+  const [allNodeBounds, setAllNodeBounds] = useState<Record<string, NodeBounds>>({});
+  const nodeBounds = selectedNid != null ? (allNodeBounds[selectedNid] ?? null) : null;
 
   // ── tabs ─────────────────────────────────────────────────────────────────
   const [tabs, setTabsState] = useState<Tab[]>([]);
@@ -405,7 +406,7 @@ export default function App() {
     treeCacheRef.current.clear();
     setCacheVersion(0);
     setSelectedNid(null);
-    setNodeBounds(null);
+    setAllNodeBounds({});
   }, [runId]);
 
   // ── update frames/keyframes and clear caches when scene selection changes ──
@@ -502,14 +503,14 @@ export default function App() {
 
   // ── node bounds fetch ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (selectedNid == null) { setNodeBounds(null); return; }
+    if (!hasScene) { setAllNodeBounds({}); return; }
     const ctrl = new AbortController();
-    fetch(withToken(`/node/${selectedNid}?frame=${frame}${sceneParam}`), { signal: ctrl.signal })
-      .then(r => r.ok ? r.json() as Promise<NodeBounds> : null)
-      .then(data => setNodeBounds(data))
+    fetch(withToken(`/node-bounds?frame=${frame}${sceneParam}`), { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() as Promise<Record<string, NodeBounds>> : {})
+      .then(data => setAllNodeBounds(data))
       .catch(() => {});
     return () => ctrl.abort();
-  }, [selectedNid, frame]);
+  }, [frame, sceneParam, hasScene]);
 
   // ── source line highlights ────────────────────────────────────────────────
   useEffect(() => {

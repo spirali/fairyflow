@@ -97,7 +97,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/frames", get(frames_handler))
         .route("/tree/{n}", get(tree_handler))
         .route("/trees", get(trees_handler))
-        .route("/node/{id}", get(node_handler))
+        .route("/node-bounds", get(node_bounds_handler))
         .route("/export-video", post(crate::export::export_handler))
         .route("/export-player", post(crate::package::export_player_handler))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_layer))
@@ -379,8 +379,7 @@ async fn trees_handler(
     }
 }
 
-async fn node_handler(
-    Path(id): axum::extract::Path<u64>,
+async fn node_bounds_handler(
     Query(params): Query<NodeQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
@@ -388,18 +387,12 @@ async fn node_handler(
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
     let sel = scene_selection(params.scene);
-    renderer_skia::clear_image_cache();
-    let scene = match anim.build_scene(FrameId::new(params.frame), sel) {
-        Ok(s) => s,
+    match anim.all_node_bounds(FrameId::new(params.frame), sel) {
+        Ok(bounds) => axum::Json(bounds).into_response(),
         Err(e) => {
-            warn!(node = id, frame = params.frame, error = %e, "build_scene failed in node_handler");
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+            warn!(frame = params.frame, error = %e, "all_node_bounds failed in node_bounds_handler");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         }
-    };
-    renderer_skia::prune_text_cache();
-    match renderer_skia::find_node_bounds(&scene, id) {
-        Some(bounds) => axum::Json(bounds).into_response(),
-        None => (StatusCode::NOT_FOUND, "node not found or has no bounds").into_response(),
     }
 }
 

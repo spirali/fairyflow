@@ -3,7 +3,7 @@ use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
 use crate::nodes::{Node, SceneDef};
 use crate::eval::EvalCtx;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -139,6 +139,14 @@ impl SingleScene {
 
 // ─────────────────────────── AnimationDef impl ───────────────────────────────
 
+#[derive(Debug, Clone, Serialize)]
+pub struct NodeBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 impl AnimationDef {
     fn from_scenes(scenes: Vec<SingleScene>) -> Self {
         let mut frame_offsets = Vec::with_capacity(scenes.len());
@@ -158,6 +166,29 @@ impl AnimationDef {
         let (s, local_frame) = self.resolve(frame_id, selection);
         let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes);
         s.scene.eval(&ctx)
+    }
+
+    pub fn all_node_bounds(
+        &self,
+        frame_id: FrameId,
+        selection: SceneSelection,
+    ) -> anyhow::Result<HashMap<u64, NodeBounds>> {
+        let (s, local_frame) = self.resolve(frame_id, selection);
+        let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes);
+        let mut map = HashMap::new();
+        for (node_id, node) in &s.nodes {
+            let x = node.get_x(&ctx).unwrap_or(0.0);
+            let y = node.get_y(&ctx).unwrap_or(0.0);
+            let w = node.get_width(&ctx).unwrap_or(0.0);
+            let h = node.get_height(&ctx).unwrap_or(0.0);
+            map.insert(node_id.as_u64(), NodeBounds {
+                x: x as f32,
+                y: y as f32,
+                width: w as f32,
+                height: h as f32,
+            });
+        }
+        Ok(map)
     }
 
     pub fn key_frames(&self, selection: SceneSelection) -> Vec<FrameId> {

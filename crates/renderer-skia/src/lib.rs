@@ -4,6 +4,6 @@ mod render;
 pub use renderer_core::*;
 
 pub use render::{
-    NodeBounds, RasterRenderer, find_node_bounds, render_scene, render_scene_fitted,
+    RasterRenderer, render_scene, render_scene_fitted,
     render_scene_to_buffer,
 };

@@ -8,10 +8,9 @@ use renderer_core::{
     TextSpan,
 };
 use resvg::usvg;
-use serde::Serialize;
 use std::sync::Arc;
 use tiny_skia::{
-    FillRule, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Point, Rect, Stroke, Transform,
+    FillRule, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Stroke, Transform,
 };
 
 // ── Color conversion ──────────────────────────────────────────────────────────
@@ -358,143 +357,6 @@ pub fn render_scene_to_buffer(scene: &Scene, width: u32, height: u32, buffer: &m
         *dst = ((src.red() as u32) << 16)
             | ((src.green() as u32) << 8)
             | (src.blue() as u32);
-    }
-}
-
-// ── Node bounds ───────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize)]
-pub struct NodeBounds {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-/// Find the axis-aligned bounding box of `node_id` in scene coordinates (scale = 1).
-pub fn find_node_bounds(scene: &Scene, node_id: u64) -> Option<NodeBounds> {
-    search_children(&scene.children, node_id, Transform::identity())
-}
-
-fn search_children(nodes: &[Node], node_id: u64, parent: Transform) -> Option<NodeBounds> {
-    nodes.iter().find_map(|n| search_node(n, node_id, parent))
-}
-
-fn search_node(node: &Node, node_id: u64, parent: Transform) -> Option<NodeBounds> {
-    match &node.kind {
-        NodeKind::Group {
-            position,
-            size,
-            scale_x,
-            scale_y,
-            rotation,
-            pivot_x,
-            pivot_y,
-            children,
-            ..
-        } => {
-            let pivot_x_abs = (pivot_x * size.width) as f32;
-            let pivot_y_abs = (pivot_y * size.height) as f32;
-            let t = positional_transform(position, *scale_x, *scale_y, *rotation, pivot_x_abs, pivot_y_abs, parent);
-            if node.id == node_id {
-                return Some(aabb(size.width as f32, size.height as f32, t));
-            }
-            search_children(children, node_id, t)
-        }
-        NodeKind::Rect { position, size, .. }
-        | NodeKind::Ellipse { position, size, .. }
-        | NodeKind::Image { position, size, .. } => {
-            if node.id == node_id {
-                let t = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent);
-                return Some(aabb(size.width as f32, size.height as f32, t));
-            }
-            None
-        }
-        NodeKind::Path { children, .. } => {
-            if node.id == node_id {
-                return path_bounds(children, parent);
-            }
-            children
-                .iter()
-                .find_map(|cmd| search_path_cmd(cmd, node_id, parent))
-        }
-        NodeKind::Text { position, .. } => {
-            if node.id == node_id {
-                let t = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent);
-                return Some(aabb(0.0, 0.0, t));
-            }
-            None
-        }
-    }
-}
-
-fn search_path_cmd(cmd: &PathCommand, node_id: u64, parent: Transform) -> Option<NodeBounds> {
-    let (id, pos) = match cmd {
-        PathCommand::Move { id, position } => (id, position),
-        PathCommand::Line { id, position } => (id, position),
-        PathCommand::Cubic { id, position, .. } => (id, position),
-        PathCommand::Close => return None,
-    };
-    if *id == node_id {
-        let mut pts = [Point::from_xy(pos.x as f32, pos.y as f32)];
-        parent.map_points(&mut pts);
-        Some(NodeBounds {
-            x: pts[0].x,
-            y: pts[0].y,
-            width: 0.0,
-            height: 0.0,
-        })
-    } else {
-        None
-    }
-}
-
-fn path_bounds(cmds: &[PathCommand], t: Transform) -> Option<NodeBounds> {
-    let mut pts: Vec<Point> = cmds
-        .iter()
-        .filter_map(|cmd| {
-            let pos = match cmd {
-                PathCommand::Move { position, .. } => position,
-                PathCommand::Line { position, .. } => position,
-                PathCommand::Cubic { position, .. } => position,
-                PathCommand::Close => return None,
-            };
-            Some(Point::from_xy(pos.x as f32, pos.y as f32))
-        })
-        .collect();
-    if pts.is_empty() {
-        return None;
-    }
-    t.map_points(&mut pts);
-    let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
-    let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
-    let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
-    let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    Some(NodeBounds {
-        x: min_x,
-        y: min_y,
-        width: max_x - min_x,
-        height: max_y - min_y,
-    })
-}
-
-fn aabb(w: f32, h: f32, t: Transform) -> NodeBounds {
-    let mut pts = [
-        Point::from_xy(0.0, 0.0),
-        Point::from_xy(w, 0.0),
-        Point::from_xy(0.0, h),
-        Point::from_xy(w, h),
-    ];
-    t.map_points(&mut pts);
-    let min_x = pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
-    let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
-    let max_x = pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
-    let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    NodeBounds {
-        x: min_x,
-        y: min_y,
-        width: max_x - min_x,
-        height: max_y - min_y,
     }
 }
 

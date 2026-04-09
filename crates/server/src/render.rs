@@ -29,7 +29,7 @@ pub async fn render_anim_to_dir(
     let render_count = frames_to_render.len();
 
     let result = tokio::task::spawn_blocking(move || {
-        renderer::clear_image_cache();
+        renderer_skia::clear_image_cache();
         use rayon::prelude::*;
         let render = || {
             frames_to_render
@@ -39,8 +39,8 @@ pub async fn render_anim_to_dir(
                         .build_scene(FrameId::new(n), SceneSelection::All)
                         .map_err(|e| e.to_string())?;
                     let pixmap = match target_resolution {
-                        Some((w, h)) => renderer::render_scene_fitted(&scene, w, h),
-                        None => renderer::render_scene(&scene, 1.0),
+                        Some((w, h)) => renderer_skia::render_scene_fitted(&scene, w, h),
+                        None => renderer_skia::render_scene(&scene, 1.0),
                     };
                     let png = pixmap.encode_png().map_err(|e| e.to_string())?;
                     let path = output_dir.join(format!("frame{n}.png"));
@@ -66,7 +66,7 @@ pub async fn render_anim_to_dir(
     })
     .await;
 
-    renderer::prune_text_cache();
+    renderer_skia::prune_text_cache();
     match result {
         Ok(Ok(())) => {
             println!("rendered {render_count} frame(s) to {output_dir_display}");

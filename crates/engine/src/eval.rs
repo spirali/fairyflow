@@ -4,7 +4,7 @@ use crate::basictypes::{AvId, NodeId};
 use crate::nodes::{Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, AttrExpr};
 use anyhow::bail;
 use by_address::ByAddress;
-use renderer::Inheritable;
+use renderer_core::Inheritable;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -342,8 +342,8 @@ impl Eval<f64> for FloatCall {
 // ─────────────────────────── Mixin eval impls ───────────────────────────────
 
 impl Position {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Position> {
-        Ok(renderer::Position {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Position> {
+        Ok(renderer_core::Position {
             x: self.x.eval(ctx)?,
             y: self.y.eval(ctx)?,
         })
@@ -351,8 +351,8 @@ impl Position {
 }
 
 impl Size {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Size> {
-        Ok(renderer::Size {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Size> {
+        Ok(renderer_core::Size {
             width: self.width.eval(ctx)?,
             height: self.height.eval(ctx)?,
         })
@@ -360,8 +360,8 @@ impl Size {
 }
 
 impl Style {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Style> {
-        Ok(renderer::Style {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Style> {
+        Ok(renderer_core::Style {
             fill_color: self.fill_color.eval(ctx)?.map(|c| c.into_inner()),
             stroke_color: self.stroke_color.eval(ctx)?.map(|c| c.into_inner()),
             stroke_width: self.stroke_width.eval(ctx)?,
@@ -371,8 +371,8 @@ impl Style {
 }
 
 impl TextStyle {
-    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextStyle> {
-        Ok(renderer::TextStyle {
+    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextStyle> {
+        Ok(renderer_core::TextStyle {
             fill_color: self.style.fill_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
             stroke_color: self.style.stroke_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
             stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?,
@@ -387,7 +387,7 @@ impl TextStyle {
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Node> {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Node> {
         let _span = tracing::trace_span!("node.eval", node_id = self.id.as_u64()).entered();
         let kind = match &self.kind {
             NodeKind::Group {
@@ -402,7 +402,7 @@ impl Node {
                 clip_x, clip_y, clip_w, clip_h, layout,
                 children,
                 z_level,
-            } => renderer::NodeKind::Group {
+            } => renderer_core::NodeKind::Group {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 alpha: alpha.eval(ctx)?,
@@ -432,7 +432,7 @@ impl Node {
                 size,
                 style,
                 z_level,
-            } => renderer::NodeKind::Rect {
+            } => renderer_core::NodeKind::Rect {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
@@ -443,7 +443,7 @@ impl Node {
                 size,
                 style,
                 z_level,
-            } => renderer::NodeKind::Ellipse {
+            } => renderer_core::NodeKind::Ellipse {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 style: style.eval(ctx)?,
@@ -455,7 +455,7 @@ impl Node {
                 children,
                 crop_start,
                 crop_end,
-            } => renderer::NodeKind::Path {
+            } => renderer_core::NodeKind::Path {
                 style: style.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?,
                 crop_start: crop_start.eval(ctx)?,
@@ -472,7 +472,7 @@ impl Node {
                 sh_language,
                 sh_theme,
                 children,
-            } => renderer::NodeKind::Text {
+            } => renderer_core::NodeKind::Text {
                 position: position.eval(ctx)?,
                 text_style: text_style.eval_as_inheritable(ctx)?,
                 sh_language: sh_language.clone(),
@@ -491,7 +491,7 @@ impl Node {
                 path,
                 keep_aspect,
                 children,
-            } => renderer::NodeKind::Image {
+            } => renderer_core::NodeKind::Image {
                 position: position.eval(ctx)?,
                 size: size.eval(ctx)?,
                 z_level: z_level.eval_as_inheritable(ctx)?,
@@ -520,25 +520,25 @@ impl Node {
                     }
                     result
                 },
-                all_svg_layers: renderer::svg_image_layers(&path.eval(ctx)?),
+                all_svg_layers: renderer_core::svg_image_layers(&path.eval(ctx)?),
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"
             ),
         };
-        Ok(renderer::Node {
+        Ok(renderer_core::Node {
             id: self.id.as_u64(),
             kind,
         })
     }
 
-    pub fn eval_as_path_cmd(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::PathCommand> {
+    pub fn eval_as_path_cmd(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::PathCommand> {
         match &self.kind {
-            NodeKind::Move { position } => Ok(renderer::PathCommand::Move {
+            NodeKind::Move { position } => Ok(renderer_core::PathCommand::Move {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
             }),
-            NodeKind::Line { position } => Ok(renderer::PathCommand::Line {
+            NodeKind::Line { position } => Ok(renderer_core::PathCommand::Line {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
             }),
@@ -548,7 +548,7 @@ impl Node {
                 c1_y,
                 c2_x,
                 c2_y,
-            } => Ok(renderer::PathCommand::Cubic {
+            } => Ok(renderer_core::PathCommand::Cubic {
                 id: self.id.as_u64(),
                 position: position.eval(ctx)?,
                 c1_x: c1_x.eval(ctx)?,
@@ -557,27 +557,27 @@ impl Node {
                 c2_y: c2_y.eval(ctx)?,
             }),
             NodeKind::Close => {
-                Ok(renderer::PathCommand::Close)
+                Ok(renderer_core::PathCommand::Close)
             },
             _ => anyhow::bail!("expected path command node, got {:?}", self.id),
         }
     }
 
-    pub fn eval_as_text_child(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextChild> {
+    pub fn eval_as_text_child(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextChild> {
         match &self.kind {
             NodeKind::TextGroup { .. } => {
-                Ok(renderer::TextChild::Group(self.eval_as_text_group(ctx)?))
+                Ok(renderer_core::TextChild::Group(self.eval_as_text_group(ctx)?))
             }
             NodeKind::TextSpan { .. } => {
-                Ok(renderer::TextChild::Span(self.eval_as_text_span(ctx)?))
+                Ok(renderer_core::TextChild::Span(self.eval_as_text_span(ctx)?))
             }
             _ => anyhow::bail!("expected t_group or t_span node, got {:?}", self.id),
         }
     }
 
-    pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextGroup> {
+    pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextGroup> {
         match &self.kind {
-            NodeKind::TextGroup { text_style, children } => Ok(renderer::TextGroup {
+            NodeKind::TextGroup { text_style, children } => Ok(renderer_core::TextGroup {
                 id: self.id.as_u64(),
                 text_style: text_style.eval_as_inheritable(ctx)?,
                 children: children
@@ -589,7 +589,7 @@ impl Node {
         }
     }
 
-    pub fn eval_as_image_layer(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::ImageLayer> {
+    pub fn eval_as_image_layer(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::ImageLayer> {
         match &self.kind {
             NodeKind::Layer {
                 position,
@@ -598,7 +598,7 @@ impl Node {
                 alpha,
                 layer_name,
                 ..
-            } => Ok(renderer::ImageLayer {
+            } => Ok(renderer_core::ImageLayer {
                 id: self.id.as_u64(),
                 layer_name: layer_name.clone(),
                 position: position.eval(ctx)?,
@@ -610,9 +610,9 @@ impl Node {
         }
     }
 
-    pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::TextSpan> {
+    pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextSpan> {
         match &self.kind {
-            NodeKind::TextSpan { text_style, text } => Ok(renderer::TextSpan {
+            NodeKind::TextSpan { text_style, text } => Ok(renderer_core::TextSpan {
                 id: self.id.as_u64(),
                 text: text.eval(ctx)?,
                 text_style: text_style.eval_as_inheritable(ctx)?,
@@ -625,7 +625,7 @@ impl Node {
 // ─────────────────────────── SceneDef eval impl ─────────────────────────────
 
 impl SceneDef {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer::Scene> {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
         let fill_color = self.fill_color.eval(ctx)?.map(|x| x.into_inner()).unwrap_or_default();
         let mut children = Vec::with_capacity(self.children.len());
@@ -635,7 +635,7 @@ impl SceneDef {
                 children.push(node.eval(ctx)?);
             }
         }
-        Ok(renderer::Scene {
+        Ok(renderer_core::Scene {
             width: self.size.width.eval(ctx)?,
             height: self.size.height.eval(ctx)?,
             fill_color,

@@ -214,7 +214,7 @@ impl PlayerApp {
         let Ok(mut buffer) = surface.buffer_mut() else {
             return;
         };
-        renderer::render_scene_to_buffer(&scene, size.width, size.height, &mut buffer);
+        renderer_skia::render_scene_to_buffer(&scene, size.width, size.height, &mut buffer);
         let _ = buffer.present();
     }
 }
@@ -357,7 +357,7 @@ impl ApplicationHandler for PlayerApp {
 // ── Public entry point ─────────────────────────────────────────────────────
 
 pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
-    renderer::Resources::init();
+    renderer_skia::Resources::init();
 
     let package = load_package(package_path)?;
 

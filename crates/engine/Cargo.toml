@@ -9,5 +9,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-renderer = { path = "../renderer" }
+renderer-core = { path = "../renderer-core" }
 by_address = "1.2.1"

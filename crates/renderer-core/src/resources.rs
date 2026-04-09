@@ -59,7 +59,7 @@ impl Resources {
     pub fn get() -> &'static Resources {
         GLOBAL
             .get()
-            .expect("renderer::Resources::init() must be called before rendering")
+            .expect("renderer_core::Resources::init() must be called before rendering")
     }
 
     pub fn font_cx(&self) -> FontContext {

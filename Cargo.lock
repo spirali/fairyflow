@@ -761,7 +761,7 @@ dependencies = [
  "anyhow",
  "by_address",
  "csscolorparser",
- "renderer",
+ "renderer-core",
  "serde",
  "serde_json",
  "tracing",
@@ -2104,7 +2104,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "engine",
- "renderer",
+ "renderer-skia",
  "serde",
  "serde_json",
  "softbuffer",
@@ -2384,22 +2384,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
-name = "renderer"
+name = "renderer-core"
 version = "0.1.0"
 dependencies = [
  "csscolorparser",
  "fontdb",
  "image",
  "parley",
- "resvg",
  "serde",
  "skrifa",
  "syntect",
- "tiny-skia",
  "tracing",
  "usvg",
  "xmltree",
  "zip 2.4.2",
+]
+
+[[package]]
+name = "renderer-skia"
+version = "0.1.0"
+dependencies = [
+ "renderer-core",
+ "resvg",
+ "serde",
+ "tiny-skia",
+ "tracing",
 ]
 
 [[package]]
@@ -2636,7 +2645,7 @@ dependencies = [
  "player",
  "rand 0.8.5",
  "rayon",
- "renderer",
+ "renderer-skia",
  "serde",
  "serde_json",
  "tokio",

@@ -9,7 +9,7 @@ base64 = "0.22"
 toml = "0.8"
 rayon = "1"
 engine = { path = "../engine" }
-renderer = { path = "../renderer" }
+renderer-skia = { path = "../renderer-skia" }
 axum = { version = "0.8.8", features = ["ws"] }
 futures-util = "0.3"
 clap = { version = "4", features = ["derive"] }

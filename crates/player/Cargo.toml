@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 engine = { path = "../engine" }
-renderer = { path = "../renderer" }
+renderer-skia = { path = "../renderer-skia" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

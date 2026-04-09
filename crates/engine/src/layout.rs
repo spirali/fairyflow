@@ -271,7 +271,7 @@ impl Node {
                 let parent = ctx.node(parent_id)?;
                 let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
                 let path_val = path.eval(ctx)?;
-                let Some((nw, _nh)) = renderer::measure_image(path_val.as_str()) else {
+                let Some((nw, _nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nw as f64
@@ -308,15 +308,15 @@ impl Node {
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                renderer::measure_text(&lines).0 as f64
+                renderer_core::measure_text(&lines).0 as f64
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
-                renderer::measure_text(&[child]).0 as f64
+                renderer_core::measure_text(&[child]).0 as f64
             }
             NodeKind::Image { path, size, .. } => {
                 let path_val = path.eval(ctx)?;
-                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()) else {
+                let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 if size.height.get_expr().is_default_height_of(self.id) {
@@ -340,7 +340,7 @@ impl Node {
                 let parent = ctx.node(parent_id)?;
                 let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
                 let path_val = path.eval(ctx)?;
-                let Some((_nw, nh)) = renderer::measure_image(path_val.as_str()) else {
+                let Some((_nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nh as f64
@@ -377,15 +377,15 @@ impl Node {
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                renderer::measure_text(&lines).1 as f64
+                renderer_core::measure_text(&lines).1 as f64
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
-                renderer::measure_text(&[child]).1 as f64
+                renderer_core::measure_text(&[child]).1 as f64
             }
             NodeKind::Image { path, size, .. } => {
                 let path_val = path.eval(ctx)?;
-                let Some((nw, nh)) = renderer::measure_image(path_val.as_str()) else {
+                let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 if size.width.get_expr().is_default_width_of(self.id) {
@@ -411,7 +411,7 @@ fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
         .iter()
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(renderer::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0)))
+    Ok(renderer_core::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0)))
 }
 /*
 /// Returns the axis-aligned bounding box `(x, y, width, height)` of the immediate

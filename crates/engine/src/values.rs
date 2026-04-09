@@ -8,7 +8,7 @@ use crate::avalue::AnimatedValue;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::FrameId;
-use renderer::Color as RendererColor;
+use renderer_core::Color as RendererColor;
 
 #[derive(Debug, Clone)]
 pub struct Color(RendererColor);

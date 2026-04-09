@@ -120,14 +120,14 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
     let frames_arc = Arc::new(frames);
 
     let render_result = tokio::task::spawn_blocking(move || {
-        renderer::clear_image_cache();
+        renderer_skia::clear_image_cache();
         use rayon::prelude::*;
         let done = done_count;
         frames_arc.par_iter().enumerate().try_for_each(|(idx, &frame_n)| -> Result<(), String> {
             let scene = anim.build_scene(FrameId::new(frame_n), sel).map_err(|e| e.to_string())?;
             let pixmap = match target_res {
-                Some((w, h)) => renderer::render_scene_fitted(&scene, w, h),
-                None => renderer::render_scene(&scene, 1.0),
+                Some((w, h)) => renderer_skia::render_scene_fitted(&scene, w, h),
+                None => renderer_skia::render_scene(&scene, 1.0),
             };
             let png = pixmap.encode_png().map_err(|e| e.to_string())?;
             std::fs::write(temp_arc.join(format!("frame{idx}.png")), &png)
@@ -138,7 +138,7 @@ async fn do_export(state: AppState, params: ExportParams, tx: UnboundedSender<St
         })
     }).await;
 
-    renderer::prune_text_cache();
+    renderer_skia::prune_text_cache();
 
     match render_result {
         Ok(Ok(())) => {}

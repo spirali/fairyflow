@@ -154,7 +154,7 @@ impl AnimationDef {
         &self,
         frame_id: FrameId,
         selection: SceneSelection,
-    ) -> anyhow::Result<renderer::Scene> {
+    ) -> anyhow::Result<renderer_core::Scene> {
         let (s, local_frame) = self.resolve(frame_id, selection);
         let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes);
         s.scene.eval(&ctx)

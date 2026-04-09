@@ -1,19 +1,17 @@
 [package]
-name = "renderer"
+name = "renderer-core"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 serde = { workspace = true }
-tiny-skia = "0.11"
 csscolorparser = { workspace = true }
+tracing = { workspace = true }
 parley = "0.7.0"
 skrifa = "0.37.0"
-tracing = { workspace = true }
-resvg = "0.44"
-usvg = "0.44"
 fontdb = "0.22"
-xmltree = "0.10"
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
+usvg = "0.44"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
-syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
+xmltree = "0.10"

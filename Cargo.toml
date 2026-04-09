@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/server", "crates/engine", "crates/renderer", "crates/player"]
+members = [
+    "crates/server",
+    "crates/engine",
+    "crates/renderer-core",
+    "crates/renderer-skia",
+    "crates/player",
+]
 resolver = "3"
 
 [profile.release]

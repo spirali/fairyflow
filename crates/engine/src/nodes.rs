@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use crate::basictypes::{AvId, FrameId, NodeId};
 use crate::eval::EvalCtx;
-use renderer::Color as RendererColor;
+use renderer_core::Color as RendererColor;
 use serde::{Deserialize, Deserializer, de};
 use std::sync::Arc;
 use serde::de::DeserializeOwned;

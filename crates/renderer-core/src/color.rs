@@ -12,7 +12,7 @@ impl Color {
         csscolorparser::Color::from_html(color).ok().map(Color)
     }
 
-    pub(crate) fn from_rgba8(r: u8, g: u8, b: u8, a: u8) -> Color {
+    pub fn from_rgba8(r: u8, g: u8, b: u8, a: u8) -> Color {
         Color(csscolorparser::Color {
             r: r as f32 / 255.0,
             g: g as f32 / 255.0,
@@ -37,9 +37,9 @@ impl Color {
         })
     }
 
-    pub(crate) fn to_skia_color(&self) -> tiny_skia::Color {
+    /// Return the raw RGBA components in [0.0, 1.0] range.
+    pub fn to_rgba_f32(&self) -> (f32, f32, f32, f32) {
         let c = &self.0;
-        tiny_skia::Color::from_rgba(c.r as f32, c.g as f32, c.b as f32, c.a as f32)
-            .unwrap_or(tiny_skia::Color::BLACK)
+        (c.r, c.g, c.b, c.a)
     }
 }

@@ -117,7 +117,7 @@ async fn main() {
         )
         .init();
 
-    renderer::Resources::init();
+    renderer_skia::Resources::init();
 
     let args = Args::parse();
 
@@ -179,7 +179,7 @@ async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
             std::process::exit(1);
         }
     };
-    renderer::Resources::get().load_font_directories(&config.font_directories);
+    renderer_skia::Resources::get().load_font_directories(&config.font_directories);
 
     if let Err(e) = std::env::set_current_dir(&directory) {
         eprintln!(
@@ -249,7 +249,7 @@ async fn run_render_json(
     };
 
     if !font_dirs.is_empty() {
-        renderer::Resources::get().load_font_directories(&font_dirs);
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
     }
 
     if video {

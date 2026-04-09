@@ -174,7 +174,7 @@ async fn file_save_handler(
     if is_config {
         match ProjectConfig::load(std::path::Path::new("fairyflow.toml")) {
             Ok(new_cfg) => {
-                renderer::Resources::get().load_font_directories(&new_cfg.font_directories);
+                renderer_skia::Resources::get().load_font_directories(&new_cfg.font_directories);
                 *state.config.lock().unwrap() = new_cfg.clone();
                 state.config_tx.send(new_cfg).ok();
             }
@@ -309,7 +309,7 @@ struct RenderedFrame {
 #[derive(Serialize)]
 struct TreeFrame {
     n: u32,
-    scene: renderer::Scene,
+    scene: renderer_skia::Scene,
 }
 
 fn default_scale() -> f32 {
@@ -332,9 +332,9 @@ async fn tree_handler(
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
     let sel = scene_selection(params.scene);
-    renderer::clear_image_cache();
+    renderer_skia::clear_image_cache();
     let result = anim.build_scene(FrameId::new(n), sel);
-    renderer::prune_text_cache();
+    renderer_skia::prune_text_cache();
     match result {
         Ok(scene) => axum::Json(scene).into_response(),
         Err(e) => {
@@ -356,7 +356,7 @@ async fn trees_handler(
     }
     let sel = scene_selection(params.scene);
     let result = tokio::task::spawn_blocking(move || {
-        renderer::clear_image_cache();
+        renderer_skia::clear_image_cache();
         (params.from..=params.to)
             .map(|n| {
                 anim.build_scene(FrameId::new(n as u32), sel)
@@ -365,7 +365,7 @@ async fn trees_handler(
             .collect::<Result<Vec<_>, _>>()
     })
     .await;
-    renderer::prune_text_cache();
+    renderer_skia::prune_text_cache();
     match result {
         Ok(Ok(frames)) => axum::Json(frames).into_response(),
         Ok(Err(e)) => {
@@ -388,7 +388,7 @@ async fn node_handler(
         return (StatusCode::NOT_FOUND, "no animation").into_response();
     };
     let sel = scene_selection(params.scene);
-    renderer::clear_image_cache();
+    renderer_skia::clear_image_cache();
     let scene = match anim.build_scene(FrameId::new(params.frame), sel) {
         Ok(s) => s,
         Err(e) => {
@@ -396,8 +396,8 @@ async fn node_handler(
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
         }
     };
-    renderer::prune_text_cache();
-    match renderer::find_node_bounds(&scene, id) {
+    renderer_skia::prune_text_cache();
+    match renderer_skia::find_node_bounds(&scene, id) {
         Some(bounds) => axum::Json(bounds).into_response(),
         None => (StatusCode::NOT_FOUND, "node not found or has no bounds").into_response(),
     }
@@ -414,10 +414,10 @@ async fn frame_handler(
     };
     let sel = scene_selection(params.scene);
     let result: Result<anyhow::Result<Vec<u8>>, _> = tokio::task::spawn_blocking(move || {
-        renderer::clear_image_cache();
+        renderer_skia::clear_image_cache();
         let scene = anim.build_scene(FrameId::new(n), sel)?;
-        let pixmap = renderer::render_scene(&scene, scale);
-        renderer::prune_text_cache();
+        let pixmap = renderer_skia::render_scene(&scene, scale);
+        renderer_skia::prune_text_cache();
         Ok(pixmap.encode_png()?)
     })
     .await;
@@ -450,13 +450,13 @@ async fn frames_handler(
     let sel = scene_selection(params.scene);
 
     let results = tokio::task::spawn_blocking(move || {
-        renderer::clear_image_cache();
+        renderer_skia::clear_image_cache();
         use rayon::prelude::*;
         (from..=to)
             .into_par_iter()
             .filter_map(|n| {
                 let scene = anim.build_scene(FrameId::new(n as u32), sel).ok()?;
-                let pixmap = renderer::render_scene(&scene, scale);
+                let pixmap = renderer_skia::render_scene(&scene, scale);
                 let png = pixmap.encode_png().ok()?;
                 Some(RenderedFrame {
                     n,
@@ -466,7 +466,7 @@ async fn frames_handler(
             .collect::<Vec<_>>()
     })
     .await;
-    renderer::prune_text_cache();
+    renderer_skia::prune_text_cache();
 
     match results {
         Ok(frames) => axum::Json(frames).into_response(),

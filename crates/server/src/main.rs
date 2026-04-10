@@ -53,7 +53,7 @@ enum Cmd {
         directory: PathBuf,
     },
     /// Render all frames from a JSON animation file to PNG images
-    RenderJson {
+    RenderPng {
         /// Path to the JSON animation file
         json_path: PathBuf,
 
@@ -79,13 +79,29 @@ enum Cmd {
         /// Also write frame{n}.json with the evaluated scene tree for each rendered frame
         #[arg(long)]
         write_tree: bool,
+    },
 
-        /// Produce a video file instead of individual PNGs.
-        /// When set, output_dir is treated as the output video file path (e.g. out.mp4).
-        #[arg(long)]
-        video: bool,
+    /// Render a JSON animation to a video file via ffmpeg
+    RenderVideo {
+        /// Path to the JSON animation file
+        json_path: PathBuf,
 
-        /// Frames per second for video output
+        /// Output video file path (e.g. out.mp4)
+        output_file: PathBuf,
+
+        /// Number of threads to use for rendering (default: all available)
+        #[arg(short, long)]
+        threads: Option<usize>,
+
+        /// Directories to load additional fonts from before rendering
+        #[arg(long = "font-dir")]
+        font_dirs: Vec<PathBuf>,
+
+        /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
+        #[arg(long = "target-resolution", value_parser = parse_resolution)]
+        target_resolution: Option<(u32, u32)>,
+
+        /// Frames per second
         #[arg(long, default_value_t = 24)]
         fps: u32,
 
@@ -96,6 +112,23 @@ enum Cmd {
         /// Constant rate factor for video quality (lower = better quality)
         #[arg(long, default_value_t = 23)]
         crf: u32,
+    },
+
+    /// Render all frames from a JSON animation file to a multi-page PDF
+    RenderPdf {
+        /// Path to the JSON animation file
+        json_path: PathBuf,
+
+        /// Output PDF file path (e.g. out.pdf)
+        output_file: PathBuf,
+
+        /// Comma-separated list of frame numbers to render (default: all frames)
+        #[arg(long, value_delimiter = ',')]
+        frames: Option<Vec<u32>>,
+
+        /// Directories to load additional fonts from before rendering
+        #[arg(long = "font-dir")]
+        font_dirs: Vec<PathBuf>,
     },
     /// Initialize a new project directory
     Init {
@@ -124,7 +157,7 @@ async fn main() {
 
     match args.command {
         Cmd::Open { port, token, directory } => run_serve(port, token, directory).await,
-        Cmd::RenderJson {
+        Cmd::RenderPng {
             json_path,
             output_dir,
             threads,
@@ -132,26 +165,23 @@ async fn main() {
             font_dirs,
             target_resolution,
             write_tree,
-            video,
+        } => run_render_png(json_path, output_dir, threads, frames, font_dirs, target_resolution, write_tree).await,
+        Cmd::RenderVideo {
+            json_path,
+            output_file,
+            threads,
+            font_dirs,
+            target_resolution,
             fps,
             codec,
             crf,
-        } => {
-            run_render_json(
-                json_path,
-                output_dir,
-                threads,
-                frames,
-                font_dirs,
-                target_resolution,
-                write_tree,
-                video,
-                fps,
-                codec,
-                crf,
-            )
-            .await
-        }
+        } => run_render_video(json_path, output_file, threads, font_dirs, target_resolution, fps, codec, crf).await,
+        Cmd::RenderPdf {
+            json_path,
+            output_file,
+            frames,
+            font_dirs,
+        } => run_render_pdf(json_path, output_file, frames, font_dirs).await,
         Cmd::Init { directory } => run_init(directory).await,
         Cmd::Play { package } => {
             if let Err(e) = player::open_player(&package) {
@@ -220,7 +250,7 @@ fn parse_resolution(s: &str) -> Result<(u32, u32), String> {
     Ok((w, h))
 }
 
-async fn run_render_json(
+async fn run_render_png(
     json_path: PathBuf,
     output_dir: PathBuf,
     threads: Option<usize>,
@@ -228,52 +258,58 @@ async fn run_render_json(
     font_dirs: Vec<PathBuf>,
     target_resolution: Option<(u32, u32)>,
     write_tree: bool,
-    video: bool,
+) {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    render_anim_to_dir(anim, output_dir, threads, frames, target_resolution, write_tree).await;
+}
+
+async fn run_render_video(
+    json_path: PathBuf,
+    output_file: PathBuf,
+    threads: Option<usize>,
+    font_dirs: Vec<PathBuf>,
+    target_resolution: Option<(u32, u32)>,
     fps: u32,
     codec: String,
     crf: u32,
 ) {
-    let json_str = match tokio::fs::read_to_string(&json_path).await {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    crate::render::render_anim_to_video(anim, output_file, threads, target_resolution, fps, codec, crf).await;
+}
+
+async fn run_render_pdf(
+    json_path: PathBuf,
+    output_file: PathBuf,
+    frames: Option<Vec<u32>>,
+    font_dirs: Vec<PathBuf>,
+) {
+    let anim = load_anim(&json_path).await;
+    if !font_dirs.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    crate::render::render_anim_to_pdf(anim, frames, output_file).await;
+}
+
+async fn load_anim(json_path: &PathBuf) -> AnimationDef {
+    let json_str = match tokio::fs::read_to_string(json_path).await {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: failed to read {}: {e}", json_path.display());
             std::process::exit(1);
         }
     };
-
-    let anim = match AnimationDef::from_str(&json_str) {
+    match AnimationDef::from_str(&json_str) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: failed to parse animation JSON: {e}");
             std::process::exit(1);
         }
-    };
-
-    if !font_dirs.is_empty() {
-        renderer_skia::Resources::get().load_font_directories(&font_dirs);
-    }
-
-    if video {
-        crate::render::render_anim_to_video(
-            anim,
-            output_dir,
-            threads,
-            target_resolution,
-            fps,
-            codec,
-            crf,
-        )
-        .await;
-    } else {
-        render_anim_to_dir(
-            anim,
-            output_dir,
-            threads,
-            frames,
-            target_resolution,
-            write_tree,
-        )
-        .await;
     }
 }
 

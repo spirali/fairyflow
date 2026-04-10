@@ -5,7 +5,8 @@ use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{
-    node_z_level as core_node_z_level, positional_transform as core_positional_transform,
+    node_z_level,
+    positional_transform as core_positional_transform,
     AffineTransform,
 };
 use renderer_core::{
@@ -394,10 +395,6 @@ fn affine_from_skia(t: Transform) -> AffineTransform {
 
 fn skia_from_affine(t: AffineTransform) -> Transform {
     Transform::from_row(t.a, t.b, t.c, t.d, t.e, t.f)
-}
-
-fn node_z_level(node: &Node) -> f64 {
-    core_node_z_level(node)
 }
 
 fn fill_and_stroke(

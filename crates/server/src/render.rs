@@ -82,6 +82,45 @@ pub async fn render_anim_to_dir(
     }
 }
 
+/// Render all frames from an animation to a multi-page PDF.
+pub async fn render_anim_to_pdf(
+    anim: AnimationDef,
+    frames: Option<Vec<u32>>,
+    output_path: PathBuf,
+) {
+    let frame_count = anim.frame_count(SceneSelection::All);
+    let frames_to_render: Vec<u32> = frames.unwrap_or_else(|| (0..frame_count).collect());
+    let render_count = frames_to_render.len();
+
+    let output_path_display = output_path.display().to_string();
+    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        renderer_core::clear_image_cache();
+        let mut scenes: Vec<renderer_core::Scene> = Vec::new();
+        for f in &frames_to_render {
+            let scene = anim.build_scene(FrameId::new(*f), SceneSelection::All)?;
+            scenes.push(scene);
+        }
+        renderer_core::prune_text_cache();
+        let scene_refs: Vec<&renderer_core::Scene> = scenes.iter().collect();
+        let pdf_bytes = renderer_pdf::render_to_pdf(&scene_refs)?;
+        std::fs::write(&output_path, &pdf_bytes)?;
+        Ok(())
+    })
+    .await;
+
+    match result {
+        Ok(Ok(())) => println!("rendered {render_count} frame(s) to PDF at {output_path_display}"),
+        Ok(Err(e)) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("error: PDF task panicked: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// Shared ffmpeg helper used by both the CLI and the HTTP export handler.
 pub(crate) async fn run_ffmpeg(
     frames_dir: &std::path::Path,

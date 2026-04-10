@@ -5,6 +5,7 @@ import subprocess
 import time
 import sys
 import os
+import fitz
 from fairyflow import scene
 from fairyflow.serializer import create_export
 import numpy as np
@@ -100,20 +101,31 @@ def test_scene(request):
     def_path = out_dir / "def.json"
     def_path.write_text(json.dumps(exported, indent=2))
 
-    cmd = [
+    pdf_path = out_dir / "animation.pdf"
+
+    png_cmd = [
         str(SERVER_BINARY),
-        "render-json",
+        "render-png",
         str(def_path),
         str(frames_dir),
         "--write-tree",
     ]
     if s.select_frames is not None:
-        cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
+        png_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
     if s.target_resolution is not None:
         w, h = s.target_resolution
-        cmd.append(f"--target-resolution={w}x{h}")
+        png_cmd.append(f"--target-resolution={w}x{h}")
+    subprocess.run(png_cmd, check=True, cwd=ROOT)
 
-    subprocess.run(cmd, check=True, cwd=ROOT)
+    pdf_cmd = [
+        str(SERVER_BINARY),
+        "render-pdf",
+        str(def_path),
+        str(pdf_path),
+    ]
+    if s.select_frames is not None:
+        pdf_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
+    subprocess.run(pdf_cmd, check=True, cwd=ROOT)
 
     check_frames_dir = CHECK_DIR / request.node.name / "frames"
     if FAIRYFLOW_TEST_UPDATE and check_frames_dir.is_dir():
@@ -162,3 +174,31 @@ def test_scene(request):
         current_json = json.loads(current_json.read_text())
         check_json = json.loads(check_json.read_text())
         assert current_json == check_json
+
+    # PDF rendering check: convert each PDF page to an image and compare with reference PNGs.
+    # PageSettings uses scene dimensions as PDF points; rendering at 72 DPI (Matrix(1,1))
+    # gives exactly scene.width × scene.height pixels, matching the PNG output.
+    PDF_TOLERANCE = 2  # max per-channel absolute difference
+    if pdf_path.exists():
+        pdf_doc = fitz.open(str(pdf_path))
+        if pdf_doc.page_count != len(check_frames):
+            pytest.fail(
+                f"PDF has {pdf_doc.page_count} page(s) but {len(check_frames)} reference frame(s)"
+            )
+        for page_idx, (page, check_png) in enumerate(zip(pdf_doc.pages(), check_frames)):
+            pix = page.get_pixmap(matrix=fitz.Matrix(1, 1), colorspace=fitz.csRGB)
+            pdf_arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+            check_img = Image.open(check_png)
+            check_arr = np.asarray(check_img.convert("RGB"))
+            if pdf_arr.shape != check_arr.shape:
+                pytest.fail(
+                    f"PDF page {page_idx}: size {pdf_arr.shape[1]}x{pdf_arr.shape[0]} != "
+                    f"reference {check_arr.shape[1]}x{check_arr.shape[0]}"
+                )
+            max_diff = int(np.abs(pdf_arr.astype(np.int32) - check_arr.astype(np.int32)).max())
+            if max_diff > PDF_TOLERANCE:
+                pytest.fail(
+                    f"PDF page {page_idx} ({check_png.name}): "
+                    f"max pixel diff {max_diff} exceeds tolerance of {PDF_TOLERANCE}"
+                )
+        pdf_doc.close()

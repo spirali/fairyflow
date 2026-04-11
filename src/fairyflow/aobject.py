@@ -4,8 +4,8 @@ from .ctxvars import get_frame, get_transition
 
 
 class AnimatedObject:
-    def __init__(self, frame: int):
-        self._start = frame
+    def __init__(self):
+        self._start = get_frame()
         self._end = None
         self._attrs = {}
 
@@ -18,8 +18,8 @@ class AnimatedObject:
         else:
             self._add_attr(name, InheritedExprs(default))
 
-    def _set_attr(self, name, value):
-        self._attrs[name].set(get_frame(), value, get_transition())
+    def _set_attr(self, name, value, transition=None):
+        self._attrs[name].set(get_frame(), value, transition)
 
     def _get_attr(self, name):
         return self._attrs[name]
@@ -35,5 +35,7 @@ class AnimatedObject:
             v.hold(get_frame())
         return self
 
-    def _move_attr(self, name, delta):
-        self._attrs[name].move(get_frame(), delta, get_transition())
+    def _move_attr(self, name, delta, transition=None):
+        if transition is None:
+            transition = get_transition()
+        self._attrs[name].move(get_frame(), delta, transition)

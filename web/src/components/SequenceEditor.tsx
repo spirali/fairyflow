@@ -34,6 +34,20 @@ export default function SequenceEditor({
   const [exportResultPath, setExportResultPath] = useState('');
   const [exportError, setExportError] = useState('');
 
+  // Export as video dialog
+  const [videoExportOpen, setVideoExportOpen] = useState(false);
+  const [videoFilename, setVideoFilename] = useState('');
+  const [videoWidth, setVideoWidth] = useState(0);
+  const [videoHeight, setVideoHeight] = useState(0);
+  const [videoFps, setVideoFps] = useState(fps);
+  const [videoCodec, setVideoCodec] = useState<'h264' | 'h265' | 'vp9'>('h264');
+  const [videoCrf, setVideoCrf] = useState(23);
+  const [videoExportStatus, setVideoExportStatus] = useState<ExportStatus>('idle');
+  const [videoExportProgress, setVideoExportProgress] = useState(0);
+  const [videoExportMessage, setVideoExportMessage] = useState('');
+  const [videoExportDonePath, setVideoExportDonePath] = useState('');
+  const [videoExportError, setVideoExportError] = useState('');
+
   // Export-to-PDF dialog
   type FrameSelection = 'cue_frames' | 'cue_plus_key_frames' | 'all_frames';
   const [pdfExportOpen, setPdfExportOpen] = useState(false);
@@ -318,6 +332,101 @@ export default function SequenceEditor({
     }
   };
 
+  // ── Export as video ───────────────────────────────────────────────────────
+
+  const openVideoExportDialog = () => {
+    const base = path.replace(/\\/g, '/').split('/').pop() ?? path;
+    const suggested = base.endsWith('.ffsq') ? base.slice(0, -5) + '.mp4' : base + '.mp4';
+    setVideoFilename(suggested);
+    setVideoWidth(0);
+    setVideoHeight(0);
+    setVideoFps(fps);
+    setVideoCodec('h264');
+    setVideoCrf(23);
+    setVideoExportStatus('idle');
+    setVideoExportProgress(0);
+    setVideoExportMessage('');
+    setVideoExportDonePath('');
+    setVideoExportError('');
+    setVideoExportOpen(true);
+  };
+
+  const handleVideoCodecChange = (codec: 'h264' | 'h265' | 'vp9') => {
+    setVideoCodec(codec);
+    const ext = codec === 'vp9' ? '.webm' : '.mp4';
+    setVideoFilename(prev => prev.replace(/\.(mp4|webm)$/i, '') + ext);
+  };
+
+  const doVideoExport = async () => {
+    if (videoExportStatus === 'exporting') return;
+    setVideoExportStatus('exporting');
+    setVideoExportProgress(0);
+    setVideoExportMessage('Rendering frames…');
+    setVideoExportDonePath('');
+    setVideoExportError('');
+
+    let finished = false;
+    try {
+      const response = await fetch(withToken('/export-seq-video'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seq_path: path,
+          filename: videoFilename,
+          fps: videoFps,
+          codec: videoCodec,
+          crf: videoCrf,
+          width: videoWidth,
+          height: videoHeight,
+        }),
+      });
+      if (!response.ok || !response.body) {
+        setVideoExportStatus('error');
+        setVideoExportError(`Server error: ${response.status}`);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'progress') {
+              setVideoExportProgress(Math.round(ev.done / ev.total * 100));
+              setVideoExportMessage(`Rendering frames… ${ev.done}/${ev.total}`);
+            } else if (ev.type === 'ffmpeg') {
+              setVideoExportProgress(100);
+              setVideoExportMessage('Encoding video…');
+            } else if (ev.type === 'done') {
+              finished = true;
+              setVideoExportStatus('done');
+              setVideoExportDonePath(ev.path);
+            } else if (ev.type === 'error') {
+              finished = true;
+              setVideoExportStatus('error');
+              setVideoExportError(ev.message);
+            }
+          } catch { /* ignore malformed lines */ }
+        }
+      }
+      if (!finished) {
+        setVideoExportStatus('error');
+        setVideoExportError('Export ended unexpectedly.');
+      }
+    } catch (e) {
+      setVideoExportStatus('error');
+      setVideoExportError(String(e));
+    }
+  };
+
   // ── Export to PDF ──────────────────────────────────────────────────────────
 
   const openPdfExportDialog = () => {
@@ -386,7 +495,11 @@ export default function SequenceEditor({
             onClick={openPdfExportDialog}
             disabled={isRendering || sceneFiles.length === 0}
           >Export to PDF</button>
-          <button className="seq-btn seq-btn-dim" disabled title="Not yet implemented">Export as Video</button>
+          <button
+            className="seq-btn"
+            onClick={openVideoExportDialog}
+            disabled={isRendering || sceneFiles.length === 0}
+          >Export as Video</button>
         </div>
       </div>
 
@@ -501,6 +614,94 @@ export default function SequenceEditor({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+      {videoExportOpen && (
+        <div className="modal-overlay" onClick={() => { if (videoExportStatus !== 'exporting') setVideoExportOpen(false); }}>
+          <div className="export-dialog" onClick={e => e.stopPropagation()}>
+            <div className="export-dialog-header">
+              <span>Export as Video</span>
+              <button
+                className="export-dialog-close"
+                onClick={() => setVideoExportOpen(false)}
+                disabled={videoExportStatus === 'exporting'}
+              >✕</button>
+            </div>
+
+            <div className="export-dialog-body">
+              <div className="export-row">
+                <label>Resolution</label>
+                <span className="export-wh">
+                  <input type="number" className="export-num" value={videoWidth} min={0}
+                    onChange={e => setVideoWidth(Number(e.target.value))} />
+                  <span>×</span>
+                  <input type="number" className="export-num" value={videoHeight} min={0}
+                    onChange={e => setVideoHeight(Number(e.target.value))} />
+                </span>
+                <span className="export-hint">0 = original</span>
+              </div>
+
+              <div className="export-row">
+                <label>FPS</label>
+                <input type="number" className="export-num" value={videoFps} min={1} max={120}
+                  onChange={e => setVideoFps(Number(e.target.value))} />
+              </div>
+
+              <div className="export-row">
+                <label>Codec</label>
+                <select value={videoCodec} onChange={e => handleVideoCodecChange(e.target.value as typeof videoCodec)}>
+                  <option value="h264">H.264 (.mp4)</option>
+                  <option value="h265">H.265 (.mp4)</option>
+                  <option value="vp9">VP9 (.webm)</option>
+                </select>
+              </div>
+
+              <div className="export-row">
+                <label>Quality (CRF {videoCrf})</label>
+                <input type="range" className="export-slider" min={0} max={51} value={videoCrf}
+                  onChange={e => setVideoCrf(Number(e.target.value))} />
+                <span className="export-hint">lower = better</span>
+              </div>
+
+              <div className="export-row">
+                <label>Filename</label>
+                <input type="text" className="export-text" value={videoFilename}
+                  onChange={e => setVideoFilename(e.target.value)} />
+              </div>
+            </div>
+
+            {videoExportStatus === 'exporting' && (
+              <div className="export-progress-area">
+                <div className="export-progress-label">{videoExportMessage}</div>
+                <div className="export-progress-track">
+                  <div className="export-progress-fill" style={{width: `${videoExportProgress}%`}} />
+                </div>
+              </div>
+            )}
+
+            {videoExportStatus === 'done' && (
+              <div className="export-result export-result-ok">
+                Saved to <code>{videoExportDonePath}</code>
+              </div>
+            )}
+
+            {videoExportStatus === 'error' && (
+              <div className="export-result export-result-err">{videoExportError}</div>
+            )}
+
+            <div className="export-dialog-footer">
+              <button className="export-btn-cancel"
+                onClick={() => setVideoExportOpen(false)}
+                disabled={videoExportStatus === 'exporting'}>
+                {videoExportStatus === 'done' || videoExportStatus === 'error' ? 'Close' : 'Cancel'}
+              </button>
+              <button className="export-btn-ok"
+                onClick={doVideoExport}
+                disabled={videoExportStatus === 'exporting' || !videoFilename.trim()}>
+                {videoExportStatus === 'exporting' ? 'Exporting…' : 'Export'}
+              </button>
+            </div>
           </div>
         </div>
       )}

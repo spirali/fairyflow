@@ -21,7 +21,6 @@ from .exprs import (
     to_expr,
 )
 from .ctxvars import (
-    fctx,
     get_current_node,
     ROOT_OBJECTS,
     set_current_node,
@@ -31,9 +30,9 @@ from .config import DEFAULT_SCENE_CONFIG, FPS
 
 
 class Node(AnimatedObject):
-    def __init__(self, parent: Union[None, "Group"], frame: int):
-        super().__init__(frame)
-        self._parent = parent        
+    def __init__(self, parent: Union[None, "Group"]):
+        super().__init__()
+        self._parent = parent
         if parent:
             self._id = parent._new_id()
         else:
@@ -94,8 +93,8 @@ class AlphaMixin:
     def _init_alpha_from_parent(self):
         self._add_from_parent("alpha")
 
-    def alpha(self, value):
-        self._set_attr("alpha", value)
+    def alpha(self, value, transition=None):
+        self._set_attr("alpha", value, transition)
         return self
 
 
@@ -103,8 +102,8 @@ class ZLevelMixin:
     def _init_z(self):
         self._add_from_parent("z_level", 0)
 
-    def z_level(self, value):
-        self._set_attr("z_level", value)
+    def z_level(self, value, transition=None):
+        self._set_attr("z_level", value, transition)
         return self
 
 
@@ -117,17 +116,17 @@ class SizeMixin:
         self._add_attr("width", width)
         self._add_attr("height", height)
 
-    def width(self, value):
-        self._set_attr("width", value)
+    def width(self, value, transition=None):
+        self._set_attr("width", value, transition)
         return self
 
-    def height(self, value):
-        self._set_attr("height", value)
+    def height(self, value, transition=None):
+        self._set_attr("height", value, transition)
         return self
 
-    def size(self, width, height):
-        self.width(width)
-        self.height(height)
+    def size(self, width, height, transition=None):
+        self.width(width, transition)
+        self.height(height, transition)
         return self
 
 
@@ -140,20 +139,20 @@ class PositionMixin:
         self._add_attr("x", x)
         self._add_attr("y", y)
 
-    def x(self, px):
-        self._set_attr("x", px)
+    def x(self, px, transition=None):
+        self._set_attr("x", px, transition)
         return self
 
-    def y(self, px):
-        self._set_attr("y", px)
+    def y(self, px, transition=None):
+        self._set_attr("y", px, transition)
         return self
 
-    def xy(self, x, y):
-        self.x(x)
-        self.y(y)
+    def xy(self, x, y, transition=None):
+        self.x(x, transition)
+        self.y(y, transition)
         return self
 
-    def align_x(self, value):
+    def align_x(self, value, transition=None):
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
             new_value = expr_mul(
@@ -161,10 +160,10 @@ class PositionMixin:
             )
         else:
             new_value = expr_mul(parent._get_attr("width"), value)
-        self._set_attr("x", new_value)
+        self._set_attr("x", new_value, transition)
         return self
 
-    def align_y(self, value):
+    def align_y(self, value, transition=None):
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
             new_value = expr_mul(
@@ -172,18 +171,18 @@ class PositionMixin:
             )
         else:
             new_value = expr_mul(parent._get_attr("height"), value)
-        self._set_attr("y", new_value)
+        self._set_attr("y", new_value, transition)
         return self
 
-    def pos(self, position: Position):
+    def pos(self, position: Position, transition=None):
         position = position.into_node(self._parent)
-        self._set_attr("x", position.x)
-        self._set_attr("y", position.y)
+        self._set_attr("x", position.x, transition)
+        self._set_attr("y", position.y, transition)
         return self
 
-    def move(self, dx, dy):
-        self._move_attr("x", dx)
-        self._move_attr("y", dy)
+    def move(self, dx, dy, transition=None):
+        self._move_attr("x", dx, transition)
+        self._move_attr("y", dy, transition)
         return self
 
     def get_pos(self) -> Position:
@@ -191,7 +190,7 @@ class PositionMixin:
         y = self._get_attr("y")
         return Position(self._parent, x, y)
     
-    def follow_path(self, path: "Path", *, frames=None, time=None):
+    def follow_path(self, path: "Path", *, time=1, auto_fwd=None):
         assert isinstance(path, Path)
         if frames is None:
             if time is None:
@@ -225,22 +224,22 @@ class StyleMixin(AlphaMixin):
         self._add_from_parent("stroke_width")
         self._init_alpha_from_parent()
 
-    def color(self, value: str):
-        self._set_attr("fill_color", Color.parse(value))
+    def color(self, value: str, transition = None):
+        self._set_attr("fill_color", Color.parse(value), transition)
         return self
 
-    def stroke_color(self, value: str):
-        self._set_attr("stroke_color", Color.parse(value))
+    def stroke_color(self, value: str, transition = None):
+        self._set_attr("stroke_color", Color.parse(value), transition)
         return self
 
-    def stroke_width(self, value: float):
-        self._set_attr("stroke_width", value)
+    def stroke_width(self, value: float, transition = None):
+        self._set_attr("stroke_width", value, transition)
         return self
 
 
 class NodeWithChildren(Node):
-    def __init__(self, parent, frame, children=None):
-        super().__init__(parent, frame)
+    def __init__(self, parent, children=None):
+        super().__init__(parent)
         if children is None:
             children = []
         self._children = children
@@ -289,21 +288,21 @@ class RotAndScaleMixin:
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
 
-    def scale_x(self, value):
-        self._set_attr("scale_x", value)
+    def scale_x(self, value, transition=None):
+        self._set_attr("scale_x", value, transition)
         return self
 
-    def scale_y(self, value):
-        self._set_attr("scale_y", value)
+    def scale_y(self, value, transition=None):
+        self._set_attr("scale_y", value, transition)
         return self
 
-    def scale(self, value):
-        self.scale_x(value)
-        self.scale_y(value)
+    def scale(self, value, transition=None):
+        self.scale_x(value, transition)
+        self.scale_y(value, transition)
         return self
 
-    def rotate(self, value):
-        self._set_attr("rotation", value)
+    def rotate(self, value, transition=None):
+        self._set_attr("rotation", value, transition)
         return self
 
 
@@ -318,8 +317,8 @@ class Group(
 ):
     kind = "group"
 
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_context_manager()
         self._init_size()
         self._init_alpha()
@@ -346,28 +345,29 @@ class Group(
         result["layout"] = self._layout.serialize(serializer)
         return result
     
-    def clip_x(self, value):
-        self._set_attr("clip_x", value)
+    def clip_x(self, value, transition=None):
+        self._set_attr("clip_x", value, transition)
         return self
     
-    def clip_y(self, value):
-        self._set_attr("clip_y", value)
+    def clip_y(self, value, transition=None):
+        self._set_attr("clip_y", value, transition)
         return self
 
-    def clip_w(self, value):
-        self._set_attr("clip_w", value)
+    def clip_w(self, value, transition=None):
+        self._set_attr("clip_w", value, transition)
         return self
 
-    def clip_h(self, value):
-        self._set_attr("clip_h", value)
+    def clip_h(self, value, transition=None):
+        self._set_attr("clip_h", value, transition)
         return self            
 
 
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
-    def __init__(self, width, height, color, cue_at_end):
-        super().__init__(None, 0)
+    def __init__(self, width, height, color, cue_at_start):
+        set_frame(0)
+        super().__init__(None)
         self._init_context_manager()
         if width is None:
             width = DEFAULT_SCENE_CONFIG["width"]
@@ -375,22 +375,22 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
             height = DEFAULT_SCENE_CONFIG["height"]
         if color is None:
             color = DEFAULT_SCENE_CONFIG["color"]
-        if cue_at_end is None:
-            cue_at_end = DEFAULT_SCENE_CONFIG["cue_at_end"]            
+        if cue_at_start is None:
+            cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
         self._init_size(width, height)
         self._add_attr("fill_color", color)
         self._id_counter = 0
         self._layout = CENTERING_LAYOUT
         self.name = None        
         self.max_frame = 0
-        self.cue_at_end = cue_at_end
+        self.cue_at_start = cue_at_start
         self.cues = set()
 
     def __enter__(self):
         super().__enter__()
 
-    def color(self, value: str):
-        self._set_attr("fill_color", Color.parse(value))
+    def color(self, value: str, transition=None):
+        self._set_attr("fill_color", Color.parse(value), transition)
         return self
 
     def _new_id(self):
@@ -401,8 +401,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         result = super().serialize(serializer)
         result["name"] = self.name
         result["frames"] = self.max_frame + 1
-        if self.cue_at_end:
-            self.cues.add(self.max_frame)
+        if self.cue_at_start:
+            self.cues.add(0)
         if self.cues:
             result["cues"] = sorted(self.cues)
         return result
@@ -417,8 +417,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "rect"
 
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -428,8 +428,8 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "ellipse"
 
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -439,8 +439,8 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     kind = "path"
 
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_style()
         self._init_z()
         self._add_attr("crop_start", 0.0)
@@ -453,11 +453,11 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         else:
             return (0, 0)
         
-    def crop_start(self, value):
-        self._set_attr("crop_start", value)
+    def crop_start(self, value, transition=None):
+        self._set_attr("crop_start", value, transition)
 
-    def crop_end(self, value):
-        self._set_attr("crop_end", value)
+    def crop_end(self, value, transition=None):
+        self._set_attr("crop_end", value, transition)
 
     def move_to(self):
         p = PathMove(self, get_frame(), *self._prev_coords())
@@ -557,16 +557,16 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
 class PathMove(Node, PositionMixin):
     kind = "move"
 
-    def __init__(self, parent, frame, x, y):
-        super().__init__(parent, frame)
+    def __init__(self, parent, x, y):
+        super().__init__(parent)
         self._init_position(x, y)
 
 
 class PathLine(Node, PositionMixin):
     kind = "line"
 
-    def __init__(self, parent, frame, x, y):
-        super().__init__(parent, frame)
+    def __init__(self, parent, x, y):
+        super().__init__(parent)
         self._init_position(x, y)
 
 
@@ -577,8 +577,8 @@ class PathClose(Node):
 class PathCubic(Node, PositionMixin):
     kind = "cubic"
 
-    def __init__(self, parent, frame, x, y):
-        super().__init__(parent, frame)
+    def __init__(self, parent, x, y):
+        super().__init__(parent)
         self._init_position(x, y)
         self._add_attr("c1_x", 0)
         self._add_attr("c1_y", 0)
@@ -615,8 +615,8 @@ class PathCubic(Node, PositionMixin):
 class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "image"
 
-    def __init__(self, parent, frame, image_path, keep_aspect):
-        super().__init__(parent, frame)
+    def __init__(self, parent, image_path, keep_aspect):
+        super().__init__(parent)
         self._init_size()
         self._init_z()
         self._init_position()
@@ -644,8 +644,8 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "layer"
 
-    def __init__(self, parent, frame, layer_name):
-        super().__init__(parent, frame)
+    def __init__(self, parent, layer_name):
+        super().__init__(parent)
         self.layer_name = layer_name
         self._init_size()
         self._init_z()
@@ -662,13 +662,13 @@ def make_node(cls, *args):
     current_node = get_current_node()
     if current_node is None:
         raise Exception("Element created out of context of a parent ndoe")
-    item = cls(current_node, get_frame(), *args)
+    item = cls(current_node, *args)
     current_node._children.append(item)
     return item
 
 
-def scene(width: int | None = None, height: int | None = None, color: str | None = None, cue_at_end: bool | None = None):
-    scene = Scene(width, height, color, cue_at_end)
+def scene(width: int | None = None, height: int | None = None, color: str | None = None, cue_at_start: bool | None = None):
+    scene = Scene(width, height, color, cue_at_start)
     ROOT_OBJECTS.get().append(scene)
     return scene
 

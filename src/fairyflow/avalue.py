@@ -1,6 +1,5 @@
+from .ctxvars import get_frame, get_transition, Transition
 from .exprs import expr_add, expr_hold, Expr
-
-type Transition = Literal["step", "linear"]
 
 
 class Hold:
@@ -11,13 +10,17 @@ HOLD = Hold()
 
 
 class AnimatedValue(Expr):
-    def __init__(self, init_val, init_frame):
+    def __init__(self, init_val, init_frame=None):
+        if init_frame is None:
+            init_frame = get_frame()
         self.init_frame = init_frame
         self.values = {init_frame: init_val}
         self.transitions = {}
         self.single_value = True
 
-    def set(self, frame: int, value, transition: Transition):
+    def set(self, frame: int, value, transition: Transition | None = None):
+        if transition is None:
+            transition = get_transition()
         self.values[frame] = value
         self.transitions[frame] = transition
         if frame != self.init_frame:
@@ -27,7 +30,7 @@ class AnimatedValue(Expr):
         if frame not in self.values:
             self.values[frame] = HOLD
 
-    def move(self, frame, delta, transition):
+    def move(self, frame, delta, transition=None):
         f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
         self.set(frame, expr_add(self.values[f], delta), transition)
 

@@ -1,5 +1,5 @@
 from .nodes import group, rect, path, ellipse, scene, image
-from .ctxvars import step, linear, transition, set_frame, jump_frames, set_time, jump_time, cue
+from .ctxvars import step, linear, set_frame, fwd_frames, set_time, fwd_time, cue, time_to_frames, frames_to_time
 from .color import Color
 from .text import text
 from .config import set_default_scene
@@ -15,11 +15,12 @@ __all__ = [
     "text",
     "step",
     "linear",
-    "transition",
     "set_frame",
-    "jump_frames",
+    "fwd_frames",
     "set_time",
-    "jump_time",
+    "fwd_time",
     "image",
-    "cue"
+    "cue",
+    "time_to_frames",
+    "frames_to_time"
 ]

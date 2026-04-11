@@ -99,6 +99,7 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/trees", get(trees_handler))
         .route("/node-bounds", get(node_bounds_handler))
         .route("/export-video", post(crate::export::export_handler))
+        .route("/export-seq-video", post(crate::export::export_seq_video_handler))
         .route("/export-player", post(crate::package::export_player_handler))
         .route("/export-pdf", post(crate::pdf_export::export_pdf_handler))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_layer))

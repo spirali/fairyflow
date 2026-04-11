@@ -18,6 +18,7 @@ class TextStyleMixin(StyleMixin):
         self._init_style()
         self._add_attr("font", "sans-serif")
         self._add_attr("font_size", 16)
+        self._add_attr("font_weight", 400)
         self._add_attr("italic", False)
 
     def _init_text_style_from_parent(self):        
@@ -34,16 +35,23 @@ class TextStyleMixin(StyleMixin):
         self._set_attr("font", value)
         return self
 
-    def font_size(self, value: float):
-        self._set_attr("font_size", value)
+    def font_size(self, value: float, transition=None):
+        self._set_attr("font_size", value, transition)
         return self
+    
+    def font_weight(self, value: float, transition=None):
+        self._set_attr("font_weight", value, transition)
+        return self    
+    
+    def bold(self):
+        self.font_weight(800)
 
 
 class TextSpan(Node, TextStyleMixin):
     kind = "t_span"
 
-    def __init__(self, parent, frame, text):
-        super().__init__(parent, frame)
+    def __init__(self, parent, text):
+        super().__init__(parent)
         self._init_text_style_from_parent()
         self._add_attr("text", text)
 
@@ -57,17 +65,17 @@ class TextSpan(Node, TextStyleMixin):
 class TextGroup(NodeWithChildren, TextStyleMixin):
     kind = "t_group"
 
-    def __init__(self, parent, frame):
-        super().__init__(parent, frame)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_text_style_from_parent()
 
     def span(self, text):
-        span = TextSpan(self, get_frame(), text)
+        span = TextSpan(self, text)
         self._children.append(span)
         return span
 
     def group(self):
-        group = TextGroup(self, self._frame)
+        group = TextGroup(self)
         self._children.append(group)
         return group
 
@@ -75,21 +83,22 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
-    def __init__(self, parent, frame, sh_language, sh_theme):
-        super().__init__(parent, frame)
+    def __init__(self, parent, sh_language, sh_theme):
+        super().__init__(parent)
         self._init_position()
         self._init_text_style()
         self._init_z()
+        self.color("black")        
         self.sh_language = sh_language
         self.sh_theme = sh_theme
 
     def group(self):
-        group = TextGroup(self, get_frame())
+        group = TextGroup(self)
         self._children.append(group)
         return group
 
     def span(self, text):
-        span = TextSpan(self, get_frame(), text)
+        span = TextSpan(self, text)
         self._children.append(span)
         return span
     

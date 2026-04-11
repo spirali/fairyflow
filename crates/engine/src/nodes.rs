@@ -9,9 +9,10 @@ use crate::values::{Color, Expr, Value};
 // ──────────────────────────── Transition ───────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum Transition {
+    #[serde(rename="S")]
     Step,
+    #[serde(rename="L")]
     Linear,
 }
 

@@ -60,6 +60,7 @@ pub struct TextStyle {
     pub style: Style,
     pub font: AttrExpr<Arc<String>>,
     pub font_size: AttrExpr<f64>,
+    pub font_weight: AttrExpr<f64>,
     pub italic: AttrExpr<bool>,
 }
 

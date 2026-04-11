@@ -21,6 +21,7 @@ from .exprs import (
     to_expr,
 )
 from .ctxvars import (
+    fwd_time,
     get_current_node,
     ROOT_OBJECTS,
     set_current_node,
@@ -96,6 +97,14 @@ class AlphaMixin:
     def alpha(self, value, transition=None):
         self._set_attr("alpha", value, transition)
         return self
+    
+    def fade_in(self, time=1):
+        self._anim_attr("alpha", 1, time, start=0)
+        return self
+    
+    def fade_out(self, time=1):
+        self._anim_attr("alpha", 0, time)        
+        return self    
 
 
 class ZLevelMixin:
@@ -199,7 +208,7 @@ class PositionMixin:
         start = get_frame()
         end = start + frames
         av = AnimatedValue(0, get_frame())
-        av.set(end, 1, "linear")
+        av.set(end, 1, "L")
         x = expr_path_x(path, av)
         y = expr_path_y(path, av)
         if self._has_attr("width"):
@@ -360,6 +369,14 @@ class Group(
     def clip_h(self, value, transition=None):
         self._set_attr("clip_h", value, transition)
         return self            
+    
+    def hide_right(self, time=1):
+        self._anim_attr("clip_x", 1, time)
+        return self
+
+    def hide_left(self, time=1):
+        self._anim_attr("clip_w", 0, time)
+        return self
 
 
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):

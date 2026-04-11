@@ -25,6 +25,7 @@ class TextStyleMixin(StyleMixin):
         self._init_style_from_parent()
         self._add_from_parent("font")
         self._add_from_parent("font_size")
+        self._add_from_parent("font_weight")
         self._add_from_parent("italic")        
 
     def italic(self, value: bool):
@@ -44,7 +45,7 @@ class TextStyleMixin(StyleMixin):
         return self    
     
     def bold(self):
-        self.font_weight(800)
+        return self.font_weight(800)
 
 
 class TextSpan(Node, TextStyleMixin):

@@ -379,6 +379,7 @@ impl TextStyle {
             alpha: self.style.alpha.eval_as_inheritable(ctx)?,
             font_family: self.font.eval_as_inheritable(ctx)?,
             font_size: self.font_size.eval_as_inheritable(ctx)?,
+            font_weight: self.font_weight.eval_as_inheritable(ctx)?,
             italic: self.italic.eval_as_inheritable(ctx)?,
         })
     }

@@ -1,6 +1,6 @@
 from .avalue import AnimatedValue, Transition
 from .exprs import Call, InheritedExprs, expr_add, expr_hold
-from .ctxvars import get_frame, get_transition
+from .ctxvars import fwd_time, get_frame, get_transition
 
 
 class AnimatedObject:
@@ -34,6 +34,14 @@ class AnimatedObject:
         for v in self._attrs.values():
             v.hold(get_frame())
         return self
+    
+    def _anim_attr(self, name, value, time, start=None):
+        if start is None:
+            self._get_attr(name).hold()
+        else:
+            self._set_attr(name, start, "S")
+        fwd_time(time)
+        self._set_attr(name, value, "L")        
 
     def _move_attr(self, name, delta, transition=None):
         if transition is None:

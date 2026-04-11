@@ -82,6 +82,8 @@ pub struct TextStyle {
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub font_size: Inheritable<f64>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub font_weight: Inheritable<f64>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub italic: Inheritable<bool>,
 }
 

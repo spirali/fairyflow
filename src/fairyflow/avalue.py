@@ -26,7 +26,9 @@ class AnimatedValue(Expr):
         if frame != self.init_frame:
             self.single_value = False
 
-    def hold(self, frame: int):
+    def hold(self, frame: int | None = None):
+        if frame is None:
+            frame = get_frame()
         if frame not in self.values:
             self.values[frame] = HOLD
 
@@ -65,5 +67,5 @@ def serialize_frame_value(frame, obj, transitions):
         return {
             "frame": frame,
             "value": serialize_expr(obj),
-            "tr": transitions.get(frame, "step"),
+            "tr": transitions.get(frame, "S"),
         }

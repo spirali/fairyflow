@@ -50,6 +50,8 @@ pub struct SpanKey {
     pub font_family: Arc<String>,
     /// `f32::to_bits()` of the font size — gives `Hash`/`Eq` without float concerns.
     pub font_size_bits: u32,
+    /// `f32::to_bits()` of the font weight — gives `Hash`/`Eq` without float concerns.
+    pub font_weight_bits: u32,
     pub italic: bool,
 }
 

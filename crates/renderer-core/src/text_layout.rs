@@ -1,8 +1,8 @@
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
 use crate::resources::Resources;
 use parley::{
-    Alignment, AlignmentOptions, FontContext, FontStack, LayoutContext, PositionedLayoutItem,
-    StyleProperty,
+    Alignment, AlignmentOptions, FontContext, FontStack, FontWeight, LayoutContext,
+    PositionedLayoutItem, StyleProperty,
 };
 use crate::{TextChild, TextSpan};
 use skrifa::{
@@ -66,6 +66,10 @@ impl TextLayoutEngine {
             );
             builder.push(
                 StyleProperty::FontStack(FontStack::Source((span.text_style.font_family.value().as_str()).into())),
+                range.clone(),
+            );
+            builder.push(
+                StyleProperty::FontWeight(FontWeight::new(*span.text_style.font_weight.value() as f32)),
                 range.clone(),
             );
             if *span.text_style.italic.value() {
@@ -269,6 +273,7 @@ pub fn make_line_key(spans: &[&TextSpan]) -> glyph_cache::LineKey {
             text: s.text.clone(),
             font_family: s.text_style.font_family.value().clone(),
             font_size_bits: (*s.text_style.font_size.value() as f32).to_bits(),
+            font_weight_bits: (*s.text_style.font_weight.value() as f32).to_bits(),
             italic: *s.text_style.italic.value(),
         })
         .collect::<Vec<_>>()

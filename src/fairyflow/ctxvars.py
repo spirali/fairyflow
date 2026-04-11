@@ -32,12 +32,12 @@ class BuildState:
         self._time = frames_to_time(new_frames)
 
     def set_time(self, time: float):
-        self.time = time
+        self._time = time
         self._set_frame(time_to_frames(time))
 
     def fwd_time(self, time: float):
-        self.time += time        
-        self._set_frame(time_to_frames(self.time))
+        self._time += time        
+        self._set_frame(time_to_frames(self._time))
 
     def transition(self, tr: Transition):
         self._transition = tr

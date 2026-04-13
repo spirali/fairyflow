@@ -194,9 +194,14 @@ class PositionMixin:
         self._move_attr("y", dy, transition)
         return self
 
-    def get_pos(self) -> Position:
+    def get_pos(self, align_x=0, align_y=0) -> Position:
         x = self._get_attr("x")
         y = self._get_attr("y")
+        if isinstance(self, SizeMixin):
+            if align_x != 0:
+                x = x + self._get_attr("width") * align_x
+            if align_y != 0:
+                y = y + self._get_attr("width") * align_x
         return Position(self._parent, x, y)
     
     def follow_path(self, path: "Path", *, time=1, auto_fwd=None):
@@ -477,22 +482,22 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         self._set_attr("crop_end", value, transition)
 
     def move_to(self):
-        p = PathMove(self, get_frame(), *self._prev_coords())
+        p = PathMove(self, *self._prev_coords())
         self._children.append(p)
         return p
 
     def line_to(self):
-        p = PathLine(self, get_frame(), *self._prev_coords())
+        p = PathLine(self, *self._prev_coords())
         self._children.append(p)
         return p
 
     def cubic_to(self):
-        p = PathCubic(self, get_frame(), *self._prev_coords())
+        p = PathCubic(self, *self._prev_coords())
         self._children.append(p)
         return p
     
     def close(self):
-        p = PathClose(self, get_frame())
+        p = PathClose(self)
         self._children.append(p)
         return p
 
@@ -536,7 +541,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dx = nx * width * 0.5
         dy = ny * width * 0.5
 
-        path = Path(self._parent, get_frame())
+        path = Path(self._parent)
         self._parent._children.append(path)
         path.move_to().xy(px - dy, py + dx)
         path.line_to().pos(pos)
@@ -558,7 +563,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         if dir is None:            
             return None
         if length is None:
-            length = self._get_attr("stroke_width") * 5
+            length = self._get_attr("stroke_width") * 3
         if width is None:
             width  = length
         path = self._create_arrow(*dir, length, width)

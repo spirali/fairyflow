@@ -70,8 +70,13 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
         let _span = tracing::trace_span!("av.eval").entered();
         let frame = ctx.frame();
         let Some((left_f, left_fv)) = self.scan_left(frame) else {
-            dbg!(&frame);
-            panic!();
+            let (_key, value) = self.values.first_key_value().unwrap();
+            match value {
+                FrameValue::KeyFrame(kf) => {
+                    return kf.value.eval(ctx)
+                }
+                FrameValue::Hold => unreachable!()
+            }
         };
         let left_v = left_fv.value.eval(ctx)?;
         if left_f == frame {

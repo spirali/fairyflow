@@ -84,14 +84,22 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
-    def __init__(self, parent, sh_language, sh_theme):
+    def __init__(self, parent):
         super().__init__(parent)
         self._init_position()
         self._init_text_style()
         self._init_z()
         self.color("black")        
-        self.sh_language = sh_language
-        self.sh_theme = sh_theme
+        self.sh_language = None
+        self.sh_theme = None
+
+    def sh(self, language, *, theme=None):
+        """
+        Enable Syntax highligting
+        """
+        self.sh_language = language
+        self.sh_theme = theme
+        return self
 
     def group(self):
         group = TextGroup(self)
@@ -114,3 +122,45 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
 
 def text(sh_language=None, sh_theme=None):
     return make_node(Text, sh_language, sh_theme)
+
+
+def stext(input_text: str, *, strip=True, delimiters="<>"):
+    """
+    Parse input paramter and create a text() node from it
+
+    "hello" -> 
+        text().span("hello")
+    "line1\nline2" -> 
+        t = text()
+        t.span("line1")
+        t.span("line2")
+    "Text <abc>Hello</abc> <xyz>world!</xyz>" -> 
+        t = text()
+        g = t.group()
+        g.span("Text ").
+        g.span("Hello").name("abc")
+        g.span(" ")
+        g.span("world!").name("xyz")
+    "<a>one<b>two</b></a>" -> 
+        t = text()
+        g = t.group().name("a")
+        g.span("one")
+        g.span("two").name("b")
+    "<a><b><c>text</c></b></a>" -> 
+        t = text()
+        g1 = t.group().name("a")
+        g2 = t.group().name("b")
+        g2 = t.span("text).name("c")
+    "<a>line1\nline2</a>" -> 
+        t = text()
+        t.span("line1").name("a")
+        t.span("line1").name("b")
+    """
+    
+    if strip:
+        input_text = input_text.strip()
+    
+
+    t = text()
+    # TODO IMPLEMENT PARSING
+    return t

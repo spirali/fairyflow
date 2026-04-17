@@ -39,6 +39,12 @@ class Node(AnimatedObject):
         else:
             self._id = 0            
         self.info = get_info(self._id)
+        self.name = None
+
+    def name(self, name: str | None):
+        self.name = name
+        self.info["name"] = name
+        return self
 
     def parent_chain(self) -> list["Group"]:
         result = []
@@ -154,6 +160,19 @@ class PositionMixin:
 
     def y(self, px, transition=None):
         self._set_attr("y", px, transition)
+        return self
+    
+    def x_reset(self):
+        self._set_attr("x", expr_default_x(self))
+        return self
+    
+    def y_reset(self):
+        self._set_attr("y", expr_default_y(self))
+        return self
+    
+    def xy_reset(self):
+        self.x_reset()
+        self.y_reset()
         return self
 
     def xy(self, x, y, transition=None):
@@ -401,12 +420,12 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
             cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
         self._init_size(width, height)
         self._add_attr("fill_color", color)
+        self.name = name
         self._id_counter = 0
-        self._layout = CENTERING_LAYOUT
-        self.name = None        
+        self._layout = CENTERING_LAYOUT        
         self.max_frame = 0
-        self.cue_at_start = cue_at_start
-        self.cues = set()
+        self.cue_at_start = cue_at_start        
+        self.cues = set()        
 
     def __enter__(self):
         super().__enter__()
@@ -439,8 +458,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "rect"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self, parent, name):
+        super().__init__(parent, name)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -450,8 +469,8 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "ellipse"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self, parent, name):
+        super().__init__(parent, name)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -461,8 +480,8 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     kind = "path"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self, parent, name):
+        super().__init__(parent, name)
         self._init_style()
         self._init_z()
         self._add_attr("crop_start", 0.0)
@@ -689,7 +708,7 @@ def make_node(cls, *args):
     return item
 
 
-def scene(width: int | None = None, height: int | None = None, color: str | None = None, cue_at_start: bool | None = None):
+def scene(width: int | None = None, height: int | None = None, *, color: str | None = None, cue_at_start: bool | None = None):
     scene = Scene(width, height, color, cue_at_start)
     ROOT_OBJECTS.get().append(scene)
     return scene
@@ -711,5 +730,5 @@ def path():
     return make_node(Path)
 
 
-def image(path, keep_aspect=True):
+def image(path, *, keep_aspect=True):
     return make_node(Image, path, keep_aspect)

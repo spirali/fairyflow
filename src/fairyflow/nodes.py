@@ -39,10 +39,10 @@ class Node(AnimatedObject):
         else:
             self._id = 0            
         self.info = get_info(self._id)
-        self.name = None
+        self._name = None
 
     def name(self, name: str | None):
-        self.name = name
+        self._name = name
         self.info["name"] = name
         return self
 
@@ -85,6 +85,23 @@ class Node(AnimatedObject):
         if self._parent is None:
             raise Exception("Node does not have parent")
         return self._parent
+    
+
+    def match(self, *, name=None, kind=None):
+        if name is not None and self.name != name:
+            return False
+        if kind is not None and self.kind != name:
+            return False        
+        return True
+
+    def find_child(self, *, name=None, kind=None):
+        if self.match(name, kind):
+            return self        
+        else:
+            return None
+        
+    def get_children(self):
+        return ()
     
     def get_scene(self):
         return self._parent.get_scene()
@@ -285,6 +302,18 @@ class NodeWithChildren(Node):
                 serializer.add_node(child) for child in self._children
             ]
         return result
+    
+    def find_child(self, *, name=None, kind=None):
+        result = super().find_child(name=name, kind=kind)
+        if result is not None:
+            return result
+        for child in self._children:
+            result = child.find_child(name=name, kind=kind)
+            if result is not None:
+                return result
+        
+    def get_children(self):
+        return self._children    
 
     # def build(self, ctx):
     #     result = super().build(ctx)
@@ -420,7 +449,6 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
             cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
         self._init_size(width, height)
         self._add_attr("fill_color", color)
-        self.name = name
         self._id_counter = 0
         self._layout = CENTERING_LAYOUT        
         self.max_frame = 0
@@ -440,7 +468,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     
     def serialize(self, serializer):
         result = super().serialize(serializer)
-        result["name"] = self.name
+        result["name"] = self._name
         result["frames"] = self.max_frame + 1
         if self.cue_at_start:
             self.cues.add(0)
@@ -458,8 +486,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "rect"
 
-    def __init__(self, parent, name):
-        super().__init__(parent, name)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -469,8 +497,8 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "ellipse"
 
-    def __init__(self, parent, name):
-        super().__init__(parent, name)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
@@ -480,8 +508,8 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     kind = "path"
 
-    def __init__(self, parent, name):
-        super().__init__(parent, name)
+    def __init__(self, parent):
+        super().__init__(parent)
         self._init_style()
         self._init_z()
         self._add_attr("crop_start", 0.0)

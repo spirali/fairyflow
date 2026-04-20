@@ -28,8 +28,8 @@ class Serializer:
 
 
 def create_export(idx, scene):
-    if scene.name is None:
-        scene.name = f"Scene_{idx + 1}"
+    if scene._name is None:
+        scene._name = f"Scene_{idx + 1}"
     serializer = Serializer()
     serialized_scene = scene.serialize(serializer)    
     return {

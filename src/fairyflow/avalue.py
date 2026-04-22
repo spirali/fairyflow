@@ -1,5 +1,6 @@
+from typing import TypeVar, Generic
 from .ctxvars import get_frame, get_transition, Transition
-from .exprs import expr_add, expr_hold, Expr
+from .exprs import Call, Expr
 
 
 class Hold:
@@ -8,9 +9,10 @@ class Hold:
 
 HOLD = Hold()
 
+T = TypeVar('T')
 
-class AnimatedValue(Expr):
-    def __init__(self, init_val, init_frame=None):
+class AnimatedValue(Generic[T], Expr):
+    def __init__(self, init_val: T, init_frame=None):
         if init_frame is None:
             init_frame = get_frame()
         self.init_frame = init_frame
@@ -18,7 +20,7 @@ class AnimatedValue(Expr):
         self.transitions = {}
         self.single_value = True
 
-    def set(self, frame: int, value, transition: Transition | None = None):
+    def set(self, frame: int, value: T, transition: Transition | None = None):
         if transition is None:
             transition = get_transition()
         self.values[frame] = value
@@ -34,12 +36,12 @@ class AnimatedValue(Expr):
 
     def move(self, frame, delta, transition=None):
         f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
-        self.set(frame, expr_add(self.values[f], delta), transition)
+        self.set(frame, Call.add(self.values[f], delta), transition)
 
     def is_single_value(self):
         return self.single_value
 
-    def get_first_value(self):
+    def get_first_value(self) -> T:
         return self.values[self.init_frame]
 
     def serialize(self):

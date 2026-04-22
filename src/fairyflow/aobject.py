@@ -1,5 +1,5 @@
 from .avalue import AnimatedValue, Transition
-from .exprs import Call, InheritedExprs, expr_add, expr_hold
+from .exprs import Call, Inherited
 from .ctxvars import fwd_time, get_frame, get_transition
 
 
@@ -14,9 +14,9 @@ class AnimatedObject:
 
     def _add_from_parent(self, name, default=None):
         if name in self._parent._attrs:
-            self._add_attr(name, InheritedExprs(self._parent._get_attr(name)))
+            self._add_attr(name, Inherited(self._parent._get_attr(name)))
         else:
-            self._add_attr(name, InheritedExprs(default))
+            self._add_attr(name, Inherited(default))
 
     def _set_attr(self, name, value, transition=None):
         self._attrs[name].set(get_frame(), value, transition)

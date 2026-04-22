@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Union
-from .exprs import expr_default_x, expr_default_y
+from .exprs import Call
 from .position import Position
 
 from .nodes import (
@@ -61,7 +61,7 @@ class TextSpan(Node, TextStyleMixin):
         self._set_attr("text", value)
 
     def get_pos(self):
-        return Position(self._parent, expr_default_x(self), expr_default_y(self))
+        return Position(self._parent, Call.default_x(self), Call.default_y(self))
 
 
 class TextGroup(NodeWithChildren, TextStyleMixin):

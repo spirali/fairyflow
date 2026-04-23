@@ -55,8 +55,8 @@ class TextStyleMixin(StyleMixin):
 class TextSpan(Node, TextStyleMixin):
     kind = "t_span"
 
-    def __init__(self, text: StringLike):
-        super().__init__()
+    def __init__(self, parent, text: StringLike):
+        super().__init__(put_in_context=False, parent=parent)
         self._init_text_style_from_parent()
         self._add_attr("text", text)
 
@@ -70,8 +70,8 @@ class TextSpan(Node, TextStyleMixin):
 class TextGroup(NodeWithChildren, TextStyleMixin):
     kind = "t_group"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        super().__init__(put_in_context=False, parent=parent)
         self._init_text_style_from_parent()
 
     def span(self, text: StringLike):
@@ -111,7 +111,7 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
         return group
 
     def span(self, text: StringLike) -> TextSpan:
-        span = TextSpan(text)
+        span = TextSpan(self, text)
         self._children.append(span)
         return span
     

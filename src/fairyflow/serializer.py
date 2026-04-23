@@ -41,6 +41,7 @@ def create_export(idx, scene):
 
 def write_tree(objs, path):
     export = [create_export(idx, obj) for idx, obj in enumerate(objs)]
-    print(json.dumps(export))
+    with open("/tmp/tree", "w") as f:
+        f.write(json.dumps(export))
     with open(path, "w") as f:
         json.dump(export, f)

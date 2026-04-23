@@ -15,7 +15,7 @@ from .exprs import (
 )
 from .ctxvars import (
     Transition,
-    fwd_time,
+    adv_time,
     get_current_node,
     ROOT_OBJECTS,
     set_current_node,
@@ -474,24 +474,18 @@ class PositionMixin:
                 y = y + self._get_attr("width") * align_x
         return Position(self._parent, x, y)
     
-    def follow_path(self, path: "Path", *, time : SupportsFloat = 1):
+    def follow_path(self, path: "Path", *, time : SupportsFloat = 1) -> Self:
         assert isinstance(path, Path)
-        if frames is None:
-            if time is None:
-                time = 1
-            frames = FPS * time
-        start = get_frame()
-        end = start + frames
-        av = AnimatedValue(0, get_frame())
-        av.set(end, 1, "L")
+        av = AnimatedValue(0)
         x = Call.path_x(path, av)
         y = Call.path_y(path, av)
         if self._has_attr("width"):
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
         self.xy(x, y)
-        set_frame(end)
+        adv_time(time)
         self.hold()
+        av.set(1, "L")
         return self
 
 @beartype

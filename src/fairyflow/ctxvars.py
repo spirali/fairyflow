@@ -27,7 +27,7 @@ class BuildState:
         self._set_frame(frame)
         self._time = (frames_to_time(frame))
 
-    def fwd_frames(self, frames: int):    
+    def adv_frames(self, frames: int):    
         new_frames = self.frames + frames
         self._set_frame(new_frames)
         self._time = frames_to_time(new_frames)
@@ -36,7 +36,7 @@ class BuildState:
         self._time = time
         self._set_frame(time_to_frames(time))
 
-    def fwd_time(self, time: float):
+    def adv_time(self, time: float):
         self._time += time        
         self._set_frame(time_to_frames(self._time))
 
@@ -61,49 +61,47 @@ B_STATE = contextvars.ContextVar("B_state", default=BuildState())
   
 def time_to_frames(time: SupportsFloat) -> int:
     """
-    Convert time to frames
+    Convert time in seconds to a frame number.
     """
     return int(round(config.FPS * time))
 
 def frames_to_time(frames: int) -> float:
     """
-    Convert frames to time
-    """    
+    Convert a frame number to time in seconds.
+    """
     return frames / config.FPS
 
 
 def set_frame(frame: int):
     """
-    Set the current frame
-    """    
+    Set the current frame in the active build state, also updating time.
+    """
     B_STATE.get().set_frame(frame)
 
 @beartype
-def fwd_frames(frames: int):
+def adv_frames(frames: int):
     """
-    Move current frame foward
-    """    
-    B_STATE.get().fwd_frames(frames)
+    Advance the current frame by the given number of frames.
+    """
+    B_STATE.get().adv_frames(frames)
     
-@beartype    
+@beartype
 def set_time(time: float):
     """
-    Set current time
-    """    
+    Set the current time in seconds, also updating the current frame.
+    """
     B_STATE.get().set_time(time)
     
 @beartype
-def fwd_time(time: SupportsFloat):
+def adv_time(time: SupportsFloat):
     """
-    Move current time forward
-    """    
-    B_STATE.get().fwd_time(time)
+    Advance the current time by the given duration in seconds.
+    """
+    B_STATE.get().adv_time(time)
 
 def cue():
     """
-    Mark the current frame as cue
-
-    Cue frame pauses player and waits for user input
+    Mark the current frame as a cue point; the player pauses here and waits for user input.
     """
     node = CURRENT_NODE.get()
     node.get_scene().cues.add(get_frame())
@@ -111,29 +109,29 @@ def cue():
 
 def step():
     """
-    Set default transition to "step"
+    Set the default transition to step ('S') — properties change instantaneously.
     """
     B_STATE.get().transition("S")
 
 
 def linear():
     """
-    Set default transition to "linear"
-    """    
+    Set the default transition to linear ('L') — properties interpolate between keyframes.
+    """
     B_STATE.get().transition("L")
 
 
 def get_frame() -> int:
     """
-    Get current frame
+    Return the current frame number.
     """
     return B_STATE.get()._frame
 
 
 def get_transition() -> Transition:
     """
-    Get current transition
-    """    
+    Return the current transition type ('S' for step, 'L' for linear).
+    """
     return B_STATE.get()._transition
 
 
@@ -153,12 +151,12 @@ def reset_ctx():
 
 def get_bstate() -> BuildState:
     """
-    Get current build state
+    Return the active BuildState from the context variable.
     """
     return B_STATE.get()
 
 def bstate() -> BuildState:
     """
-    Create copy of the current BuildState
+    Return a shallow copy of the current BuildState.
     """
     return copy(B_STATE.get())

@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
+from beartype import beartype
 from typing import Union
+
+from .types import StringLike, BoolLike, FloatLike
 from .exprs import Call
 from .position import Position
 
@@ -9,10 +12,9 @@ from .nodes import (
     PositionMixin,
     StyleMixin,
     ZLevelMixin,
-    make_node,
 )
 
-
+@beartype
 class TextStyleMixin(StyleMixin):
 
     def _init_text_style(self):
@@ -29,19 +31,19 @@ class TextStyleMixin(StyleMixin):
         self._add_from_parent("font_weight")
         self._add_from_parent("italic")        
 
-    def italic(self, value: bool):
+    def italic(self, value: BoolLike):
         self._set_attr("italic", value)
         return self
 
-    def font(self, value: str):
+    def font(self, value: StringLike):
         self._set_attr("font", value)
         return self
 
-    def font_size(self, value: float, transition=None):
+    def font_size(self, value: FloatLike, transition=None):
         self._set_attr("font_size", value, transition)
         return self
     
-    def font_weight(self, value: float, transition=None):
+    def font_weight(self, value: FloatLike, transition=None):
         self._set_attr("font_weight", value, transition)
         return self    
     
@@ -49,11 +51,12 @@ class TextStyleMixin(StyleMixin):
         return self.font_weight(800)
 
 
+@beartype
 class TextSpan(Node, TextStyleMixin):
     kind = "t_span"
 
-    def __init__(self, parent, text):
-        super().__init__(parent)
+    def __init__(self, text: StringLike):
+        super().__init__()
         self._init_text_style_from_parent()
         self._add_attr("text", text)
 
@@ -63,15 +66,15 @@ class TextSpan(Node, TextStyleMixin):
     def get_pos(self):
         return Position(self._parent, Call.default_x(self), Call.default_y(self))
 
-
+@beartype
 class TextGroup(NodeWithChildren, TextStyleMixin):
     kind = "t_group"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_text_style_from_parent()
 
-    def span(self, text):
+    def span(self, text: StringLike):
         span = TextSpan(self, text)
         self._children.append(span)
         return span
@@ -85,8 +88,8 @@ class TextGroup(NodeWithChildren, TextStyleMixin):
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_position()
         self._init_text_style()
         self._init_z()
@@ -102,13 +105,13 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
         self.sh_theme = theme
         return self
 
-    def group(self):
+    def group(self) -> TextGroup:
         group = TextGroup(self)
         self._children.append(group)
         return group
 
-    def span(self, text):
-        span = TextSpan(self, text)
+    def span(self, text: StringLike) -> TextSpan:
+        span = TextSpan(text)
         self._children.append(span)
         return span
     
@@ -120,10 +123,6 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
             result["sh_theme"] = self.sh_theme
         return result
     
-
-def text():
-    return make_node(Text)
-
 
 @dataclass
 class _TagNode:
@@ -209,7 +208,8 @@ def _add_tag_to(parent, node):
             _add_node_to(g, child)
 
 
-def stext(input_text: str, *, strip=True, delimiters="<>"):
+@beartype
+def stext(input_text: str, *, strip: bool =True, delimiters: str = "<>"):
     """
     Parse input_text and create a text() node from it.
 

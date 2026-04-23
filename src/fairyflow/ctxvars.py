@@ -1,5 +1,6 @@
 import contextvars
-from typing import Literal
+from typing import Literal, SupportsFloat
+from beartype import beartype
 from . import config
 from copy import copy
 
@@ -58,43 +59,81 @@ ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
 B_STATE = contextvars.ContextVar("B_state", default=BuildState())
   
-def time_to_frames(time: float) -> int:
+def time_to_frames(time: SupportsFloat) -> int:
+    """
+    Convert time to frames
+    """
     return int(round(config.FPS * time))
 
 def frames_to_time(frames: int) -> float:
+    """
+    Convert frames to time
+    """    
     return frames / config.FPS
 
 
 def set_frame(frame: int):
+    """
+    Set the current frame
+    """    
     B_STATE.get().set_frame(frame)
 
+@beartype
 def fwd_frames(frames: int):
+    """
+    Move current frame foward
+    """    
     B_STATE.get().fwd_frames(frames)
     
+@beartype    
 def set_time(time: float):
+    """
+    Set current time
+    """    
     B_STATE.get().set_time(time)
     
-def fwd_time(time: float):
+@beartype
+def fwd_time(time: SupportsFloat):
+    """
+    Move current time forward
+    """    
     B_STATE.get().fwd_time(time)
 
 def cue():
+    """
+    Mark the current frame as cue
+
+    Cue frame pauses player and waits for user input
+    """
     node = CURRENT_NODE.get()
     node.get_scene().cues.add(get_frame())
 
 
 def step():
+    """
+    Set default transition to "step"
+    """
     B_STATE.get().transition("S")
 
 
 def linear():
+    """
+    Set default transition to "linear"
+    """    
     B_STATE.get().transition("L")
 
 
 def get_frame() -> int:
+    """
+    Get current frame
+    """
     return B_STATE.get()._frame
 
 
 def get_transition() -> Transition:
+    """
+    Get current transition
+    """    
     return B_STATE.get()._transition
 
 
@@ -106,14 +145,20 @@ def get_current_node():
     return CURRENT_NODE.get()
 
 
-def reset_ctx():
+def reset_ctx():    
     ROOT_OBJECTS.set([])
     CURRENT_NODE.set(None)
     B_STATE.set(BuildState())
 
 
-def get_bstate():
+def get_bstate() -> BuildState:
+    """
+    Get current build state
+    """
     return B_STATE.get()
 
-def bstate():
+def bstate() -> BuildState:
+    """
+    Create copy of the current BuildState
+    """
     return copy(B_STATE.get())

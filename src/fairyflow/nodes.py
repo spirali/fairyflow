@@ -1,4 +1,4 @@
-from typing import Union, Literal, Self
+from typing import Union, Literal, Self, SupportsFloat
 from beartype import beartype
 import os
 
@@ -27,28 +27,48 @@ type OpTr = Transition | None
 
 @beartype
 class Node(AnimatedObject):
-    def __init__(self, parent: Union[None, "NodeWithChildren"]):
+    def __init__(self, put_in_context: bool = True, parent = None):
         super().__init__()
-        self._parent = parent
+        if put_in_context:
+            parent = get_current_node()
+            if parent is None:
+                raise Exception("Element created out of context of a parent ndoe")
+            parent._children.append(self)            
+            self._parent = parent
+        else:
+            self._parent = parent            
         if parent:
             self._id = parent._new_id()
         else:
-            self._id = 0            
+            self._id = None
         self.info = get_info(self._id)
         self._name = None
 
     def name(self, name: str | None):
-        """ Sets name of the node.
+        """Set the display name of the node.
 
-        Name is is uninterpred by FairyFlow and is used only for debugging or for searching nodes via methods like find_node.
+        The name is not interpreted by FairyFlow and is used only for debugging
+        or for searching nodes via `find_node`.
+
+        Args:
+            name: A human-readable label for the node, or ``None`` to clear it.
+
+        Returns:
+            self, for method chaining.
         """
         self._name = name
         self.info["name"] = name
         return self
 
     def parent_chain(self) -> list["Group"]:
-        """
-        Return list of nodes to the parent node
+        """Return all ancestor `Group` nodes from this node up to the root.
+
+        Traverses the parent chain and collects every ancestor that is a
+        `Group` instance, ordered from nearest to farthest.
+
+        Returns:
+            A list of `Group` ancestors, nearest first. Empty if no `Group`
+            ancestor exists.
         """
         result = []
         node = self
@@ -59,10 +79,14 @@ class Node(AnimatedObject):
         return result
 
     def parent_group(self) -> Union["Group", "Scene"]:
-        """
-        Returns the closest group (or scene) of the self. 
-        
-        Returns None if self is Scene
+        """Return the nearest ancestor that is a `Group` or `Scene`.
+
+        Walks up the parent chain and returns the first node that is either a
+        `Group` or a `Scene`.
+
+        Returns:
+            The nearest `Group` or `Scene` ancestor, or ``None`` if ``self``
+            is the root `Scene`.
         """
         parent = self._parent
         if (
@@ -96,8 +120,16 @@ class Node(AnimatedObject):
     
 
     def match(self, *, name: str | None = None, kind: str | None = None) -> bool:
-        """
-        Returns True if node matches the filter condition.
+        """Return whether this node satisfies all supplied filter criteria.
+
+        Each argument is optional; only provided arguments are checked.
+
+        Args:
+            name: If given, the node's name must equal this value.
+            kind: If given, the node's ``kind`` string must equal this value.
+
+        Returns:
+            ``True`` if every supplied criterion matches, ``False`` otherwise.
         """
         if name is not None and self.name != name:
             return False
@@ -106,8 +138,17 @@ class Node(AnimatedObject):
         return True
 
     def find_node(self, *, name: str | None = None, kind: str | None = None) -> Union["Node", None]:
-        """
-        Finds the node that matches the filter (BFS).
+        """Find the first node matching the filter criteria using BFS.
+
+        Searches the subtree rooted at this node in breadth-first order and
+        returns the first node that satisfies all supplied criteria.
+
+        Args:
+            name: If given, only nodes with this name are considered.
+            kind: If given, only nodes whose ``kind`` equals this are considered.
+
+        Returns:
+            The first matching `Node`, or ``None`` if no match is found.
         """
         if self.match(name, kind):
             return self        
@@ -115,8 +156,10 @@ class Node(AnimatedObject):
             return None
         
     def get_scene(self) -> "Scene":
-        """
-        Return scene (root node).
+        """Return the root `Scene` of the scene tree.
+
+        Returns:
+            The `Scene` node that is the root ancestor of all nodes in this tree.
         """
         return self._parent.get_scene()
 
@@ -133,22 +176,45 @@ class AlphaMixin:
         self._add_from_parent("alpha")
 
     def alpha(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Set alpha of the node (and its children)
+        """Set the opacity of this node and all its children.
+
+        Args:
+            value: Opacity in the range ``[0.0, 1.0]``, where ``0.0`` is fully
+                transparent and ``1.0`` is fully opaque.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("alpha", value, tr)
         return self
     
     def fade_in(self, time: float = 1) -> Self:
-        """
-        Animation: Fade in (start with alpha 0 and change it ot 1)
+        """Animate a fade-in effect by transitioning alpha from 0 to 1.
+
+        Sets the node alpha to ``0`` at the current frame and animates it to
+        ``1`` over the given duration.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
         """
         self._anim_attr("alpha", 1, time, start=0)
         return self
     
     def fade_out(self, time: float = 1) -> Self:
-        """
-        Animation: Fade out (change alpha to 0)
+        """Animate a fade-out effect by transitioning alpha to 0.
+
+        Animates the node alpha from its current value down to ``0`` over the
+        given duration.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
         """
         self._anim_attr("alpha", 0, time)        
         return self    
@@ -160,8 +226,16 @@ class ZLevelMixin:
         self._add_from_parent("z_level", 0)
 
     def z_level(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Set z-level.
+        """Set the z-level (rendering order) of the node.
+
+        Nodes with higher z-levels are drawn on top of nodes with lower values.
+
+        Args:
+            value: The z-level. Higher values appear in front.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("z_level", value, tr)
         return self
@@ -178,23 +252,42 @@ class SizeMixin:
         self._add_attr("height", height)
 
     def width(self, value: FloatLike, tr: OpTr=None) -> Self:
-        """
-        Sets width of the node
+        """Set the width of the node in pixels.
+
+        Args:
+            value: The new width in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("width", value, tr)
         return self
 
     def height(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Sets height of the node
+        """Set the height of the node in pixels.
+
+        Args:
+            value: The new height in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("height", value, tr)
         return self
 
     def size(self, width, height: FloatLike, tr: OpTr = None) -> Self:
+        """Set the width and height of the node in pixels.
+
+        Args:
+            width: The new width in pixels.
+            height: The new height in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Sets width and height of the node
-        """        
         self._set_attr("width", width, tr)
         self._set_attr("height", height, tr)
         return self
@@ -211,52 +304,93 @@ class PositionMixin:
         self._add_attr("y", y)
 
     def x(self, px: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Sets x of the node.
+        """Set the x coordinate of the node.
+
+        Args:
+            px: The x position in pixels, relative to the parent node's origin.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("x", px, tr)
         return self
 
     def y(self, px: FloatLike, tr: OpTr = None) -> Self:
+        """Set the y coordinate of the node.
+
+        Args:
+            px: The y position in pixels, relative to the parent node's origin.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Sets y of the node.
-        """        
         self._set_attr("y", px, tr)
         return self
     
     def x_reset(self, tr: OpTr = None) -> Self:
+        """Reset the x coordinate to the layout default.
+
+        Args:
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Resets x coordinate to default.
-        """                
         self._set_attr("x", Call.default_x(self), tr)
         return self
     
     def y_reset(self, tr: OpTr = None) -> Self:
+        """Reset the y coordinate to the layout default.
+
+        Args:
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Resets y coordinate to default.
-        """                        
         self._set_attr("y", Call.default_y(self), tr)
         return self
     
     def xy_reset(self, tr: OpTr = None) -> Self:
+        """Reset both x and y coordinates to the layout default.
+
+        Args:
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Resets x,y coordinate to default.
-        """                                
         self.x_reset(tr)
         self.y_reset(tr)
         return self
 
     def xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Sets both x and y of the node.
+        """Set both x and y coordinates of the node.
+
+        Args:
+            x: The x position in pixels, relative to the parent node's origin.
+            y: The y position in pixels, relative to the parent node's origin.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("x", x, tr)
         self._set_attr("y", y, tr)
         return self
 
     def align_x(self, value: FloatLike, tr: OpTr=None) -> Self:
-        """
-        Horizontally align item inside parent node (0 = left, 0.5 = center, 1.0 = right)
+        """Horizontally align the node within its parent.
+
+        Args:
+            value: Alignment factor. ``0.0`` aligns to the left edge, ``0.5``
+                to the center, and ``1.0`` to the right edge.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
@@ -269,9 +403,16 @@ class PositionMixin:
         return self
 
     def align_y(self, value: FloatLike, tr: OpTr=None) -> Self:
+        """Vertically align the node within its parent.
+
+        Args:
+            value: Alignment factor. ``0.0`` aligns to the top edge, ``0.5``
+                to the center, and ``1.0`` to the bottom edge.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Vertically align item inside parent node (0 = top, 0.5 = center, 1.0 = bottom)
-        """        
         parent = self.parent_group()
         if isinstance(self, SizeMixin):
             new_value = Call.mul(
@@ -283,8 +424,14 @@ class PositionMixin:
         return self
 
     def pos(self, position: Position, tr: OpTr=None) -> Self:
-        """
-        Sets the position of the node
+        """Set the position of the node using a `Position` object.
+
+        Args:
+            position: The target position, resolved relative to the parent node.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         position = position.into_node(self._parent)
         self._set_attr("x", position.x, tr)
@@ -292,17 +439,32 @@ class PositionMixin:
         return self
 
     def move(self, dx: FloatLike, dy: FloatLike, tr: OpTr=None) -> Self:
+        """Shift the node's position by a relative offset.
+
+        Args:
+            dx: Horizontal offset in pixels.
+            dy: Vertical offset in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Move the position of the node
-        """        
         self._move_attr("x", dx, tr)
         self._move_attr("y", dy, tr)
         return self
 
     def get_pos(self, align_x=0, align_y=0) -> Position:
+        """Return the current position of the node as a `Position`.
+
+        Args:
+            align_x: Horizontal alignment offset within the node. ``0.0``
+                returns the left edge; ``0.5`` the center; ``1.0`` the right edge.
+            align_y: Vertical alignment offset within the node. ``0.0``
+                returns the top edge; ``0.5`` the center; ``1.0`` the bottom edge.
+
+        Returns:
+            A `Position` representing the node's resolved coordinates.
         """
-        Get position of the node
-        """        
         x = self._get_attr("x")
         y = self._get_attr("y")
         if isinstance(self, SizeMixin):
@@ -312,7 +474,7 @@ class PositionMixin:
                 y = y + self._get_attr("width") * align_x
         return Position(self._parent, x, y)
     
-    def follow_path(self, path: "Path", *, time : float = 1):
+    def follow_path(self, path: "Path", *, time : SupportsFloat = 1):
         assert isinstance(path, Path)
         if frames is None:
             if time is None:
@@ -332,7 +494,7 @@ class PositionMixin:
         self.hold()
         return self
 
-
+@beartype
 class StyleMixin(AlphaMixin):
     def _init_style(self):
         self._add_attr("fill_color", None)
@@ -347,30 +509,51 @@ class StyleMixin(AlphaMixin):
         self._init_alpha_from_parent()
 
     def color(self, value: ColorLike, tr: OpTr = None) -> Self:
-        """
-        Sets fill color of the node
+        """Set the fill color of the node.
+
+        Args:
+            value: Any color value accepted by `Color.parse` (e.g. a hex
+                string, an RGB tuple, or a `Color` instance).
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("fill_color", Color.parse(value), tr)
         return self
 
     def stroke_color(self, value: ColorLike, tr: OpTr = None) -> Self:
+        """Set the stroke (outline) color of the node.
+
+        Args:
+            value: Any color value accepted by `Color.parse` (e.g. a hex
+                string, an RGB tuple, or a `Color` instance).
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Sets stroke color of the node
-        """        
         self._set_attr("stroke_color", Color.parse(value), tr)
         return self
 
     def stroke_width(self, value: FloatLike, tr: OpTr = None):
+        """Set the stroke width of the node in pixels.
+
+        Args:
+            value: The stroke width in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Sets stroke width
-        """                
         self._set_attr("stroke_width", value, tr)
         return self
 
 
+@beartype
 class NodeWithChildren(Node):
-    def __init__(self, parent, children=None):
-        super().__init__(parent)
+    def __init__(self, put_in_context: bool = True, children=None):
+        super().__init__(put_in_context=put_in_context)
         if children is None:
             children = []
         self._children = children
@@ -394,8 +577,16 @@ class NodeWithChildren(Node):
                 return result
             
     def get_child(self, *, name: str | None = None, kind: str | None = None) -> Node | None:
-        """
-        Get first direct descendant that maches the filter
+        """Return the first direct child matching the given filter criteria.
+
+        Only immediate children are searched, not deeper descendants.
+
+        Args:
+            name: If given, only children with this name are considered.
+            kind: If given, only children whose ``kind`` equals this are considered.
+
+        Returns:
+            The first matching child `Node`, or ``None`` if no match is found.
         """
         for child in self._children:
             if child.match(name=name, kind=kind):
@@ -403,13 +594,15 @@ class NodeWithChildren(Node):
         return None
         
     def get_children(self) -> list[Node]:
-        """
-        Return children
+        """Return the list of all direct children of this node.
+
+        Returns:
+            A list of child `Node` objects in the order they were added.
         """
         return self._children    
     
 
-
+@beartype
 class ContextManagerMixin:
     def _init_context_manager(self):
         self._ctx = None
@@ -424,7 +617,7 @@ class ContextManagerMixin:
         set_current_node(self._ctx)
         self._ctx = None
 
-
+@beartype
 class RotAndScaleMixin:
     def _init_rot_and_scale(self):
         self._add_attr("rotation", 0)
@@ -434,31 +627,65 @@ class RotAndScaleMixin:
         self._add_attr("scale_y", 1)
 
     def scale_x(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Scales the node in x axis
+        """Scale the node along the x axis.
+
+        Args:
+            value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
+                the width.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("scale_x", value, tr)
         return self
 
     def scale_y(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Scale the node along the y axis.
+
+        Args:
+            value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
+                the height.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Scales the node in y axis
-        """        
         self._set_attr("scale_y", value, tr)
         return self
 
     def scale(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """Scales the node"""
+        """Scale the node uniformly along both axes.
+
+        Args:
+            value: Scale factor applied to both x and y. ``1.0`` is the
+                original size; ``2.0`` doubles both dimensions.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
         self._set_attr("scale_x", value, tr)
         self._set_attr("scale_y", value, tr)
         return self
 
     def rotate(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """Rotates the node"""
+        """Rotate the node around its pivot point.
+
+        The pivot is controlled by ``pivot_x`` / ``pivot_y`` attributes,
+        which default to the node's center (``0.5``, ``0.5``).
+
+        Args:
+            value: Rotation angle in degrees, clockwise.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
         self._set_attr("rotation", value, tr)
         return self
 
-
+@beartype
 class Group(
     NodeWithChildren,
     ContextManagerMixin,
@@ -470,8 +697,8 @@ class Group(
 ):
     kind = "group"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_context_manager()
         self._init_size()
         self._init_alpha()
@@ -486,12 +713,36 @@ class Group(
         self._layout = CENTERING_LAYOUT
 
     def column(self, gap: FloatLike = 0, align: FloatLike = 0.5) -> Self:
-        """ Set layout to "column" mode """
+        """Switch the group to column (vertical) layout.
+
+        Children are stacked vertically with an optional gap and horizontal
+        alignment.
+
+        Args:
+            gap: Vertical gap between children in pixels.
+            align: Horizontal alignment of children within the column.
+                ``0.0`` = left, ``0.5`` = center, ``1.0`` = right.
+
+        Returns:
+            self, for method chaining.
+        """
         self._layout = ColumnLayout(get_frame(), gap, align)
         return self
 
     def row(self, gap: FloatLike = 0, align: FloatLike = 0.5) -> Self:
-        """ Set layout to "row" mode """
+        """Switch the group to row (horizontal) layout.
+
+        Children are placed side by side with an optional gap and vertical
+        alignment.
+
+        Args:
+            gap: Horizontal gap between children in pixels.
+            align: Vertical alignment of children within the row.
+                ``0.0`` = top, ``0.5`` = center, ``1.0`` = bottom.
+
+        Returns:
+            self, for method chaining.
+        """
         self._layout = RowLayout(get_frame(), gap, align)
         return self
 
@@ -501,54 +752,123 @@ class Group(
         return result
     
     def clip_x(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        x-axis of the clipped window. Relative with the width of the node; 0 - left, 1 - right
+        """Set the x offset of the clipping window.
+
+        Values are relative to the node width: ``0.0`` is the left edge and
+        ``1.0`` is the right edge. Combine with `clip_w` to reveal or conceal
+        horizontal portions of the group.
+
+        Args:
+            value: Relative x start of the clipping window, in ``[0.0, 1.0]``.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("clip_x", value, tr)
         return self
     
     def clip_y(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Set the y offset of the clipping window.
+
+        Values are relative to the node height: ``0.0`` is the top edge and
+        ``1.0`` is the bottom edge.
+
+        Args:
+            value: Relative y start of the clipping window, in ``[0.0, 1.0]``.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        y-axis of the clipped window. Relative with the height of the node; 0 - top, 1 - bottom
-        """        
         self._set_attr("clip_y", value, transition)
         return self
 
     def clip_w(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Set the width of the clipping window.
+
+        Values are relative to the node width: ``1.0`` shows the full width
+        and ``0.0`` hides the node entirely.
+
+        Args:
+            value: Relative width of the clipping window, in ``[0.0, 1.0]``.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        width of the clipped window. Relative with the width of the node; 1 = full width
-        """                
         self._set_attr("clip_w", value, transition)
         return self
 
     def clip_h(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Set the height of the clipping window.
+
+        Values are relative to the node height: ``1.0`` shows the full height
+        and ``0.0`` hides the node entirely.
+
+        Args:
+            value: Relative height of the clipping window, in ``[0.0, 1.0]``.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
-        Height of the clipped window. Relative with the height of the node; 1 = full height
-        """                
         self._set_attr("clip_h", value, tr)
         return self            
     
-    def hide_right(self, time: float = 1) -> Self:
-        """
-        Animation; hide the node by sweaping to the right
+    def hide_right(self, time: SupportsFloat = 1) -> Self:
+        """Animate hiding the group with a wipe-right effect.
+
+        Animates ``clip_x`` from its current value to ``1.0``, causing the
+        content to disappear by sweeping toward the right.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
         """
         self._anim_attr("clip_x", 1, time)
         return self
 
-    def hide_left(self, time: float = 1) -> Self:
+    def hide_left(self, time: SupportsFloat = 1) -> Self:
+        """Animate hiding the group with a wipe-left effect.
+
+        Animates ``clip_w`` from its current value to ``0.0``, causing the
+        content to disappear by shrinking toward the left.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
         """
-        Animation; hide the node by sweaping to the left
-        """        
         self._anim_attr("clip_w", 0, time)
         return self
 
-
+@beartype
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     kind = "scene"
 
-    def __init__(self, width, height, color, cue_at_start):
+    def __init__(self, width: SupportsFloat | None = None, height: SupportsFloat | None = None, color: str | Color | None = None, cue_at_start: bool | None = None):
+        """Create a new `Scene` and register it as a root object.
+
+        A scene is the top-level container for all nodes in an animation. It
+        defines the canvas dimensions and background color and must be used as a
+        context manager (``with scene() as s:``) before adding child nodes.
+
+        Args:
+            width: Canvas width in pixels. 
+            height: Canvas height in pixels.
+            color: Background color of the scene (String or instance of Color)
+            cue_at_start: If ``True``, frame 0 is automatically added as a cue
+                point.
+
+        Returns:
+            The newly created `Scene` node.
+        """        
         set_frame(0)
-        super().__init__(None)
+        super().__init__(put_in_context=False)
         self._init_context_manager()
         if width is None:
             width = DEFAULT_SCENE_CONFIG["width"]
@@ -561,17 +881,26 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self._init_size(width, height)
         self._add_attr("fill_color", color)
         self._id_counter = 0
+        self._id = 0        
         self._layout = CENTERING_LAYOUT        
         self.max_frame = 0
         self.cue_at_start = cue_at_start        
         self.cues = set()        
+        ROOT_OBJECTS.get().append(self)
 
     def __enter__(self):
         super().__enter__()
 
     def color(self, value: ColorLike, tr: OpTr = None) -> Self:
-        """
-        Sets the background color of the scene
+        """Set the background color of the scene.
+
+        Args:
+            value: Any color value accepted by `Color.parse` (e.g. a hex
+                string, an RGB tuple, or a `Color` instance).
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
         """
         self._set_attr("fill_color", Color.parse(value), tr)
         return self
@@ -596,34 +925,36 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def update_max_frame(self, frame):
         self.max_frame = max(self.max_frame, frame)
 
-
+@beartype
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "rect"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
         self._init_position()
 
 
+@beartype
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     kind = "ellipse"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_size(0, 0)
         self._init_style()
         self._init_z()
         self._init_position()
 
 
+@beartype
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     kind = "path"
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self._init_style()
         self._init_z()
         self._add_attr("crop_start", 0.0)
@@ -637,44 +968,74 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             return (0, 0)
         
     def crop_start(self, value: FloatLike, tr: OpTr = None) -> Self:
-        """
-        Crops the path from the starts; [0-1] relative to the length of the path
+        """Crop the path from its start.
+
+        Args:
+            value: Relative start offset in ``[0.0, 1.0]``. ``0.0`` keeps the
+                full path; ``1.0`` hides it entirely from the start.
+            tr: Optional transition for animation.
         """
         self._set_attr("crop_start", value, tr)
+        return self
 
     def crop_end(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Crop the path from its end.
+
+        Args:
+            value: Relative end offset in ``[0.0, 1.0]``. ``1.0`` keeps the
+                full path; ``0.0`` hides it entirely from the end.
+            tr: Optional transition for animation.
         """
-        Crops the path from the end; [0-1] relative to the length of the path
-        """        
         self._set_attr("crop_end", value, tr)
+        return self
 
     def move_to(self) -> "PathMove":
-        """
-        Create "move" commnand on the path.
+        """Append a move-to command to the path.
+
+        Moves the current drawing position without drawing a line. Use this
+        as the first command of a path or to start a new subpath.
+
+        Returns:
+            The newly created `PathMove` node for setting the target position.
         """
         p = PathMove(self, *self._prev_coords())
         self._children.append(p)
         return p
 
     def line_to(self) -> "PathLine":
-        """
-        Create "line" commnand on the path.
+        """Append a line-to command to the path.
+
+        Draws a straight line from the current position to the target.
+
+        Returns:
+            The newly created `PathLine` node for setting the target position.
         """
         p = PathLine(self, *self._prev_coords())
         self._children.append(p)
         return p
 
     def cubic_to(self) -> "PathCubic":
-        """
-        Create cubiec bezier curve commnand on the path.
+        """Append a cubic Bézier curve command to the path.
+
+        Draws a cubic Bézier segment from the current position to the target,
+        shaped by two control points.
+
+        Returns:
+            The newly created `PathCubic` node. Use its ``c1_xy`` / ``c2_xy``
+            methods to set the control points and ``xy`` to set the endpoint.
         """
         p = PathCubic(self, *self._prev_coords())
         self._children.append(p)
         return p
     
     def close(self) -> "PathClose":
-        """
-        Close path
+        """Append a close-path command.
+
+        Draws a straight line back to the start of the current subpath and
+        closes it.
+
+        Returns:
+            The newly created `PathClose` node.
         """
         p = PathClose(self)
         self._children.append(p)
@@ -720,7 +1081,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dx = nx * width * 0.5
         dy = ny * width * 0.5
 
-        path = Path(self._parent)
+        path = Path()
         self._parent._children.append(path)
         path.move_to().xy(px - dy, py + dx)
         path.line_to().pos(pos)
@@ -730,10 +1091,23 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         
 
     def triangle_arrow(self, placement: Literal["start", "end"]="end", *, length: FloatLike | None = None, width: FloatLike | None = None) -> "Path":
-        """
-        Creates a triangle arrow on the path. 
+        """Add a filled triangle arrowhead at one end of the path.
 
-        Important: It sets `crop_start` of the `self` to not overlap with arrow.
+        The arrowhead is created as a separate sibling `Path` node. To prevent
+        the main path from overlapping the arrowhead, ``crop_start`` or
+        ``crop_end`` is automatically adjusted.
+
+        Args:
+            placement: Which end of the path receives the arrowhead.
+                ``"start"`` places it at the first point; ``"end"`` at the last.
+            length: Length of the arrowhead in pixels. Defaults to three times
+                the current stroke width.
+            width: Base width of the arrowhead in pixels. Defaults to the same
+                value as ``length``.
+
+        Returns:
+            The new `Path` node representing the arrowhead, or ``None`` if the
+            path has fewer than two points.
         """
         if placement == "start":
             dir = self._get_start_direction()
@@ -761,7 +1135,7 @@ class PathMove(Node, PositionMixin):
     kind = "move"
 
     def __init__(self, parent, x, y):
-        super().__init__(parent)
+        super().__init__(put_in_context=False, parent=parent)
         self._init_position(x, y)
 
 
@@ -769,11 +1143,15 @@ class PathLine(Node, PositionMixin):
     kind = "line"
 
     def __init__(self, parent, x, y):
-        super().__init__(parent)
+        super().__init__(put_in_context=False, parent=parent)
         self._init_position(x, y)
 
 
 class PathClose(Node):
+
+    def __init__(self, parent):
+        super().__init__(put_in_context=False, parent=parent)
+
     kind = "close"
 
 
@@ -781,7 +1159,7 @@ class PathCubic(Node, PositionMixin):
     kind = "cubic"
 
     def __init__(self, parent, x, y):
-        super().__init__(parent)
+        super().__init__(put_in_context=False, parent=parent)
         self._init_position(x, y)
         self._add_attr("c1_x", 0)
         self._add_attr("c1_y", 0)
@@ -789,29 +1167,67 @@ class PathCubic(Node, PositionMixin):
         self._add_attr("c2_y", 0)
 
     def c1_x(self, px: FloatLike, tr: OpTr = None) -> Self:
-        """Set x-coordinate of control point 1. It is relative to the start point of the path"""
+        """Set the x coordinate of control point 1, relative to the segment's start point.
+
+        Args:
+            px: Relative x offset of control point 1 in pixels.
+            tr: Optional transition for animation.
+        """
         self._set_attr("c1_x", px, tr)
 
     def c1_y(self, px: FloatLike, tr: OpTr = None) -> Self:
-        """Set y-coordinate of control point 1. It is relative to the start point of the path"""
+        """Set the y coordinate of control point 1, relative to the segment's start point.
+
+        Args:
+            px: Relative y offset of control point 1 in pixels.
+            tr: Optional transition for animation.
+        """
         self._set_attr("c1_y", px, tr)
 
     def c2_x(self, px: FloatLike, tr: OpTr = None) -> Self:
-        """Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        """Set the x coordinate of control point 2, relative to the segment's end point.
+
+        Args:
+            px: Relative x offset of control point 2 in pixels.
+            tr: Optional transition for animation.
+        """
         self._set_attr("c2_x", px, tr)
 
     def c2_y(self, px: FloatLike, tr: OpTr = None) -> Self:
-        """Set x-coordinate of control point 1. It is relative to the end point of the path"""
+        """Set the y coordinate of control point 2, relative to the segment's end point.
+
+        Args:
+            px: Relative y offset of control point 2 in pixels.
+            tr: Optional transition for animation.
+        """
         self._set_attr("c2_y", px, tr)
 
     def c1_xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
-        """Set x,y-coordinates of control point 1. It is relative to the start point of the path"""
+        """Set both coordinates of control point 1, relative to the segment's start point.
+
+        Args:
+            x: Relative x offset of control point 1 in pixels.
+            y: Relative y offset of control point 1 in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
         self.c1_x(x, tr)
         self.c1_y(y, tr)
         return self
 
     def c2_xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
-        """Set x,y-coordinates of control point 2. It is relative to the end point of the path"""
+        """Set both coordinates of control point 2, relative to the segment's end point.
+
+        Args:
+            x: Relative x offset of control point 2 in pixels.
+            y: Relative y offset of control point 2 in pixels.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
         self.c2_x(x, tr)
         self.c2_y(y, tr)
         return self
@@ -820,8 +1236,8 @@ class PathCubic(Node, PositionMixin):
 class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "image"
 
-    def __init__(self, parent, image_path, keep_aspect):
-        super().__init__(parent)
+    def __init__(self, image_path: str, keep_aspect: bool = True):
+        super().__init__()
         self._init_size()
         self._init_z()
         self._init_position()
@@ -831,8 +1247,16 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         self._add_attr("keep_aspect", keep_aspect)
 
     def layer(self, name: str) -> "ImageLayer":
-        """
-        Get layer from the image
+        """Get or create a named layer from the image.
+
+        If a layer with the given name already exists it is returned unchanged.
+        Otherwise a new `ImageLayer` child node is created and appended.
+
+        Args:
+            name: The name of the layer to retrieve or create.
+
+        Returns:
+            The `ImageLayer` node for the specified layer name.
         """
         for child in self._children:
             if child.layer_name == name:
@@ -842,8 +1266,20 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         return layer
 
     def file_name(self, image_path: str) -> Self:
-        """
-        Set the file name of the loaded image
+        """Set the file path of the image to load.
+
+        The path is resolved to an absolute path before storing. Raises if the
+        file does not exist.
+
+        Args:
+            image_path: Path to the image file (absolute or relative to the
+                current working directory).
+
+        Returns:
+            self, for method chaining.
+
+        Raises:
+            Exception: If the resolved path does not point to an existing file.
         """
         image_path = os.path.abspath(image_path)
         if not os.path.exists(image_path):
@@ -855,8 +1291,8 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     kind = "layer"
 
-    def __init__(self, parent, layer_name):
-        super().__init__(parent)
+    def __init__(self, layer_name):
+        super().__init__()
         self.layer_name = layer_name
         self._init_size()
         self._init_z()
@@ -869,54 +1305,100 @@ class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaM
         return result
 
 
-def make_node(cls, *args):
-    current_node = get_current_node()
-    if current_node is None:
-        raise Exception("Element created out of context of a parent ndoe")
-    item = cls(current_node, *args)
-    current_node._children.append(item)
-    return item
+# def make_node(cls, *args):
+#     current_node = get_current_node()
+#     if current_node is None:
+#         raise Exception("Element created out of context of a parent ndoe")
+#     item = cls(current_node, *args)
+#     current_node._children.append(item)
+#     return item
 
 
-def scene(width: int | None = None, height: int | None = None, *, color: str | Color | None = None, cue_at_start: bool | None = None) -> Scene:
-    """
-    Creates a scene
-    """
-    scene = Scene(width, height, color, cue_at_start)
-    ROOT_OBJECTS.get().append(scene)
-    return scene
+# def scene(width: int | None = None, height: int | None = None, *, color: str | Color | None = None, cue_at_start: bool | None = None) -> Scene:
+#     """Create a new `Scene` and register it as a root object.
+
+#     A scene is the top-level container for all nodes in an animation. It
+#     defines the canvas dimensions and background color and must be used as a
+#     context manager (``with scene() as s:``) before adding child nodes.
+
+#     Args:
+#         width: Canvas width in pixels. Defaults to the value from
+#             ``DEFAULT_SCENE_CONFIG``.
+#         height: Canvas height in pixels. Defaults to the value from
+#             ``DEFAULT_SCENE_CONFIG``.
+#         color: Background color of the scene. Accepts any value supported by
+#             `Color.parse`. Defaults to the value from ``DEFAULT_SCENE_CONFIG``.
+#         cue_at_start: If ``True``, frame 0 is automatically added as a cue
+#             point. Defaults to the value from ``DEFAULT_SCENE_CONFIG``.
+
+#     Returns:
+#         The newly created `Scene` node.
+#     """
+#     scene = Scene(width, height, color, cue_at_start)
+#     ROOT_OBJECTS.get().append(scene)
+#     return scene
 
 
-def group() -> Group:
-    """
-    Return a new group within the current context.
-    """
-    return make_node(Group)
+# def group() -> Group:
+#     """Create a new `Group` node inside the current context.
+
+#     A group is a rectangular container that positions, clips, and transforms
+#     its children. Must be called inside a ``with scene(...)`` or
+#     ``with group(...)`` block.
+
+#     Returns:
+#         The newly created `Group` node.
+#     """
+#     return make_node(Group)
 
 
-def rect() -> Rect:
-    """
-    Return a new rect within the current context.
-    """    
-    return make_node(Rect)
+# def rect() -> Rect:
+#     """Create a new `Rect` node inside the current context.
+
+#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
+
+#     Returns:
+#         The newly created `Rect` node.
+#     """
+#     return make_node(Rect)
 
 
-def ellipse() -> Ellipse:
-    """
-    Return a new ellipse within the current context.
-    """        
-    return make_node(Ellipse)
+# def ellipse() -> Ellipse:
+#     """Create a new `Ellipse` node inside the current context.
+
+#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
+
+#     Returns:
+#         The newly created `Ellipse` node.
+#     """
+#     return make_node(Ellipse)
 
 
-def path() -> Path:
-    """
-    Return a new path within the current context
-    """        
-    return make_node(Path)
+# def path() -> Path:
+#     """Create a new `Path` node inside the current context.
+
+#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
+#     Build the path shape with `Path.move_to`, `Path.line_to`, `Path.cubic_to`,
+#     and `Path.close`.
+
+#     Returns:
+#         The newly created `Path` node.
+#     """
+#     return make_node(Path)
 
 
-def image(path: str, *, keep_aspect: bool = True) -> Image:
-    """
-    Return a new image within the current context
-    """            
-    return make_node(Image, path, keep_aspect)
+# def image(path: str, *, keep_aspect: bool = True) -> Image:
+#     """Create a new `Image` node inside the current context.
+
+#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
+
+#     Args:
+#         path: Path to the image file. Passed to `Image.file_name`; the file
+#             must exist at call time.
+#         keep_aspect: If ``True`` (default), the image preserves its original
+#             aspect ratio when the node size changes.
+
+#     Returns:
+#         The newly created `Image` node.
+#     """
+#     return make_node(Image, path, keep_aspect)

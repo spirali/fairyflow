@@ -12,12 +12,11 @@ $ pip install fairyflow
 
 ## Create project
 
-
 ```bash
 $ fairyflow init <project_name>
 ```
 
-It will create an initial project layout, see TODO REF TO STRUCTURE.MD for more info.
+This creates an initial project layout. See [Project Structure](structure.md) for details.
 
 ## Start development environment
 
@@ -25,39 +24,37 @@ It will create an initial project layout, see TODO REF TO STRUCTURE.MD for more 
 $ fairyflow open <project_name>
 ```
 
-It starts a local web server, click on printed URL to open interactive environemnt:
-
-<img src="screenshot_after_init.png"/>
+It starts a local web server. Click the printed URL to open the interactive environment.
 
 ## First code & render
 
+Open `scene.py` in the editor and write your first scene. Press ++ctrl+s++ to evaluate:
 
-```ffpy frame="0"
-with scene():
-   rect().size(30, 20).color("green")
-
+```ffpy frame=0
+with Scene():
+    Rect().size(120, 70).color("steelblue").align_x(0.5).align_y(0.5)
 ```
 
-Press ++ctrl+s++ to evaluate scene. You will get the folowing output:
+## Your first animation
 
-<img src="screenshot_after_eval.png"/>
-
-
-## You first video
-
+Add time-based changes to create motion:
 
 ```ffpy video="mp4"
-with scene():
-   r = rect().size(20, 20).color("green")
-   linear()
-   jump_time(1)
-   r.color("orange")
+with Scene():
+    r = Rect().size(60, 60).color("steelblue").xy(20, 70)
+    linear()
+    adv_time(1.5)
+    r.xy(220, 70).color("tomato")
 ```
 
-Press again ++ctrl+s++ to evalute the scene, you will get the following result:
+`linear()` switches interpolation to smooth, and `adv_time(1.5)` advances the timeline by
+1.5 seconds. Attribute changes after that call are placed at the new time.
 
-<img src="screenshot_after_eval2.png"/>
+## Next steps
 
-and resulting video:
-
-TODO
+- [Project Structure](structure.md) — scenes, groups, and files
+- [Shapes](shapes.md) — Rect, Ellipse, Path
+- [Text](text.md) — Text and font styling
+- [Animations](anim.md) — transitions, fades, path following
+- [Layout](layout.md) — column and row layouts
+- [Cues](cues.md) — interactive presentations

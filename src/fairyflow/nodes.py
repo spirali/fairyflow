@@ -27,6 +27,13 @@ type OpTr = Transition | None
 
 @beartype
 class Node(AnimatedObject):
+    """Base class for all scene nodes.
+
+    Manages parent-child relationships, frame-based visibility, and
+    serialization. Not intended to be instantiated directly — use a concrete
+    subclass such as `Rect`, `Group`, or `Path`.
+    """
+
     def __init__(self, put_in_context: bool = True, parent = None):
         super().__init__()
         if put_in_context:
@@ -169,6 +176,8 @@ class Node(AnimatedObject):
 
 @beartype
 class AlphaMixin:
+    """Mixin that adds animatable opacity (`alpha`) to a node."""
+
     def _init_alpha(self):
         self._add_attr("alpha", 1)
 
@@ -222,6 +231,8 @@ class AlphaMixin:
 
 @beartype
 class ZLevelMixin:
+    """Mixin that adds a `z_level` attribute for controlling rendering order."""
+
     def _init_z(self):
         self._add_from_parent("z_level", 0)
 
@@ -243,6 +254,8 @@ class ZLevelMixin:
 
 @beartype
 class SizeMixin:
+    """Mixin that adds animatable `width` and `height` attributes to a node."""
+
     def _init_size(self, width=None, height=None):
         if width is None:
             width = Call.default_width(self)
@@ -295,6 +308,8 @@ class SizeMixin:
 
 @beartype
 class PositionMixin:
+    """Mixin that adds animatable `x` / `y` position and alignment helpers to a node."""
+
     def _init_position(self, x=None, y=None):
         if x is None:
             x = Call.default_x(self)
@@ -490,6 +505,8 @@ class PositionMixin:
 
 @beartype
 class StyleMixin(AlphaMixin):
+    """Mixin that adds fill color, stroke color, stroke width, and alpha to a node."""
+
     def _init_style(self):
         self._add_attr("fill_color", None)
         self._add_attr("stroke_color", None)
@@ -546,6 +563,8 @@ class StyleMixin(AlphaMixin):
 
 @beartype
 class NodeWithChildren(Node):
+    """Base class for nodes that own a list of child nodes."""
+
     def __init__(self, put_in_context: bool = True, children=None):
         super().__init__(put_in_context=put_in_context)
         if children is None:
@@ -598,6 +617,12 @@ class NodeWithChildren(Node):
 
 @beartype
 class ContextManagerMixin:
+    """Mixin that makes a node usable as a ``with`` context manager.
+
+    While the block is active, the node is set as the current node so that
+    newly created child nodes are automatically attached to it.
+    """
+
     def _init_context_manager(self):
         self._ctx = None
 
@@ -613,6 +638,8 @@ class ContextManagerMixin:
 
 @beartype
 class RotAndScaleMixin:
+    """Mixin that adds rotation, pivot point, and x/y scale attributes to a node."""
+
     def _init_rot_and_scale(self):
         self._add_attr("rotation", 0)
         self._add_attr("pivot_x", 0.5)
@@ -689,6 +716,12 @@ class Group(
     ZLevelMixin,
     RotAndScaleMixin,
 ):
+    """A rectangular container node that positions, clips, and transforms its children.
+
+    Supports column and row layout modes and an animatable clipping window.
+    Must be used as a context manager to add children.
+    """
+
     kind = "group"
 
     def __init__(self):
@@ -842,25 +875,21 @@ class Group(
 
 @beartype
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
+    """Top-level container for an animation, defining canvas size and background color.
+
+    Must be used as a context manager (``with Scene(...) as s:``) before adding
+    child nodes. Registers itself as a root object upon creation.
+
+    Args:
+        width: Canvas width in pixels.
+        height: Canvas height in pixels.
+        color: Background color (string or `Color` instance).
+        cue_at_start: If ``True``, frame 0 is automatically added as a cue point.
+    """
+
     kind = "scene"
 
     def __init__(self, width: SupportsFloat | None = None, height: SupportsFloat | None = None, color: str | Color | None = None, cue_at_start: bool | None = None):
-        """Create a new `Scene` and register it as a root object.
-
-        A scene is the top-level container for all nodes in an animation. It
-        defines the canvas dimensions and background color and must be used as a
-        context manager (``with scene() as s:``) before adding child nodes.
-
-        Args:
-            width: Canvas width in pixels. 
-            height: Canvas height in pixels.
-            color: Background color of the scene (String or instance of Color)
-            cue_at_start: If ``True``, frame 0 is automatically added as a cue
-                point.
-
-        Returns:
-            The newly created `Scene` node.
-        """        
         set_frame(0)
         super().__init__(put_in_context=False)
         self._init_context_manager()
@@ -921,6 +950,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 
 @beartype
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
+    """A rectangle shape node with animatable position, size, fill, and stroke."""
+
     kind = "rect"
 
     def __init__(self):
@@ -933,6 +964,8 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 
 @beartype
 class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
+    """An ellipse shape node with animatable position, size, fill, and stroke."""
+
     kind = "ellipse"
 
     def __init__(self):
@@ -945,6 +978,13 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 
 @beartype
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
+    """A vector path composed of move, line, cubic, and close command nodes.
+
+    Build the shape by calling `move_to`, `line_to`, `cubic_to`, and `close` in
+    sequence. Supports crop animations and optional arrowheads via
+    `triangle_arrow`.
+    """
+
     kind = "path"
 
     def __init__(self):
@@ -1126,6 +1166,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     
 
 class PathMove(Node, PositionMixin):
+    """A move-to path command that repositions the drawing cursor without drawing."""
+
     kind = "move"
 
     def __init__(self, parent, x, y):
@@ -1134,6 +1176,8 @@ class PathMove(Node, PositionMixin):
 
 
 class PathLine(Node, PositionMixin):
+    """A line-to path command that draws a straight line to its target position."""
+
     kind = "line"
 
     def __init__(self, parent, x, y):
@@ -1142,6 +1186,7 @@ class PathLine(Node, PositionMixin):
 
 
 class PathClose(Node):
+    """A close-path command that draws a straight line back to the start of the current subpath."""
 
     def __init__(self, parent):
         super().__init__(put_in_context=False, parent=parent)
@@ -1150,6 +1195,8 @@ class PathClose(Node):
 
 
 class PathCubic(Node, PositionMixin):
+    """A cubic Bézier curve command with two animatable control points (`c1` and `c2`)."""
+
     kind = "cubic"
 
     def __init__(self, parent, x, y):
@@ -1228,6 +1275,12 @@ class PathCubic(Node, PositionMixin):
 
 
 class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
+    """An image node that loads and displays a raster image file.
+
+    Supports optional aspect-ratio preservation and per-layer visibility control
+    for ORA (OpenRaster) files via `layer`.
+    """
+
     kind = "image"
 
     def __init__(self, image_path: str, keep_aspect: bool = True):
@@ -1283,6 +1336,8 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 
 
 class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
+    """A named layer within an ORA image, rendered as a child of an `Image` node."""
+
     kind = "layer"
 
     def __init__(self, layer_name):

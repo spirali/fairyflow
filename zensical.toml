@@ -1,3 +1,4 @@
+
 # ============================================================================
 #
 # The configuration produced by default is meant to highlight the features
@@ -48,6 +49,12 @@ nav = [
     "index.md",
     "getstarted.md",
     "structure.md",
+    "shapes.md",
+    "text.md",
+    "images.md",
+    "layout.md",
+    "anim.md",
+    "cues.md",
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize

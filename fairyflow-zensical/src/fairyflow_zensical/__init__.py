@@ -3,14 +3,14 @@ Zensical plugin for ``ffpy`` custom fenced code blocks.
 
 Image mode:
     ```ffpy frame=3
-    with scene():
+    with Scene():
         Rect().size(20, 20).color("green")
     ```
     Renders frame N as PNG, embeds as base64 data-URI <img>.
 
 Video mode:
     ```ffpy video="mp4"
-    with scene():
+    with Scene():
         Rect().size(20, 20).color("green")
     ```
     Renders all frames, runs ffmpeg, saves to docs/assets/ffpy/<hash>.mp4,

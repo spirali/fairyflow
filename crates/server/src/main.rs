@@ -322,14 +322,40 @@ async fn run_init(directory: PathBuf) {
         std::process::exit(1);
     }
 
-    let files = ["fairyflow.toml", "scene1.ffpy", "main.ffsq"];
-    for name in &files {
+    for subdir in &["scenes", "sequences"] {
+        let path = directory.join(subdir);
+        if let Err(e) = tokio::fs::create_dir_all(&path).await {
+            eprintln!("error: failed to create directory {}: {e}", path.display());
+            std::process::exit(1);
+        }
+    }
+
+    let files: &[(&str, &str)] = &[
+        (
+            "fairyflow.toml",
+            "fps = 24\n\n# Prologue is automatically included into any scene file\nprologue = \"prologue.py\"\n",
+        ),
+        (
+            "prologue.py",
+            "from fairyflow import *\n\nset_default_scene(width=300, height=200, color=\"white\", cue_at_start=True)\n",
+        ),
+        (
+            "scenes/scene1.ffpy",
+            "with Scene():\n    stext(\"Hello world!\").fade_out()\n",
+        ),
+        (
+            "sequences/sequence1.ffsq",
+            "{\n  \"scene_files\": [\n    \"scenes/scene1.ffpy\"\n  ]\n}\n",
+        ),
+    ];
+
+    for (name, content) in files {
         let path = directory.join(name);
         if path.exists() {
             eprintln!("warning: {} already exists, skipping", path.display());
             continue;
         }
-        if let Err(e) = tokio::fs::write(&path, "").await {
+        if let Err(e) = tokio::fs::write(&path, content).await {
             eprintln!("error: failed to create {}: {e}", path.display());
             std::process::exit(1);
         }

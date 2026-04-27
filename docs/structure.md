@@ -63,10 +63,19 @@ A project created with `fairyflow init` looks like:
 
 ```
 my_project/
-├── scene.py        ← animation code (add more .py files as needed)
-└── assets/         ← images and other resources
+├── fairyflow.toml       ← project settings (fps, prologue path)
+├── prologue.py          ← shared imports and defaults for all scenes
+├── scenes/
+│   └── scene1.ffpy      ← animation code (add more .ffpy files as needed)
+├── sequences/
+│   └── sequence1.ffsq   ← sequence definition (ordered playlist of scenes)
+└── assets/              ← images and other resources
 ```
 
-Each `.py` file is a **scene file** — a normal Python script that imports
-`from fairyflow import *` and creates `Scene` objects via `with Scene():` blocks.
-Multiple scenes in one file are rendered as separate animations.
+**`fairyflow.toml`** configures the project frame rate and the path to the prologue file.
+
+**`prologue.py`** is automatically prepended to every scene file before evaluation. Use it for shared imports and default scene settings via `set_default_scene`.
+
+Each `.ffpy` file in `scenes/` is a **scene file** — a Python script that creates `Scene` objects via `with Scene():` blocks. Multiple scenes in one file are rendered as separate animations.
+
+A **sequence** (`.ffsq`) is a JSON file that collects scene files into an ordered playlist.

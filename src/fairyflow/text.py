@@ -224,7 +224,7 @@ def stext(input_text: str, *, strip: bool =True, delimiters: str = "<>"):
     close_d = delimiters[1]
     nodes, _ = _parse_content(input_text, 0, open_d, close_d)
 
-    t = text()
+    t = Text()
 
     if not nodes:
         return t

@@ -28,12 +28,14 @@ It starts a local web server. Click the printed URL to open the interactive envi
 
 ## First code & render
 
-Open `scene.py` in the editor and write your first scene. Press ++ctrl+s++ to evaluate:
+Open `scenes/scene1.ffpy`, it will contain the following code; 
+press ++ctrl+s++ to evaluate.
 
-```ffpy frame=0
+```ffpy video="mp4"
 with Scene():
-    Rect().size(120, 70).color("steelblue").align_x(0.5).align_y(0.5)
+    stext("Hello world!").fade_out()
 ```
+
 
 ## Your first animation
 

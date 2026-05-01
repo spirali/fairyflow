@@ -10,9 +10,9 @@ icon: lucide/shapes
 `.color()`, and position with `.xy(x, y)`. By default the rect has zero size and is placed
 according to the parent's layout (centered for the default layout).
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
-    Rect().size(160, 90).color("steelblue").align_x(0.5).align_y(0.5)
+    Rect().size(160, 90).color("steelblue")
 ```
 
 ### Stroke
@@ -20,9 +20,9 @@ with Scene():
 Add an outline with `.stroke_color()` and `.stroke_width()`. Setting a fill color to `None`
 gives a hollow shape.
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
-    r = Rect().size(160, 90).align_x(0.5).align_y(0.5)
+    r = Rect().size(160, 90)
     r.color("lightyellow").stroke_color("navy").stroke_width(4)
 ```
 
@@ -32,12 +32,15 @@ with Scene():
 align the node using a factor: `0.0` = left/top, `0.5` = center, `1.0` = right/bottom.
 `.move(dx, dy)` shifts the node relative to its current position.
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     Rect().size(60, 60).color("tomato").xy(20, 20)
     Rect().size(60, 60).color("gold").xy(120, 70)
     Rect().size(60, 60).color("mediumseagreen").xy(220, 120)
 ```
+
+TODO: Demo for using `.align`
+TODO: Demo for using `.move`
 
 ---
 
@@ -46,12 +49,12 @@ with Scene():
 `Ellipse` draws an ellipse. When `width == height` it becomes a circle. Its API is identical
 to `Rect`.
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
-    Ellipse().size(160, 110).color("coral").align_x(0.5).align_y(0.5)
+    Ellipse().size(160, 110).color("coral")
 ```
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     Ellipse().size(80, 80).color("orchid").xy(30, 60)
     Ellipse().size(80, 40).color("gold").xy(130, 80)
@@ -68,16 +71,15 @@ filled with `.color()`.
 
 ### Line segments
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke_color("darkslateblue").stroke_width(3)
+    p.stroke_color("darkslateblue").stroke_width(3).color("lavender")
     p.move_to().xy(30, 100)
     p.line_to().xy(150, 40)
     p.line_to().xy(270, 100)
     p.line_to().xy(150, 160)
     p.close()
-    p.color("lavender")
 ```
 
 ### Cubic Bézier curves
@@ -85,7 +87,7 @@ with Scene():
 `.cubic_to()` appends a cubic Bézier segment. Use `.c1_xy(dx, dy)` and `.c2_xy(dx, dy)` to
 set the two control point offsets (relative to the segment start and end respectively).
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     p = Path()
     p.stroke_color("darkorange").stroke_width(3)
@@ -98,7 +100,7 @@ with Scene():
 `.triangle_arrow()` adds a filled arrowhead at the end of a path. Pass `"start"` to place it
 at the beginning instead. The arrowhead is automatically sized to match the stroke width.
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     p = Path()
     p.stroke_color("steelblue").stroke_width(3)
@@ -108,12 +110,15 @@ with Scene():
     p.triangle_arrow("start").color("tomato")
 ```
 
+TODO: Mention that color is inherited but can be overriden
+TODO: Demo for larger arrow
+
 ### Path cropping
 
 `crop_start` and `crop_end` trim the path from either end. Values are in `[0.0, 1.0]` where
 `0.0` is the full extent. This is mainly used to animate paths drawing themselves in.
 
-```ffpy frame=0
+```ffpy frame="0"
 with Scene():
     p = Path()
     p.stroke_color("mediumseagreen").stroke_width(4)

@@ -6,9 +6,35 @@ icon: lucide/folder-tree
 
 ## Concepts
 
-FairyFlow animations are built around three layers: the **sequences**, the **scene file**, and the **scene**.
-A sequence (`.ffsq` file) a collection of scene files. Each scene file (`.ffpy`) may contain one or more scenes.
+FairyFlow animations are built around three layers: the **sequence**, the **scene file**, and the **scene**.
 
+## Sequence
+
+A sequence is an ordered collection of scene files. 
+Final export of the project is done in through sequences.
+It is stored in files with suffix `.ffsq`.
+
+## Scene file
+
+A scene file (suffix `.ffpy`) is a Python file that defines one or more scenes.
+
+
+## Project layout
+
+A project created with `fairyflow init` looks like:
+
+```
+my_project/
+├── fairyflow.toml       ← project settings (fps, prologue path)
+├── prologue.py          ← shared imports and defaults for all scenes
+├── scenes/
+│   └── scene1.ffpy      ← animation code (add more .ffpy files as needed)
+└── sequences/
+    └── sequence1.ffsq   ← sequence definition (ordered playlist of scenes)
+```
+
+It is just an initial layout; scenes and sequences could be placed in arbitrary directories.
+The only fixed path is `fairyflow.toml` that has to be in the root.
 
 
 ### Scene
@@ -48,18 +74,3 @@ Leaf nodes are the building blocks of a scene:
 | `Image` | Raster image (PNG, JPEG, SVG, ORA) |
 
 All nodes support animatable position, alpha, and z-ordering. Shape nodes also support color and stroke. See the individual pages for details.
-
-
-## Project layout
-
-A project created with `fairyflow init` looks like:
-
-```
-my_project/
-├── fairyflow.toml       ← project settings (fps, prologue path)
-├── prologue.py          ← shared imports and defaults for all scenes
-├── scenes/
-│   └── scene1.ffpy      ← animation code (add more .ffpy files as needed)
-└── sequences/
-    └── sequence1.ffsq   ← sequence definition (ordered playlist of scenes)
-```

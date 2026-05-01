@@ -565,8 +565,8 @@ class StyleMixin(AlphaMixin):
 class NodeWithChildren(Node):
     """Base class for nodes that own a list of child nodes."""
 
-    def __init__(self, put_in_context: bool = True, children=None):
-        super().__init__(put_in_context=put_in_context)
+    def __init__(self, put_in_context: bool = True, parent: Node = None, children=None):
+        super().__init__(put_in_context=put_in_context, parent=parent)
         if children is None:
             children = []
         self._children = children

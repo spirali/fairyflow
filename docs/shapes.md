@@ -39,8 +39,23 @@ with Scene():
     Rect().size(60, 60).color("mediumseagreen").xy(220, 120)
 ```
 
-TODO: Demo for using `.align`
-TODO: Demo for using `.move`
+`.align_x` / `.align_y` place the node relative to the scene canvas — `0.0` = left/top edge, `0.5` = center, `1.0` = right/bottom edge:
+
+```ffpy frame="0"
+with Scene():
+    Rect().size(60, 60).color("tomato").align_x(0).align_y(0)
+    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
+    Rect().size(60, 60).color("mediumseagreen").align_x(1).align_y(1)
+```
+
+`.move(dx, dy)` shifts a node by a fixed offset relative to its already-computed position, so it composes freely with `.align_x` / `.align_y` or `.xy()`:
+
+```ffpy frame="0"
+with Scene():
+    Rect().size(60, 60).color("orchid").align_x(0.5).align_y(0.5).move(-80, 0)
+    Rect().size(60, 60).color("steelblue").align_x(0.5).align_y(0.5)
+    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5).move(80, 0)
+```
 
 ---
 
@@ -110,8 +125,26 @@ with Scene():
     p.triangle_arrow("start").color("tomato")
 ```
 
-TODO: Mention that color is inherited but can be overriden
-TODO: Demo for larger arrow
+The arrowhead inherits the path's stroke color by default. Call `.color()` on the returned arrow object to override it independently — as shown above with the red start arrow.
+
+The arrowhead scales automatically with stroke width. Pass `length` and `width` to `triangle_arrow()` to override the size explicitly — `length` is the tip-to-base distance, `width` is the base width (both default to `3 × stroke_width`):
+
+```ffpy frame="0"
+with Scene():
+    # top: automatic size (stroke_width=8 → arrow 24×24)
+    p = Path()
+    p.stroke_color("steelblue").stroke_width(8)
+    p.move_to().xy(40, 60)
+    p.line_to().xy(250, 60)
+    p.triangle_arrow()
+
+    # bottom: same stroke but arrow manually set to length=40, width=20
+    q = Path()
+    q.stroke_color("steelblue").stroke_width(8)
+    q.move_to().xy(40, 140)
+    q.line_to().xy(250, 140)
+    q.triangle_arrow(length=40, width=20)
+```
 
 ### Path cropping
 

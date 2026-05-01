@@ -1,3 +1,7 @@
+---
+icon: lucide/pause-circle
+---
+
 # Exports
 
 You can export to the following formats:
@@ -8,7 +12,7 @@ You can export to the following formats:
 
 All these options are available in sequence editor.
 
-# Player
+## Player
 
 Fairyflow package (.ffpkg) is a native format for Fairy flow.
 

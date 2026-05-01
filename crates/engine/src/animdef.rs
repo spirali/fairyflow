@@ -1,8 +1,10 @@
 use crate::FrameId;
 use crate::avalue::AnimatedValue;
 use crate::basictypes::{AvId, NodeId};
-use crate::nodes::{Node, SceneDef};
+use crate::nodes::{Node, NodeKind, SceneDef};
 use crate::eval::EvalCtx;
+use crate::values::Eval;
+use renderer_core::{AffineTransform, Position as RcPosition, positional_transform};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -176,17 +178,8 @@ impl AnimationDef {
         let (s, local_frame) = self.resolve(frame_id, selection);
         let ctx = EvalCtx::new(local_frame, &s.scene, &s.nodes);
         let mut map = HashMap::new();
-        for (node_id, node) in &s.nodes {
-            let x = node.get_x(&ctx).unwrap_or(0.0);
-            let y = node.get_y(&ctx).unwrap_or(0.0);
-            let w = node.get_width(&ctx).unwrap_or(0.0);
-            let h = node.get_height(&ctx).unwrap_or(0.0);
-            map.insert(node_id.as_u64(), NodeBounds {
-                x: x as f32,
-                y: y as f32,
-                width: w as f32,
-                height: h as f32,
-            });
+        for &child_id in &s.scene.children {
+            collect_world_bounds(&s.nodes, child_id, &ctx, AffineTransform::identity(), &mut map);
         }
         Ok(map)
     }
@@ -290,6 +283,62 @@ impl AnimationDef {
             }
         }
     }
+}
+
+// ──────────────────────── World-space bounds helpers ─────────────────────────
+
+fn collect_world_bounds(
+    nodes: &HashMap<NodeId, Node>,
+    node_id: NodeId,
+    ctx: &EvalCtx,
+    parent_transform: AffineTransform,
+    map: &mut HashMap<u64, NodeBounds>,
+) {
+    let Some(node) = nodes.get(&node_id) else { return };
+
+    let x = node.get_x(ctx).unwrap_or(0.0);
+    let y = node.get_y(ctx).unwrap_or(0.0);
+    let w = node.get_width(ctx).unwrap_or(0.0);
+    let h = node.get_height(ctx).unwrap_or(0.0);
+
+    if let NodeKind::Group { scale_x, scale_y, rotation, pivot_x, pivot_y, children, .. } = &node.kind {
+        let sx = scale_x.eval(ctx).unwrap_or(1.0);
+        let sy = scale_y.eval(ctx).unwrap_or(1.0);
+        let rot = rotation.eval(ctx).unwrap_or(0.0);
+        let pvx = (pivot_x.eval(ctx).unwrap_or(0.0) * w) as f32;
+        let pvy = (pivot_y.eval(ctx).unwrap_or(0.0) * h) as f32;
+        let pos = RcPosition { x, y };
+
+        // Maps group-local coordinates → world coordinates
+        let child_transform = positional_transform(&pos, sx, sy, rot, pvx, pvy, parent_transform);
+
+        // Group's own AABB: corners (0,0)-(w,h) in group-local space
+        map.insert(node_id.as_u64(), corners_aabb(0.0, 0.0, w as f32, h as f32, child_transform));
+
+        for &c in children {
+            collect_world_bounds(nodes, c, ctx, child_transform, map);
+        }
+    } else {
+        // Non-group: position is in parent-local space; apply parent_transform to corners
+        map.insert(node_id.as_u64(), corners_aabb(x as f32, y as f32, w as f32, h as f32, parent_transform));
+
+        for &c in node.kind.children() {
+            collect_world_bounds(nodes, c, ctx, parent_transform, map);
+        }
+    }
+}
+
+fn corners_aabb(x: f32, y: f32, w: f32, h: f32, t: AffineTransform) -> NodeBounds {
+    let pts = [(x, y), (x + w, y), (x, y + h), (x + w, y + h)];
+    let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
+    let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    for (cx, cy) in pts {
+        let wx = cx * t.a + cy * t.c + t.e;
+        let wy = cx * t.b + cy * t.d + t.f;
+        min_x = min_x.min(wx); max_x = max_x.max(wx);
+        min_y = min_y.min(wy); max_y = max_y.max(wy);
+    }
+    NodeBounds { x: min_x, y: min_y, width: max_x - min_x, height: max_y - min_y }
 }
 
 // ───────────────────────────────── Tests ─────────────────────────────────────

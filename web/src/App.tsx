@@ -21,8 +21,8 @@ interface Tab { path: string; isDirty: boolean; isFfsq?: boolean }
 interface RenderedFrameResponse { n: number; png: string }
 
 /** Depth-first hit-test against the scene tree.
- *  `bounds` values are parent-relative, so `clickX/Y` must also be in the
- *  parent's local space at each recursion level.
+ *  `bounds` values are world-space (scene coordinates), so `clickX/Y`
+ *  remain unchanged across recursion levels.
  *  `tol` expands the hit region on all sides (in scene units), making
  *  zero-size and very small elements still selectable. */
 function hitTest(nodes: RawNode[], clickX: number, clickY: number, bounds: Record<string, NodeBounds>, tol: number): number | null {
@@ -31,7 +31,7 @@ function hitTest(nodes: RawNode[], clickX: number, clickY: number, bounds: Recor
     if (!b) continue;
     if (clickX >= b.x - tol && clickX <= b.x + b.width + tol && clickY >= b.y - tol && clickY <= b.y + b.height + tol) {
       if (node.kind === 'group') {
-        const child = hitTest(node.children ?? [], clickX - b.x, clickY - b.y, bounds, tol);
+        const child = hitTest(node.children ?? [], clickX, clickY, bounds, tol);
         if (child != null) return child;
       }
       return node.id;

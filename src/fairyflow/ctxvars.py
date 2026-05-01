@@ -32,11 +32,11 @@ class BuildState:
         self._set_frame(new_frames)
         self._time = frames_to_time(new_frames)
 
-    def set_time(self, time: float):
+    def set_time(self, time: SupportsFloat):
         self._time = time
         self._set_frame(time_to_frames(time))
 
-    def adv_time(self, time: float):
+    def adv_time(self, time: SupportsFloat):
         self._time += time        
         self._set_frame(time_to_frames(self._time))
 

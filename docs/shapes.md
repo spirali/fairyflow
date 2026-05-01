@@ -28,34 +28,7 @@ with Scene():
 
 ### Positioning
 
-`.xy(x, y)` sets the absolute position within the parent. `.align_x(f)` and `.align_y(f)`
-align the node using a factor: `0.0` = left/top, `0.5` = center, `1.0` = right/bottom.
-`.move(dx, dy)` shifts the node relative to its current position.
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("tomato").xy(20, 20)
-    Rect().size(60, 60).color("gold").xy(120, 70)
-    Rect().size(60, 60).color("mediumseagreen").xy(220, 120)
-```
-
-`.align_x` / `.align_y` place the node relative to the scene canvas — `0.0` = left/top edge, `0.5` = center, `1.0` = right/bottom edge:
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("tomato").align_x(0).align_y(0)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("mediumseagreen").align_x(1).align_y(1)
-```
-
-`.move(dx, dy)` shifts a node by a fixed offset relative to its already-computed position, so it composes freely with `.align_x` / `.align_y` or `.xy()`:
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("orchid").align_x(0.5).align_y(0.5).move(-80, 0)
-    Rect().size(60, 60).color("steelblue").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5).move(80, 0)
-```
+See [Layout — Default (centering) layout](layout.md) for `.xy()`, `.align_x()`, `.align_y()`, and `.move()`.
 
 ---
 

@@ -6,12 +6,12 @@ icon: lucide/image
 
 ## Image
 
-`Image` loads and displays a raster image file. Supported formats include PNG, JPEG, and SVG.
+`Image` loads and displays image. Supported formats include PNG, JPEG, ORA, and SVG.
 Pass the file path to the constructor:
 
 ```python
 with Scene():
-    Image("assets/logo.png").align_x(0.5).align_y(0.5)
+    Image("assets/logo.png")
 ```
 
 ### Size and aspect ratio
@@ -21,28 +21,38 @@ override the display size with `.size(width, height)`:
 
 ```python
 with Scene():
-    Image("assets/photo.jpg", keep_aspect=True).size(200, 150).align_x(0.5).align_y(0.5)
+    Image("assets/photo.jpg", keep_aspect=True).size(200, 150)
 ```
 
 Pass `keep_aspect=False` to stretch the image to fill the given dimensions exactly:
 
 ```python
 with Scene():
-    Image("assets/photo.jpg", keep_aspect=False).size(200, 150).align_x(0.5).align_y(0.5)
+    Image("assets/photo.jpg", keep_aspect=False).size(200, 150)
 ```
+
+When only one dimension is given, the other is computed automatically to preserve the aspect ratio:
+
+```python
+with Scene():
+    # Set width only → height is calculated from the image's aspect ratio
+    Image("assets/photo.jpg").width(200)
+
+    # Set height only → width is calculated from the image's aspect ratio
+    Image("assets/photo.jpg").height(150)
+```
+
 
 ### Positioning and alpha
 
 `Image` supports the same `.xy()`, `.align_x()`, `.align_y()`, and `.alpha()` methods as
-shape nodes, so images can be positioned, faded, and animated just like any other node.
+shape nodes — see [Layout](layout.md) for positioning details.
 
 ---
 
-## Layered images (ORA)
+## Layered images (ORA, SVG)
 
-FairyFlow supports **OpenRaster** (`.ora`) files — layered image files that you can create
-with Krita, GIMP, or other painting apps. Each named layer in the ORA file can be controlled
-independently.
+FairyFlow allows to work with individual layers of an image with format that supports layers: SVG and ORA.
 
 ### Accessing layers
 
@@ -73,16 +83,4 @@ with Scene():
     linear()
     adv_time(1)
     overlay.alpha(1)         # fades in over 1 second
-```
-
----
-
-## SVG images
-
-SVG files are treated as a single-layer image. They scale losslessly to any size and support
-`keep_aspect` just like raster images:
-
-```python
-with Scene():
-    Image("assets/icon.svg").size(80, 80).align_x(0.5).align_y(0.5)
 ```

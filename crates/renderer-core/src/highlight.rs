@@ -43,8 +43,7 @@ pub fn highlight_text(
     theme_set: &ThemeSet,
 ) -> SyntaxColors {
     let syntax = syntax_set
-        .find_syntax_by_name(language)
-        .or_else(|| syntax_set.find_syntax_by_extension(language))
+        .find_syntax_by_token(language)
         .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
 
     let theme = theme_set

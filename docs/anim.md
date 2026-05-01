@@ -16,7 +16,7 @@ values at specific frames. Five functions control the timeline:
 | `adv_frames(n)` | Advance by an integer number of frames |
 | `set_frame(n)` | Jump to a specific frame number |
 
-The default frame rate is **24 fps**.
+The default frame rate is **24 fps**. This can be changed in `fairyflow.toml`.
 
 ---
 
@@ -33,15 +33,13 @@ Call these functions at any point to switch mode for subsequent attribute change
 with Scene(width=300, height=140):
     # left rect: step (instant color change at 1.5 s)
     a = Rect().size(120, 80).xy(15, 30).color("steelblue")
-    a.hold()
     step()
     adv_time(1.5)
     a.color("tomato")
 
     # right rect: linear (smooth color transition over 1.5 s)
-    set_time(0)
+    set_time(0.0)
     b = Rect().size(120, 80).xy(165, 30).color("steelblue")
-    b.hold()
     linear()
     adv_time(1.5)
     b.color("tomato")
@@ -68,16 +66,18 @@ Use `.hold()` to freeze all current attribute values before starting a new segme
 ```ffpy video="mp4"
 with Scene():
     r = Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
-    r.hold()         # freeze at frame 0
+    adv_time(1)    
+    r.hold()    
     linear()
     adv_time(1)
     r.color("tomato").size(120, 120)
+    adv_time(0.5)
     r.hold()
-    adv_time(0.5)    # pause at large size
     linear()
     adv_time(1)
     r.color("steelblue").size(60, 60)
 ```
+
 
 ---
 
@@ -101,11 +101,9 @@ with Scene():
 with Scene():
     with Group().size(80, 80).align_x(0.5).align_y(0.5) as g:
         Ellipse().size(80, 80).color("coral")
-    g.hold()
     linear()
     adv_time(1)
     g.scale(0.2)
-    g.hold()
     linear()
     adv_time(1)
     g.scale(1)
@@ -132,12 +130,11 @@ You can also set alpha directly:
 with Scene():
     r = Rect().size(120, 80).color("steelblue").align_x(0.5).align_y(0.5)
     r.alpha(0)
-    r.hold()
     linear()
     adv_time(1)
     r.alpha(1)
-    r.hold()
     adv_time(0.5)
+    r.hold()    
     linear()
     adv_time(1)
     r.alpha(0)
@@ -153,6 +150,7 @@ extent (as a fraction of the group width), and `clip_y`/`clip_h` control the ver
 `.hide_right(time)` and `.hide_left(time)` are convenience helpers that animate the clip to
 conceal the group content.
 
+
 ```ffpy video="mp4"
 with Scene():
     with Group().size(200, 60).align_x(0.5).align_y(0.5) as g:
@@ -167,3 +165,15 @@ with Scene():
     g.clip_w(1)           # reveal left-to-right
 ```
 
+
+## Build State
+
+TODO: Example for `bstate()`
+
+```
+with bstate():  # remeber current time and transition style
+    linear()
+    adv_time(0.5)
+
+# Here time is restored, transition style is restored
+```

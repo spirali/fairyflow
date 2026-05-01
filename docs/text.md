@@ -77,19 +77,7 @@ t.span("Custom text").font("MyFont").font_size(24)
 
 ## Positioning
 
-`Text` supports `.xy(x, y)` for explicit placement. Without a position the node is centered
-in its parent by the default layout.
-
-```ffpy frame="0"
-with Scene():
-    title = Text()
-    title.span("My Presentation").font_size(30).bold().color("darkslateblue")
-    title.xy(30, 50)
-
-    sub = Text()
-    sub.span("FairyFlow — animated slides in Python").font_size(14).color("steelblue")
-    sub.xy(30, 120)
-```
+`Text` supports `.xy()`, `.align_x()`, `.align_y()`, and `.move()` for placement — see [Layout](layout.md) for details.
 
 ## stext
 
@@ -113,16 +101,34 @@ By default `stext` uses `<tag>...</tag>` syntax. Pass `delimiters="[]"` to use `
 ## Syntax highlighting
 
 Enable source-code syntax highlighting on a `Text` node with `.sh(language)`.
-An optional `.sh(language, theme=...)` argument selects the color theme
-(defaults to a built-in dark theme).
 
 ```ffpy frame="0"
-with Scene(width=400, height=220, color="#fefefe"):
+with Scene():
     stext(
 """
 x = "world"
 print(f"Hello {x}!")
 """
-    ).sh("python").font("monospace")
+    ).sh("Python").font("monospace")
 ```
 
+An optional `.sh(language, theme=...)` argument selects the color theme.
+Preinstalled themes: 
+
+* "InspiredGitHub" (default)
+* "base16-ocean.dark"
+* "base16-eighties.dark"
+* "base16-mocha.dark"
+* "base16-ocean.light"
+* "Solarized (dark)"
+* "Solarized (light)"
+
+```ffpy frame="0"
+with Scene(color="#2b303b"):
+    stext(
+"""
+x = "world"
+print(f"Hello {x}!")
+"""
+    ).sh("Python", theme="base16-ocean.dark").font("monospace")
+```

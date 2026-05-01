@@ -314,9 +314,23 @@ async fn load_anim(json_path: &PathBuf) -> AnimationDef {
 }
 
 async fn run_init(directory: PathBuf) {
+    let r    = "\x1b[0m";  // reset
+    let b    = "\x1b[1m";  // bold
+    let pink = "\x1b[95m"; // bright magenta
+    let blue = "\x1b[94m"; // bright blue
+    let gray = "\x1b[90m"; // dark gray
+    let grn  = "\x1b[92m"; // bright green
+    let yel  = "\x1b[93m"; // bright yellow
+    let red  = "\x1b[91m"; // bright red
+
+    println!();
+    println!("  {b}{pink}Fairy{r}");
+    println!("  {b}{blue}   Flow{r}");
+    println!();
+
     if let Err(e) = tokio::fs::create_dir_all(&directory).await {
         eprintln!(
-            "error: failed to create directory {}: {e}",
+            "  {red}{b}error:{r} failed to create directory {}: {e}",
             directory.display()
         );
         std::process::exit(1);
@@ -325,7 +339,10 @@ async fn run_init(directory: PathBuf) {
     for subdir in &["scenes", "sequences"] {
         let path = directory.join(subdir);
         if let Err(e) = tokio::fs::create_dir_all(&path).await {
-            eprintln!("error: failed to create directory {}: {e}", path.display());
+            eprintln!(
+                "  {red}{b}error:{r} failed to create directory {}: {e}",
+                path.display()
+            );
             std::process::exit(1);
         }
     }
@@ -352,15 +369,20 @@ async fn run_init(directory: PathBuf) {
     for (name, content) in files {
         let path = directory.join(name);
         if path.exists() {
-            eprintln!("warning: {} already exists, skipping", path.display());
+            eprintln!(
+                "  {yel}{b}warning:{r} {} already exists, skipping",
+                path.display()
+            );
             continue;
         }
         if let Err(e) = tokio::fs::write(&path, content).await {
-            eprintln!("error: failed to create {}: {e}", path.display());
+            eprintln!("  {red}{b}error:{r} failed to create {}: {e}", path.display());
             std::process::exit(1);
         }
-        println!("created {}", path.display());
+        println!("  {grn}created{r} {}", path.display());
     }
 
-    println!("initialized project in {}", directory.display());
+    println!("\n  {b}{grn}initialized{r} project in {b}{}{r}", directory.display());
+    println!("\n  open your project with:\n\n     {b}fairyflow open {}{r}", directory.display());
+    println!();
 }

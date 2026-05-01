@@ -7,6 +7,7 @@ import type { OnMount, Monaco } from '@monaco-editor/react';
 import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
+import type { FsEntry } from './components/FileTree';
 import SequenceEditor from './components/SequenceEditor';
 import SequencePlayer from './components/SequencePlayer';
 import type { ConsoleLine, InfoEntry, NodeBounds, RawNode, SceneData, SceneInfo, ServerMsg, SequenceRenderResult, WsStatus } from './types';
@@ -57,7 +58,15 @@ export default function App() {
     const tok = loadToken();
     if (!tok) { setAuthStatus('error'); return; }
     fetch(withToken('/ls'))
-      .then(r => { setAuthStatus(r.status === 401 ? 'error' : 'ok'); })
+      .then(r => {
+        if (r.status === 401) { setAuthStatus('error'); return; }
+        r.json().then((entries: FsEntry[]) => {
+          const scenesDir = entries.find(e => e.is_dir && e.name === 'scenes');
+          const first = scenesDir?.children?.find(e => !e.is_dir && e.name.endsWith('.ffpy'));
+          if (first) defaultFileRef.current = `scenes/${first.name}`;
+          setAuthStatus('ok');
+        }).catch(() => setAuthStatus('ok'));
+      })
       .catch(() => setAuthStatus('error'));
   }, []);
 
@@ -149,6 +158,8 @@ export default function App() {
   const currentFileRef = useRef<string | null>(null);
   const modelsRef = useRef<Map<string, ReturnType<Monaco['editor']['createModel']>>>(new Map());
   const viewStatesRef = useRef<Map<string, ViewState>>(new Map());
+
+  const defaultFileRef = useRef<string | null>(null);
 
   const setTabs = (t: Tab[]) => { tabsRef.current = t; setTabsState(t); };
   const setActiveTab = (i: number) => {
@@ -601,6 +612,10 @@ export default function App() {
       wsRef.current.send(JSON.stringify({ type: 'run', path }));
     });
 
+    if (defaultFileRef.current && tabsRef.current.length === 0) {
+      handleFileClick(defaultFileRef.current);
+    }
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       const path = currentFileRef.current;
       if (!path) return;
@@ -1038,7 +1053,7 @@ export default function App() {
           collapsedSize={0}
           onResize={handleFileTreeResize}
         >
-          <FileTree activeFile={currentFile} onFileClick={handleFileClick} refreshTrigger={fileTreeRefresh} />
+          <FileTree activeFile={currentFile} onFileClick={handleFileClick} refreshTrigger={fileTreeRefresh} initialExpandedDirs={defaultFileRef.current ? [defaultFileRef.current.split('/')[0]] : undefined} />
         </Panel>
 
         <PanelResizeHandle className="resize-handle horizontal" />

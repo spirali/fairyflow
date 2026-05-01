@@ -174,11 +174,12 @@ interface Props {
   activeFile: string | null;
   onFileClick: (path: string) => void;
   refreshTrigger?: number;
+  initialExpandedDirs?: string[];
 }
 
-export default function FileTree({ activeFile, onFileClick, refreshTrigger }: Props) {
+export default function FileTree({ activeFile, onFileClick, refreshTrigger, initialExpandedDirs }: Props) {
   const [tree, setTree] = useState<FsEntry[]>([]);
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set(initialExpandedDirs ?? []));
   const [contextItem, setContextItem] = useState<{ path: string; isDir: boolean } | null>(null);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [inputName, setInputName] = useState('');

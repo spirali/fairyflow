@@ -17,6 +17,14 @@ $ fairyflow init <project_name>
 ```
 
 This creates an initial project layout. See [Project Structure](structure.md) for details.
+These files are created:
+
+
+* ``fairyflow.toml`` - Configuration file
+* ``prologue.py`` - Python file included into every scene
+* ``scenes/scene1.ffpy`` - A scene file
+* ``sequences/sequence1.ffsq`` - A sequence file (a sequence of scenes)
+
 
 ## Start development environment
 
@@ -36,21 +44,6 @@ with Scene():
     stext("Hello world!").fade_out()
 ```
 
-
-## Your first animation
-
-Add time-based changes to create motion:
-
-```ffpy video="mp4"
-with Scene():
-    r = Rect().size(60, 60).color("steelblue").xy(20, 70)
-    linear()
-    adv_time(1.5)
-    r.xy(220, 70).color("tomato")
-```
-
-`linear()` switches interpolation to smooth, and `adv_time(1.5)` advances the timeline by
-1.5 seconds. Attribute changes after that call are placed at the new time.
 
 ## Next steps
 

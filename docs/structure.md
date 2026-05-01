@@ -6,20 +6,10 @@ icon: lucide/folder-tree
 
 ## Concepts
 
-FairyFlow animations are built around three layers: the **project**, the **scene file**, and the **scene**.
+FairyFlow animations are built around three layers: the **sequences**, the **scene file**, and the **scene**.
+A sequence (`.ffsq` file) a collection of scene files. Each scene file (`.ffpy`) may contain one or more scenes.
 
-```mermaid
-graph TD
-    Project["Project (directory)"] --> SF1["scene.py"]
-    Project --> SF2["intro.py"]
-    Project --> Assets["assets/"]
-    SF1 --> S1["Scene"]
-    SF1 --> S2["Scene"]
-    S1 --> G["Group"]
-    S1 --> R["Rect"]
-    G --> E["Ellipse"]
-    G --> T["Text"]
-```
+
 
 ### Scene
 
@@ -30,7 +20,9 @@ with Scene(width=400, height=300, color="white"):
     ...
 ```
 
-The default scene size is **300 × 200** pixels.
+The default scene size is **300 × 200** pixels; **white** background.
+Note that width and height is a logical size; **not** a target resolution.
+All rendering information are stored as vector graphics and rasterized into the final resolution at very last moment.
 
 ### Group
 
@@ -57,6 +49,7 @@ Leaf nodes are the building blocks of a scene:
 
 All nodes support animatable position, alpha, and z-ordering. Shape nodes also support color and stroke. See the individual pages for details.
 
+
 ## Project layout
 
 A project created with `fairyflow init` looks like:
@@ -67,15 +60,6 @@ my_project/
 ├── prologue.py          ← shared imports and defaults for all scenes
 ├── scenes/
 │   └── scene1.ffpy      ← animation code (add more .ffpy files as needed)
-├── sequences/
-│   └── sequence1.ffsq   ← sequence definition (ordered playlist of scenes)
-└── assets/              ← images and other resources
+└── sequences/
+    └── sequence1.ffsq   ← sequence definition (ordered playlist of scenes)
 ```
-
-**`fairyflow.toml`** configures the project frame rate and the path to the prologue file.
-
-**`prologue.py`** is automatically prepended to every scene file before evaluation. Use it for shared imports and default scene settings via `set_default_scene`.
-
-Each `.ffpy` file in `scenes/` is a **scene file** — a Python script that creates `Scene` objects via `with Scene():` blocks. Multiple scenes in one file are rendered as separate animations.
-
-A **sequence** (`.ffsq`) is a JSON file that collects scene files into an ordered playlist.

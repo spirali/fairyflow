@@ -4,7 +4,6 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef
 import type { PanelSize } from 'react-resizable-panels';
 import Editor from '@monaco-editor/react';
 import type { OnMount, Monaco } from '@monaco-editor/react';
-import MenuBar from './components/MenuBar';
 import TreeView from './components/TreeView';
 import FileTree from './components/FileTree';
 import type { FsEntry } from './components/FileTree';
@@ -987,8 +986,6 @@ export default function App() {
   return (
     <>
     <div className="app">
-      <MenuBar />
-
       {wsStatus === 'reconnecting' && (
         <div className="ws-banner ws-banner-reconnecting">
           Connection lost — reconnecting…

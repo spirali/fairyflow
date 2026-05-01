@@ -56,6 +56,7 @@ nav = [
     "anim.md",
     "cues.md",
     "exports.md",
+    "api.md",
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize

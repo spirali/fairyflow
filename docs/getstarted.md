@@ -37,7 +37,7 @@ It starts a local web server. Click the printed URL to open the interactive envi
 ## First code & render
 
 Open `scenes/scene1.ffpy`, it will contain the following code; 
-press ++ctrl+s++ to evaluate.
+press ++ctrl+enter++ to evaluate.
 
 ```ffpy video="mp4"
 with Scene():

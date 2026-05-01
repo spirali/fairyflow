@@ -106,12 +106,12 @@ def _render_frame_png(json_file: Path, frames_dir: Path, frame: int) -> Path:
     if server is None:
         raise RuntimeError("server binary not found; run `cargo build` first")
     result = subprocess.run(
-        [str(server), "render-json", str(json_file), str(frames_dir),
+        [str(server), "render-png", str(json_file), str(frames_dir),
          "--frames", str(frame)],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"render-json failed:\n{result.stderr.strip()}")
+        raise RuntimeError(f"render-png failed:\n{result.stderr.strip()}")
     png = frames_dir / f"frame{frame}.png"
     if not png.exists():
         raise RuntimeError(f"Expected frame PNG not written: {png}")
@@ -124,12 +124,12 @@ def _render_mp4(json_file: Path, output_mp4: Path,
     if server is None:
         raise RuntimeError("server binary not found; run `cargo build` first")
     result = subprocess.run(
-        [str(server), "render-json", str(json_file), str(output_mp4),
-         "--video", "--fps", str(fps), "--codec", codec, "--crf", str(crf)],
+        [str(server), "render-video", str(json_file), str(output_mp4),
+         "--fps", str(fps), "--codec", codec, "--crf", str(crf)],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"render-json --video failed:\n{result.stderr.strip()}")
+        raise RuntimeError(f"render-video failed:\n{result.stderr.strip()}")
 
 
 # ---------------------------------------------------------------------------

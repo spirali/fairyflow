@@ -1,31 +1,35 @@
 ---
-icon: lucide/pause-circle
+icon: lucide/download
 ---
 
 # Exports
 
-You can export to the following formats:
+FairyFlow can export your sequences in three formats. All export options are available in the sequence editor.
 
-* Fairyflow package - native format that could be played in player
-* Video
-* PDF
+| Format | Use case |
+|---|---|
+| **Player package** (`.ffpkg`) | Interactive playback with cue-based navigation |
+| **Video** (`.mp4`) | Sharing or embedding; requires ffmpeg |
+| **PDF** | Slide handouts; each selected frame becomes one page |
 
-All these options are available in sequence editor.
+---
 
-## Player
+## Player package
 
-Fairyflow package (.ffpkg) is a native format for Fairy flow.
+A `.ffpkg` is FairyFlow's native self-contained format. It bundles the animation data so it can be played without a running server.
 
-You can play open it as follows:
+Play a package with:
 
 ```
 fairyflow play <mypackage.ffpkg>
 ```
 
-Keyboard shortcuts:
+**Keyboard shortcuts in the player:**
 
-* F5 - fullscreen
-* right arrow - continue the animation
-* left arrow - play animation backwards
+| Key | Action |
+|---|---|
+| ++right++ | Continue to next cue / advance animation |
+| ++left++ | Step back |
+| ++f5++ | Toggle fullscreen |
 
-Player automatically stops on cues.
+The player automatically pauses at every [cue](cues.md).

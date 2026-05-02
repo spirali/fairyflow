@@ -51,5 +51,6 @@ with Scene():
 - [Shapes](shapes.md) — Rect, Ellipse, Path
 - [Text](text.md) — Text and font styling
 - [Animations](anim.md) — transitions, fades, path following
+- [Positioning](positioning.md) — coordinates, alignment, and cross-group positioning
 - [Layout](layout.md) — column and row layouts
 - [Cues](cues.md) — interactive presentations

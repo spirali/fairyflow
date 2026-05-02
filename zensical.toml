@@ -53,6 +53,7 @@ nav = [
     "shapes.md",
     "text.md",
     "images.md",
+    "positioning.md",
     "layout.md",
     "anim.md",
     "cues.md",

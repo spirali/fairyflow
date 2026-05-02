@@ -500,7 +500,7 @@ class PositionMixin:
         self.xy(x, y)
         adv_time(time)
         self.hold()
-        av.set(1, "L")
+        av.set(get_frame(), 1, "L")
         return self
 
 @beartype

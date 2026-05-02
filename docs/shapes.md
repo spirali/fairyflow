@@ -28,7 +28,7 @@ with Scene():
 
 ### Positioning
 
-See [Layout — Default (centering) layout](layout.md) for `.xy()`, `.align_x()`, `.align_y()`, and `.move()`.
+See [Positioning](positioning.md) for `.xy()`, `.align_x()`, `.align_y()`, and `.move()`.
 
 ---
 

@@ -46,7 +46,7 @@ with Scene():
 ### Positioning and alpha
 
 `Image` supports the same `.xy()`, `.align_x()`, `.align_y()`, and `.alpha()` methods as
-shape nodes — see [Layout](layout.md) for positioning details.
+shape nodes — see [Positioning](positioning.md) for details.
 
 ---
 

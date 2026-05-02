@@ -77,7 +77,7 @@ t.span("Custom text").font("MyFont").font_size(24)
 
 ## Positioning
 
-`Text` supports `.xy()`, `.align_x()`, `.align_y()`, and `.move()` for placement — see [Layout](layout.md) for details.
+`Text` supports `.xy()`, `.align_x()`, `.align_y()`, and `.move()` for placement — see [Positioning](positioning.md) for details.
 
 ## stext
 

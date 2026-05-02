@@ -17,36 +17,8 @@ with Scene():
 
 ## Positioning
 
-When you want precise control over placement, use `.xy(x, y)`, `.align_x()`, and
-`.align_y()` to override the default position. These methods work on all node types —
-shapes, text, images, and groups.
-
-`.xy(x, y)` sets the absolute position within the parent:
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("tomato").xy(20, 20)
-    Rect().size(60, 60).color("gold").xy(120, 70)
-    Rect().size(60, 60).color("mediumseagreen").xy(220, 120)
-```
-
-`.align_x(f)` / `.align_y(f)` place the node relative to the container — `0.0` = left/top edge, `0.5` = center, `1.0` = right/bottom edge:
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("tomato").align_x(0).align_y(0)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("mediumseagreen").align_x(1).align_y(1)
-```
-
-`.move(dx, dy)` shifts a node by a fixed offset relative to its already-computed position, so it composes freely with `.align_x` / `.align_y` or `.xy()`:
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(60, 60).color("orchid").align_x(0.5).align_y(0.5).move(-80, 0)
-    Rect().size(60, 60).color("steelblue").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5).move(80, 0)
-```
+For absolute coordinates, proportional alignment, and cross-node positioning
+(including across groups), see [Positioning](positioning.md).
 
 ---
 

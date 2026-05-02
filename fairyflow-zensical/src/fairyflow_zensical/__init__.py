@@ -149,7 +149,7 @@ def ffpy_validator(language: str, inputs: dict, options: dict,
     unrecognised keys there.
     """
     for k, v in inputs.items():
-        if k in ('frame', 'video', 'title'):
+        if k in ('frame', 'video', 'title', 'position'):
             options[k] = v
         elif k == 'hl_lines' and RE_HL_LINES.match(str(v)):
             options[k] = v
@@ -169,6 +169,7 @@ def ffpy_fence(source: str, language: str, class_name: str, options: dict,
     # Pop our custom options; leave hl_lines etc. for the highlighter
     frame_opt = options.pop("frame", None)
     video_opt = options.pop("video", None)
+    position  = options.pop("position", "bottom")
 
     # Syntax-highlight as Python using the real pymdownx highlight pipeline.
     # fence_code_format only wraps in <pre><code> without Pygments highlighting,
@@ -182,17 +183,18 @@ def ffpy_fence(source: str, language: str, class_name: str, options: dict,
     )
 
     if video_opt is not None:
-        return _do_video(source, highlighted)
+        return _do_video(source, highlighted, position)
     elif frame_opt is not None:
         try:
             frame_num = int(frame_opt)
         except ValueError:
             return _error_html(highlighted, f"Invalid frame= value: {frame_opt!r}")
-        return _do_frame(source, highlighted, frame_num)
+        return _do_frame(source, highlighted, frame_num, position)
     return highlighted  # no render mode — just show highlighted code
 
 
-def _do_frame(source: str, highlighted: str, frame: int) -> str:
+def _do_frame(source: str, highlighted: str, frame: int,
+              position: str = "bottom") -> str:
     cached_png = _cache_dir() / f"{_content_hash(source, str(frame))}.png"
     if not cached_png.exists():
         try:
@@ -212,10 +214,13 @@ def _do_frame(source: str, highlighted: str, frame: int) -> str:
         f'alt="fairyflow frame {frame}" '
         f'style="max-width:100%;display:block;margin:0 0 .5em;border:1px solid black" />'
     )
-    return f"{highlighted}\n{label}\n{img}"
+    output = f"{label}\n{img}"
+    if position == "top":
+        return f"{output}\n{highlighted}"
+    return f"{highlighted}\n{output}"
 
 
-def _do_video(source: str, highlighted: str) -> str:
+def _do_video(source: str, highlighted: str, position: str = "bottom") -> str:
     key = _content_hash(source)
     output_mp4 = _video_asset_dir() / f"{key}.mp4"
     if not output_mp4.exists():
@@ -238,4 +243,7 @@ def _do_video(source: str, highlighted: str) -> str:
         f"Your browser does not support the video tag."
         f"</video>"
     )
-    return f"{highlighted}\n{label}\n{video}"
+    output = f"{label}\n{video}"
+    if position == "top":
+        return f"{output}\n{highlighted}"
+    return f"{highlighted}\n{output}"

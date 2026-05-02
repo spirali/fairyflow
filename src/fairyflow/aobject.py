@@ -18,8 +18,8 @@ class AnimatedObject:
         else:
             self._add_attr(name, Inherited(default))
 
-    def _set_attr(self, name, value, transition=None):
-        self._attrs[name].set(get_frame(), value, transition)
+    def _set_attr(self, name, value, tr=None):
+        self._attrs[name].set(value, tr=tr)
 
     def _get_attr(self, name):
         return self._attrs[name]
@@ -49,4 +49,4 @@ class AnimatedObject:
     def _move_attr(self, name, delta, transition=None):
         if transition is None:
             transition = get_transition()
-        self._attrs[name].move(get_frame(), delta, transition)
+        self._attrs[name].move(delta, transition)

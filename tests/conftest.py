@@ -5,8 +5,8 @@ import subprocess
 import time
 import sys
 import os
-import fitz
-from fairyflow import scene
+import pymupdf
+from fairyflow import Scene
 from fairyflow.serializer import create_export
 import numpy as np
 from PIL import Image
@@ -22,6 +22,19 @@ CHECK_DIR = ROOT / "tests" / "check"
 
 FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
 FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
+
+import re as _re
+_TESTS_DIR_RE = _re.compile(r".*/tests/")
+
+def normalize_tree(obj):
+    """Replace the absolute tests-dir prefix in path strings with $TEST_DIR."""
+    if isinstance(obj, dict):
+        return {k: normalize_tree(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [normalize_tree(v) for v in obj]
+    if isinstance(obj, str) and "/tests/" in obj:
+        return _TESTS_DIR_RE.sub("$TEST_DIR/", obj, count=1)
+    return obj
 
 
 def pytest_sessionstart(session):
@@ -88,11 +101,11 @@ def server_uri(server_port):
 
 @pytest.fixture(scope="function")
 def test_scene(request):
-    s = scene(60, 40)
+    s = Scene(60, 40)
     s.select_frames = None
     s.target_resolution = None
     yield s
-    exported = create_export(s)
+    exported = create_export(0, s)
 
     out_dir = CURRENT_DIR / request.node.name
     frames_dir = out_dir / "frames"
@@ -171,8 +184,8 @@ def test_scene(request):
         check_json = check_frames_dir / f"{stem}.json"
         if not check_json.exists():
             pytest.fail(f"{stem}.json missing from check directory")
-        current_json = json.loads(current_json.read_text())
-        check_json = json.loads(check_json.read_text())
+        current_json = normalize_tree(json.loads(current_json.read_text()))
+        check_json = normalize_tree(json.loads(check_json.read_text()))
         assert current_json == check_json
 
     # PDF rendering check: convert each PDF page to an image and compare with reference PNGs.
@@ -180,13 +193,13 @@ def test_scene(request):
     # gives exactly scene.width × scene.height pixels, matching the PNG output.
     PDF_TOLERANCE = 2  # max per-channel absolute difference
     if pdf_path.exists():
-        pdf_doc = fitz.open(str(pdf_path))
+        pdf_doc = pymupdf.open(str(pdf_path))
         if pdf_doc.page_count != len(check_frames):
             pytest.fail(
                 f"PDF has {pdf_doc.page_count} page(s) but {len(check_frames)} reference frame(s)"
             )
         for page_idx, (page, check_png) in enumerate(zip(pdf_doc.pages(), check_frames)):
-            pix = page.get_pixmap(matrix=fitz.Matrix(1, 1), colorspace=fitz.csRGB)
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(1, 1), colorspace=pymupdf.csRGB)
             pdf_arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
             check_img = Image.open(check_png)
             check_arr = np.asarray(check_img.convert("RGB"))

@@ -28,6 +28,7 @@ dev = [
     "zensical>=0.0.31",
     "fairyflow-zensical",
     "pdoc>=16.0.0",
+    "pymupdf",
 ]
 
 [tool.uv.sources]

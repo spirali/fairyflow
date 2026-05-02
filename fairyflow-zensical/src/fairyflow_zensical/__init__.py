@@ -93,6 +93,7 @@ def _run_fairyflow(source: str, tmp: Path) -> Path:
          "--prologue", str(prologue),
          str(src_file), str(json_file), "24"],
         capture_output=True, text=True,
+        cwd=str(_project_root()),
     )
     if result.returncode != 0:
         raise RuntimeError(f"fairyflow failed:\n{result.stderr.strip()}")

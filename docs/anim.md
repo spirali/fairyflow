@@ -147,33 +147,58 @@ with Scene():
 `Group` nodes have an animatable clipping window. `clip_x`/`clip_w` control the horizontal
 extent (as a fraction of the group width), and `clip_y`/`clip_h` control the vertical extent.
 
-`.hide_right(time)` and `.hide_left(time)` are convenience helpers that animate the clip to
-conceal the group content.
 
+```ffpy video="mp4"
+with Scene():
+    with Group().size(200, 60) as g:
+        Rect().size(200, 60).color("cornflowerblue")
+        t = Text()
+        t.span("Revealed!").font_size(22).bold().color("white")
+        t.xy(40, 18)
+    g.clip_w(0)           # start fully hidden
+    linear()
+    adv_time(1.2)
+    g.clip_w(1)           # reveal left-to-right
+```
+
+`.hide_right(time)`, `.hide_left(time)`, `.reveal_right(time)`, and `.reveal_left(time)` are
+convenience helpers that animate the clip to conceal or reveal the group content. The direction
+refers to the sweep direction: `reveal_right` expands the clip window rightward, `reveal_left`
+sweeps it leftward. Each call also advances the timeline automatically.
 
 ```ffpy video="mp4"
 with Scene():
     with Group().size(200, 60).align_x(0.5).align_y(0.5) as g:
         Rect().size(200, 60).color("cornflowerblue")
         t = Text()
-        t.span("Revealed!").font_size(22).bold().color("white")
-        t.xy(40, 18)
-    g.clip_w(0)           # start fully hidden
-    g.hold()
-    linear()
-    adv_time(1.2)
-    g.clip_w(1)           # reveal left-to-right
+        t.span("reveal_right / hide_left").font_size(14).bold().color("white")
+        t.xy(18, 22)
+    g.reveal_right(1)   # expand clip from left to right
+    adv_time(0.4)
+    g.hide_left(1)      # shrink clip from right to left
 ```
 
+---
 
 ## Build State
 
-TODO: Example for `bstate()`
+`bstate()` captures a snapshot of the current time and transition style. Using it as a context
+manager temporarily applies that snapshot — changes inside the block do not affect the outer
+timeline, so the clock is restored when the block exits. This is useful for animating multiple
+elements in parallel from the same starting point.
 
-```
-with bstate():  # remeber current time and transition style
+```ffpy video="mp4"
+with Scene():
+    a = Rect().size(80, 80).color("steelblue").xy(20, 60)
+    b = Rect().size(80, 80).color("tomato").xy(200, 60)
+
+    with bstate():       # snapshot time = 0
+        linear()
+        adv_time(1.5)
+        a.xy(110, 60)    # a slides right over 1.5 s
+
+    # time is restored to 0 — b animates in parallel
     linear()
-    adv_time(0.5)
-
-# Here time is restored, transition style is restored
+    adv_time(1)
+    b.color("gold")      # b changes color over 1 s
 ```

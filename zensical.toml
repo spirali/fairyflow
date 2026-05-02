@@ -48,6 +48,7 @@ Copyright &copy; 2026 Ada Bohm
 nav = [
     "index.md",
     "getstarted.md",
+    "examples.md",
     "structure.md",
     "shapes.md",
     "text.md",

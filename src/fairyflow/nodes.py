@@ -808,7 +808,7 @@ class Group(
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_y", value, transition)
+        self._set_attr("clip_y", value, tr)
         return self
 
     def clip_w(self, value: FloatLike, tr: OpTr = None) -> Self:
@@ -824,7 +824,7 @@ class Group(
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_w", value, transition)
+        self._set_attr("clip_w", value, tr)
         return self
 
     def clip_h(self, value: FloatLike, tr: OpTr = None) -> Self:
@@ -872,6 +872,37 @@ class Group(
         """
         self._anim_attr("clip_w", 0, time)
         return self
+
+    def reveal_right(self, time: SupportsFloat = 1) -> Self:
+        """Animate revealing the group with a wipe-right effect.
+
+        Sets ``clip_w`` to ``0.0`` at the current frame and animates it to
+        ``1.0``, causing the content to appear by expanding toward the right.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_w", 1, time, start=0)
+        return self
+
+    def reveal_left(self, time: SupportsFloat = 1) -> Self:
+        """Animate revealing the group with a wipe-left effect.
+
+        Sets ``clip_x`` to ``1.0`` at the current frame and animates it to
+        ``0.0``, causing the content to appear by sweeping toward the left.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_x", 0, time, start=1)
+        return self
+
 
 @beartype
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):

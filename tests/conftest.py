@@ -185,8 +185,12 @@ def test_scene(request):
                 f"Check directory '{check_frames_dir}' not found; run with FAIRYFLOW_TEST_CREATE=1 to create the snapshot"
             )
 
-    current_frames = sorted(frames_dir.glob("*.png"))
-    check_frames = sorted(check_frames_dir.glob("*.png"))
+    def frame_key(p: Path) -> int:
+        m = _re.search(r"\d+", p.stem)
+        return int(m.group()) if m else 0
+
+    current_frames = sorted(frames_dir.glob("*.png"), key=frame_key)
+    check_frames = sorted(check_frames_dir.glob("*.png"), key=frame_key)
 
     current_names = [f.name for f in current_frames]
     check_names = [f.name for f in check_frames]

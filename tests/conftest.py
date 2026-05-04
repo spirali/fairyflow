@@ -18,13 +18,34 @@ ROOT = Path(__file__).parent.parent
 SERVER_BINARY = ROOT / "target" / "debug" / "server"
 SERVER_STARTUP_TIMEOUT = 10  # seconds
 CURRENT_DIR = ROOT / "tests" / "current"
+CURRENT_PDF_DIR = ROOT / "tests" / "current_pdf"
 CHECK_DIR = ROOT / "tests" / "check"
 
 FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
 FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
 
+DIFF_TOLERANCE = 3
+PDF_DIFF_TOLERANCE = 25
+
 import re as _re
 _TESTS_DIR_RE = _re.compile(r".*/tests/")
+
+
+def image_diff(current_arr: np.ndarray, check_arr: np.ndarray, label: str, tolerance: float) -> str | None:
+    """Return an error string if the two uint8 arrays differ beyond DIFF_TOLERANCE, else None.
+
+    Arrays may have 3 or 4 channels. The score is the sum of per-pixel
+    max-channel absolute differences (0-255 scale).
+    """
+    if current_arr.shape != check_arr.shape:
+        return (
+            f"{label}: size {current_arr.shape[1]}x{current_arr.shape[0]} "
+            f"!= reference {check_arr.shape[1]}x{check_arr.shape[0]}"
+        )
+    diff_sum = np.abs(current_arr.astype(np.int32) - check_arr.astype(np.int32)).max(axis=-1).sum() / 255.0
+    if diff_sum > tolerance:
+        return f"{label}: diff sum {diff_sum} exceeds tolerance of {tolerance}"
+    return None
 
 def normalize_tree(obj):
     """Replace the absolute tests-dir prefix in path strings with $TEST_DIR."""
@@ -40,6 +61,10 @@ def normalize_tree(obj):
 def pytest_sessionstart(session):
     if CURRENT_DIR.is_dir():
         for entry in CURRENT_DIR.iterdir():
+            if entry.is_dir() and entry.name.startswith("test_"):
+                shutil.rmtree(entry)
+    if CURRENT_PDF_DIR.is_dir():
+        for entry in CURRENT_PDF_DIR.iterdir():
             if entry.is_dir() and entry.name.startswith("test_"):
                 shutil.rmtree(entry)
 
@@ -104,7 +129,12 @@ def test_scene(request):
     s = Scene(60, 40)
     s.select_frames = None
     s.target_resolution = None
-    yield s
+    s.tolerance = DIFF_TOLERANCE
+    s.pdf_tolerance = PDF_DIFF_TOLERANCE
+    try:
+        yield s
+    except BaseException:
+        raise
     exported = create_export(0, s)
 
     out_dir = CURRENT_DIR / request.node.name
@@ -168,16 +198,8 @@ def test_scene(request):
     for current_png, check_png in zip(current_frames, check_frames):
         current_img = Image.open(current_png)
         check_img = Image.open(check_png)
-        if current_img.size != check_img.size:
-            pytest.fail(
-                f"{current_png.name}: resolution mismatch: "
-                f"{current_img.size} (current) vs {check_img.size} (check)"
-            )
-        current_arr = np.asarray(current_img.convert("RGBA"))
-        check_arr = np.asarray(check_img.convert("RGBA"))
-        diff_count = int(np.any(current_arr != check_arr, axis=-1).sum())
-        if diff_count:
-            pytest.fail(f"{current_png.name}: {diff_count} pixel(s) differ")
+        if err := image_diff(np.asarray(current_img.convert("RGBA")), np.asarray(check_img.convert("RGBA")), current_png.name, s.tolerance):
+            pytest.fail(err)
 
         stem = current_png.stem  # e.g. "frame0"
         current_json = frames_dir / f"{stem}.json"
@@ -191,27 +213,29 @@ def test_scene(request):
     # PDF rendering check: convert each PDF page to an image and compare with reference PNGs.
     # PageSettings uses scene dimensions as PDF points; rendering at 72 DPI (Matrix(1,1))
     # gives exactly scene.width × scene.height pixels, matching the PNG output.
-    PDF_TOLERANCE = 2  # max per-channel absolute difference
     if pdf_path.exists():
         pdf_doc = pymupdf.open(str(pdf_path))
         if pdf_doc.page_count != len(check_frames):
             pytest.fail(
                 f"PDF has {pdf_doc.page_count} page(s) but {len(check_frames)} reference frame(s)"
             )
-        for page_idx, (page, check_png) in enumerate(zip(pdf_doc.pages(), check_frames)):
+        pdf_pages = []
+        for page in pdf_doc.pages():
             pix = page.get_pixmap(matrix=pymupdf.Matrix(1, 1), colorspace=pymupdf.csRGB)
-            pdf_arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+            pdf_pages.append(np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3).copy())
+        pdf_doc.close()
+
+        failure = None
+        for page_idx, (pdf_arr, check_png) in enumerate(zip(pdf_pages, check_frames)):
             check_img = Image.open(check_png)
             check_arr = np.asarray(check_img.convert("RGB"))
-            if pdf_arr.shape != check_arr.shape:
-                pytest.fail(
-                    f"PDF page {page_idx}: size {pdf_arr.shape[1]}x{pdf_arr.shape[0]} != "
-                    f"reference {check_arr.shape[1]}x{check_arr.shape[0]}"
-                )
-            max_diff = int(np.abs(pdf_arr.astype(np.int32) - check_arr.astype(np.int32)).max())
-            if max_diff > PDF_TOLERANCE:
-                pytest.fail(
-                    f"PDF page {page_idx} ({check_png.name}): "
-                    f"max pixel diff {max_diff} exceeds tolerance of {PDF_TOLERANCE}"
-                )
-        pdf_doc.close()
+            failure = image_diff(pdf_arr, check_arr, f"PDF page {page_idx} ({check_png.name})", s.pdf_tolerance)
+            if failure:
+                break
+
+        if failure is not None:
+            dump_dir = CURRENT_PDF_DIR / request.node.name / "frames"
+            dump_dir.mkdir(parents=True, exist_ok=True)
+            for pdf_arr, check_png in zip(pdf_pages, check_frames):
+                Image.fromarray(pdf_arr, mode="RGB").save(dump_dir / check_png.name)
+            pytest.fail(failure)

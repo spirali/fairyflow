@@ -466,8 +466,11 @@ impl PdfRenderer {
         src_w: f32,
         src_h: f32,
     ) {
-        // Re-parse raw SVG bytes using the usvg version that krilla-svg expects.
-        let tree = match usvg::Tree::from_data(raw_data, &usvg::Options::default()) {
+        // Re-parse raw SVG bytes with the shared font database.
+        let tree = match usvg::Tree::from_data(raw_data, &usvg::Options {
+            fontdb: Resources::get().fontdb(),
+            ..Default::default()
+        }) {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!("SVG re-parse for PDF failed: {e}");

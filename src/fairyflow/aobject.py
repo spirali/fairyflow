@@ -32,7 +32,7 @@ class AnimatedObject:
 
     def hold(self):
         for v in self._attrs.values():
-            v.hold(get_frame())
+            v.hold()
         if hasattr(self, "_children"):
             for child in self._children:
                 child.hold()

@@ -500,7 +500,7 @@ class PositionMixin:
         self.xy(x, y)
         adv_time(time)
         self.hold()
-        av.set(1, "L")
+        av.set(1, tr="L")
         return self
 
 @beartype
@@ -1224,7 +1224,7 @@ class PathClose(Node):
 
     kind = "close"
 
-
+@beartype
 class PathCubic(Node, PositionMixin):
     """A cubic Bézier curve command with two animatable control points (`c1` and `c2`)."""
 
@@ -1246,6 +1246,7 @@ class PathCubic(Node, PositionMixin):
             tr: Optional transition for animation.
         """
         self._set_attr("c1_x", px, tr)
+        return self
 
     def c1_y(self, px: FloatLike, tr: OpTr = None) -> Self:
         """Set the y coordinate of control point 1, relative to the segment's start point.
@@ -1255,6 +1256,7 @@ class PathCubic(Node, PositionMixin):
             tr: Optional transition for animation.
         """
         self._set_attr("c1_y", px, tr)
+        return self
 
     def c2_x(self, px: FloatLike, tr: OpTr = None) -> Self:
         """Set the x coordinate of control point 2, relative to the segment's end point.
@@ -1264,6 +1266,7 @@ class PathCubic(Node, PositionMixin):
             tr: Optional transition for animation.
         """
         self._set_attr("c2_x", px, tr)
+        return self
 
     def c2_y(self, px: FloatLike, tr: OpTr = None) -> Self:
         """Set the y coordinate of control point 2, relative to the segment's end point.
@@ -1273,6 +1276,7 @@ class PathCubic(Node, PositionMixin):
             tr: Optional transition for animation.
         """
         self._set_attr("c2_y", px, tr)
+        return self
 
     def c1_xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
         """Set both coordinates of control point 1, relative to the segment's start point.
@@ -1305,6 +1309,7 @@ class PathCubic(Node, PositionMixin):
         return self
 
 
+@beartype
 class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     """An image node that loads and displays a raster image file.
 
@@ -1314,7 +1319,7 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 
     kind = "image"
 
-    def __init__(self, image_path: str, keep_aspect: bool = True):
+    def __init__(self, image_path: str | os.PathLike, keep_aspect: bool = True):
         super().__init__()
         self._init_size()
         self._init_z()
@@ -1339,11 +1344,11 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         for child in self._children:
             if child.layer_name == name:
                 return child
-        layer = ImageLayer(self, self._start, name)
+        layer = ImageLayer(self, name)
         self._children.append(layer)
         return layer
 
-    def file_name(self, image_path: str) -> Self:
+    def file_name(self, image_path: str | os.PathLike) -> Self:
         """Set the file path of the image to load.
 
         The path is resolved to an absolute path before storing. Raises if the
@@ -1362,17 +1367,18 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         image_path = os.path.abspath(image_path)
         if not os.path.exists(image_path):
             raise Exception(f"Path '{image_path}' does not exists.")
-        self._set_attr("path", image_path)
+        self._set_attr("path", str(image_path))
         return self
 
 
+@beartype
 class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
     """A named layer within an ORA image, rendered as a child of an `Image` node."""
 
     kind = "layer"
 
-    def __init__(self, layer_name):
-        super().__init__()
+    def __init__(self, parent: Image, layer_name: str):
+        super().__init__(put_in_context=False, parent=parent)
         self.layer_name = layer_name
         self._init_size()
         self._init_z()
@@ -1383,102 +1389,3 @@ class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaM
         result = super().serialize(serializer)
         result["layer_name"] = self.layer_name
         return result
-
-
-# def make_node(cls, *args):
-#     current_node = get_current_node()
-#     if current_node is None:
-#         raise Exception("Element created out of context of a parent ndoe")
-#     item = cls(current_node, *args)
-#     current_node._children.append(item)
-#     return item
-
-
-# def scene(width: int | None = None, height: int | None = None, *, color: str | Color | None = None, cue_at_start: bool | None = None) -> Scene:
-#     """Create a new `Scene` and register it as a root object.
-
-#     A scene is the top-level container for all nodes in an animation. It
-#     defines the canvas dimensions and background color and must be used as a
-#     context manager (``with scene() as s:``) before adding child nodes.
-
-#     Args:
-#         width: Canvas width in pixels. Defaults to the value from
-#             ``DEFAULT_SCENE_CONFIG``.
-#         height: Canvas height in pixels. Defaults to the value from
-#             ``DEFAULT_SCENE_CONFIG``.
-#         color: Background color of the scene. Accepts any value supported by
-#             `Color.parse`. Defaults to the value from ``DEFAULT_SCENE_CONFIG``.
-#         cue_at_start: If ``True``, frame 0 is automatically added as a cue
-#             point. Defaults to the value from ``DEFAULT_SCENE_CONFIG``.
-
-#     Returns:
-#         The newly created `Scene` node.
-#     """
-#     scene = Scene(width, height, color, cue_at_start)
-#     ROOT_OBJECTS.get().append(scene)
-#     return scene
-
-
-# def group() -> Group:
-#     """Create a new `Group` node inside the current context.
-
-#     A group is a rectangular container that positions, clips, and transforms
-#     its children. Must be called inside a ``with scene(...)`` or
-#     ``with group(...)`` block.
-
-#     Returns:
-#         The newly created `Group` node.
-#     """
-#     return make_node(Group)
-
-
-# def rect() -> Rect:
-#     """Create a new `Rect` node inside the current context.
-
-#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
-
-#     Returns:
-#         The newly created `Rect` node.
-#     """
-#     return make_node(Rect)
-
-
-# def ellipse() -> Ellipse:
-#     """Create a new `Ellipse` node inside the current context.
-
-#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
-
-#     Returns:
-#         The newly created `Ellipse` node.
-#     """
-#     return make_node(Ellipse)
-
-
-# def path() -> Path:
-#     """Create a new `Path` node inside the current context.
-
-#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
-#     Build the path shape with `Path.move_to`, `Path.line_to`, `Path.cubic_to`,
-#     and `Path.close`.
-
-#     Returns:
-#         The newly created `Path` node.
-#     """
-#     return make_node(Path)
-
-
-# def image(path: str, *, keep_aspect: bool = True) -> Image:
-#     """Create a new `Image` node inside the current context.
-
-#     Must be called inside a ``with scene(...)`` or ``with group(...)`` block.
-
-#     Args:
-#         path: Path to the image file. Passed to `Image.file_name`; the file
-#             must exist at call time.
-#         keep_aspect: If ``True`` (default), the image preserves its original
-#             aspect ratio when the node size changes.
-
-#     Returns:
-#         The newly created `Image` node.
-#     """
-#     return make_node(Image, path, keep_aspect)

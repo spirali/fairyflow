@@ -12,7 +12,7 @@ use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{AffineTransform, node_z_level, positional_transform};
-use renderer_core::{Color, ImageLayer, Node, NodeKind, Scene, Style, TextChild, TextSpan};
+use renderer_core::{Color, ImageLayer, Node, NodeKind, Scene, Size, Style, TextChild, TextSpan};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -28,6 +28,26 @@ pub fn render_to_pdf(frames: &[&Scene]) -> anyhow::Result<Vec<u8>> {
     }
     doc.finish()
         .map_err(|e| anyhow::anyhow!("PDF serialization error: {e:?}"))
+}
+
+// ── Image helper structs ──────────────────────────────────────────────────────
+
+struct ImageSpec<'a> {
+    path: &'a str,
+    dest_w: f32,
+    dest_h: f32,
+    keep_aspect: bool,
+    layers: &'a [ImageLayer],
+    hidden_layers: &'a [Arc<String>],
+}
+
+struct ImagePlacement {
+    sx: f32,
+    sy: f32,
+    offset_x: f32,
+    offset_y: f32,
+    dest_w: f32,
+    dest_h: f32,
 }
 
 // ── Internal renderer ─────────────────────────────────────────────────────────
@@ -112,8 +132,10 @@ impl PdfRenderer {
                 let pivot_y_abs = (*pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
-                    *scale_x,
-                    *scale_y,
+                    Size {
+                        width: *scale_x,
+                        height: *scale_y,
+                    },
                     *rotation,
                     pivot_x_abs,
                     pivot_y_abs,
@@ -171,8 +193,17 @@ impl PdfRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 surface.push_transform(&to_krilla_transform(transform));
                 if let Some(rect) =
                     KRect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -192,8 +223,17 @@ impl PdfRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 surface.push_transform(&to_krilla_transform(transform));
                 if let Some(path) = build_ellipse_path(size.width as f32, size.height as f32) {
                     fill_and_stroke(surface, &path, style, parent_alpha);
@@ -224,8 +264,17 @@ impl PdfRenderer {
                 lines,
                 z_level: _,
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 surface.push_transform(&to_krilla_transform(transform));
                 render_text_lines(
                     surface,
@@ -249,16 +298,27 @@ impl PdfRenderer {
                 ..
             } => {
                 let effective_alpha = parent_alpha * *alpha as f32;
-                let base_transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let base_transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 self.render_image(
                     surface,
-                    path,
-                    size.width as f32,
-                    size.height as f32,
-                    *keep_aspect,
-                    layers,
-                    hidden_layers,
+                    &ImageSpec {
+                        path,
+                        dest_w: size.width as f32,
+                        dest_h: size.height as f32,
+                        keep_aspect: *keep_aspect,
+                        layers,
+                        hidden_layers,
+                    },
                     base_transform,
                     effective_alpha,
                 );
@@ -271,45 +331,54 @@ impl PdfRenderer {
     fn render_image(
         &mut self,
         surface: &mut krilla::surface::Surface,
-        path: &str,
-        dest_w: f32,
-        dest_h: f32,
-        keep_aspect: bool,
-        layers: &[ImageLayer],
-        hidden_layers: &[Arc<String>],
+        spec: &ImageSpec<'_>,
         base_transform: AffineTransform,
         effective_alpha: f32,
     ) {
-        let Some(cached) = image_cache::load_image(path) else {
+        let Some(cached) = image_cache::load_image(spec.path) else {
             return;
         };
-        if dest_w <= 0.0 || dest_h <= 0.0 || cached.width <= 0.0 || cached.height <= 0.0 {
+        if spec.dest_w <= 0.0 || spec.dest_h <= 0.0 || cached.width <= 0.0 || cached.height <= 0.0 {
             return;
         }
 
-        let (sx, sy, offset_x, offset_y) = if keep_aspect {
-            let s = (dest_w / cached.width).min(dest_h / cached.height);
+        let placement = if spec.keep_aspect {
+            let s = (spec.dest_w / cached.width).min(spec.dest_h / cached.height);
             let actual_w = cached.width * s;
             let actual_h = cached.height * s;
-            (s, s, (dest_w - actual_w) / 2.0, (dest_h - actual_h) / 2.0)
+            ImagePlacement {
+                sx: s,
+                sy: s,
+                offset_x: (spec.dest_w - actual_w) / 2.0,
+                offset_y: (spec.dest_h - actual_h) / 2.0,
+                dest_w: spec.dest_w,
+                dest_h: spec.dest_h,
+            }
         } else {
-            (dest_w / cached.width, dest_h / cached.height, 0.0, 0.0)
+            ImagePlacement {
+                sx: spec.dest_w / cached.width,
+                sy: spec.dest_h / cached.height,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                dest_w: spec.dest_w,
+                dest_h: spec.dest_h,
+            }
         };
 
         match &cached.kind {
             CachedImageKind::Svg { raw_data, .. } => {
-                if layers.is_empty() && hidden_layers.is_empty() {
+                let svg_placement = ImagePlacement {
+                    dest_w: cached.width * placement.sx,
+                    dest_h: cached.height * placement.sy,
+                    ..placement
+                };
+                if spec.layers.is_empty() && spec.hidden_layers.is_empty() {
                     self.draw_svg_bytes(
                         surface,
                         raw_data,
-                        sx,
-                        sy,
-                        offset_x,
-                        offset_y,
+                        &svg_placement,
                         base_transform,
                         effective_alpha,
-                        cached.width,
-                        cached.height,
                     );
                 } else {
                     let all_labels = cached.image_layers.as_ref();
@@ -317,21 +386,17 @@ impl PdfRenderer {
                         self.draw_svg_bytes(
                             surface,
                             raw_data,
-                            sx,
-                            sy,
-                            offset_x,
-                            offset_y,
+                            &svg_placement,
                             base_transform,
                             effective_alpha,
-                            cached.width,
-                            cached.height,
                         );
                     } else {
                         for label in all_labels.unwrap().iter() {
-                            if hidden_layers.iter().any(|h| **h == *label) {
+                            if spec.hidden_layers.iter().any(|h| **h == *label) {
                                 continue;
                             }
-                            let override_ = layers
+                            let override_ = spec
+                                .layers
                                 .iter()
                                 .find(|l| l.layer_name.as_str() == label.as_str());
                             let layer_alpha = override_
@@ -343,7 +408,7 @@ impl PdfRenderer {
                             let (lx, ly) = override_
                                 .map(|ov| (ov.position.x as f32, ov.position.y as f32))
                                 .unwrap_or((0.0, 0.0));
-                            let Some(layer_cached) = image_cache::load_svg_layer(path, label)
+                            let Some(layer_cached) = image_cache::load_svg_layer(spec.path, label)
                             else {
                                 continue;
                             };
@@ -351,20 +416,14 @@ impl PdfRenderer {
                                 CachedImageKind::Svg { raw_data, .. } => raw_data,
                                 _ => continue,
                             };
-                            // Per-layer offset added on top of the main offset.
                             let layer_transform =
                                 AffineTransform::from_translate(lx, ly).concat(base_transform);
                             self.draw_svg_bytes(
                                 surface,
                                 layer_raw,
-                                sx,
-                                sy,
-                                offset_x,
-                                offset_y,
+                                &svg_placement,
                                 layer_transform,
                                 layer_alpha,
-                                cached.width,
-                                cached.height,
                             );
                         }
                     }
@@ -372,14 +431,16 @@ impl PdfRenderer {
             }
 
             CachedImageKind::Raster { pixmap } => {
+                let raster_placement = ImagePlacement {
+                    dest_w: pixmap.width as f32 * placement.sx,
+                    dest_h: pixmap.height as f32 * placement.sy,
+                    ..placement
+                };
                 self.draw_raster(
                     surface,
-                    path,
+                    spec.path,
                     pixmap,
-                    sx,
-                    sy,
-                    offset_x,
-                    offset_y,
+                    &raster_placement,
                     base_transform,
                     effective_alpha,
                 );
@@ -387,33 +448,36 @@ impl PdfRenderer {
 
             CachedImageKind::Ora { layers: ora_layers } => {
                 let all_labels = &cached.image_layers;
-                if layers.is_empty() && hidden_layers.is_empty() {
+                if spec.layers.is_empty() && spec.hidden_layers.is_empty() {
                     for layer_data in ora_layers.iter() {
-                        let layer_key = format!("{}\0ora\0{}", path, layer_data.name);
-                        let layer_ox = offset_x + layer_data.x as f32 * sx;
-                        let layer_oy = offset_y + layer_data.y as f32 * sy;
+                        let layer_key = format!("{}\0ora\0{}", spec.path, layer_data.name);
+                        let layer_placement = ImagePlacement {
+                            offset_x: placement.offset_x + layer_data.x as f32 * placement.sx,
+                            offset_y: placement.offset_y + layer_data.y as f32 * placement.sy,
+                            dest_w: layer_data.pixmap.width as f32 * placement.sx,
+                            dest_h: layer_data.pixmap.height as f32 * placement.sy,
+                            ..placement
+                        };
                         self.draw_raster_pixmap(
                             surface,
                             &layer_key,
                             &layer_data.pixmap,
-                            sx,
-                            sy,
-                            layer_ox,
-                            layer_oy,
+                            &layer_placement,
                             base_transform,
                             effective_alpha,
                         );
                     }
                 } else if let Some(all_labels) = all_labels {
                     for label in all_labels.iter() {
-                        if hidden_layers.iter().any(|h| **h == *label) {
+                        if spec.hidden_layers.iter().any(|h| **h == *label) {
                             continue;
                         }
                         let Some(layer_data) = ora_layers.iter().find(|l| l.name == label.as_str())
                         else {
                             continue;
                         };
-                        let override_ = layers
+                        let override_ = spec
+                            .layers
                             .iter()
                             .find(|l| l.layer_name.as_str() == label.as_str());
                         let layer_alpha = override_
@@ -425,17 +489,19 @@ impl PdfRenderer {
                         let (lx, ly) = override_
                             .map(|ov| (ov.position.x as f32, ov.position.y as f32))
                             .unwrap_or((0.0, 0.0));
-                        let layer_key = format!("{}\0ora\0{}", path, layer_data.name);
-                        let layer_ox = offset_x + layer_data.x as f32 * sx + lx;
-                        let layer_oy = offset_y + layer_data.y as f32 * sy + ly;
+                        let layer_key = format!("{}\0ora\0{}", spec.path, layer_data.name);
+                        let layer_placement = ImagePlacement {
+                            offset_x: placement.offset_x + layer_data.x as f32 * placement.sx + lx,
+                            offset_y: placement.offset_y + layer_data.y as f32 * placement.sy + ly,
+                            dest_w: layer_data.pixmap.width as f32 * placement.sx,
+                            dest_h: layer_data.pixmap.height as f32 * placement.sy,
+                            ..placement
+                        };
                         self.draw_raster_pixmap(
                             surface,
                             &layer_key,
                             &layer_data.pixmap,
-                            sx,
-                            sy,
-                            layer_ox,
-                            layer_oy,
+                            &layer_placement,
                             base_transform,
                             layer_alpha,
                         );
@@ -449,14 +515,9 @@ impl PdfRenderer {
         &mut self,
         surface: &mut krilla::surface::Surface,
         raw_data: &[u8],
-        sx: f32,
-        sy: f32,
-        offset_x: f32,
-        offset_y: f32,
+        placement: &ImagePlacement,
         base_transform: AffineTransform,
         effective_alpha: f32,
-        src_w: f32,
-        src_h: f32,
     ) {
         // Re-parse raw SVG bytes with the shared font database.
         let tree = match usvg::Tree::from_data(
@@ -473,14 +534,13 @@ impl PdfRenderer {
             }
         };
 
-        let draw_w = src_w * sx;
-        let draw_h = src_h * sy;
-        let Some(size) = KSize::from_wh(draw_w, draw_h) else {
+        let Some(size) = KSize::from_wh(placement.dest_w, placement.dest_h) else {
             return;
         };
 
         let final_transform =
-            AffineTransform::from_translate(offset_x, offset_y).concat(base_transform);
+            AffineTransform::from_translate(placement.offset_x, placement.offset_y)
+                .concat(base_transform);
         surface.push_transform(&to_krilla_transform(final_transform));
 
         if (effective_alpha - 1.0).abs() > 1e-4 {
@@ -502,10 +562,7 @@ impl PdfRenderer {
         surface: &mut krilla::surface::Surface,
         path: &str,
         pixmap: &RawPixmap,
-        sx: f32,
-        sy: f32,
-        offset_x: f32,
-        offset_y: f32,
+        placement: &ImagePlacement,
         base_transform: AffineTransform,
         effective_alpha: f32,
     ) {
@@ -513,10 +570,7 @@ impl PdfRenderer {
             surface,
             path,
             pixmap,
-            sx,
-            sy,
-            offset_x,
-            offset_y,
+            placement,
             base_transform,
             effective_alpha,
         );
@@ -527,10 +581,7 @@ impl PdfRenderer {
         surface: &mut krilla::surface::Surface,
         cache_key: &str,
         pixmap: &RawPixmap,
-        sx: f32,
-        sy: f32,
-        offset_x: f32,
-        offset_y: f32,
+        placement: &ImagePlacement,
         base_transform: AffineTransform,
         effective_alpha: f32,
     ) {
@@ -544,14 +595,13 @@ impl PdfRenderer {
             })
             .clone();
 
-        let draw_w = pixmap.width as f32 * sx;
-        let draw_h = pixmap.height as f32 * sy;
-        let Some(size) = KSize::from_wh(draw_w, draw_h) else {
+        let Some(size) = KSize::from_wh(placement.dest_w, placement.dest_h) else {
             return;
         };
 
         let final_transform =
-            AffineTransform::from_translate(offset_x, offset_y).concat(base_transform);
+            AffineTransform::from_translate(placement.offset_x, placement.offset_y)
+                .concat(base_transform);
         surface.push_transform(&to_krilla_transform(final_transform));
 
         if (effective_alpha - 1.0).abs() > 1e-4 {

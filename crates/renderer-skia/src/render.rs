@@ -97,8 +97,10 @@ impl RasterRenderer {
                 let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
-                    *scale_x,
-                    *scale_y,
+                    Size {
+                        width: *scale_x,
+                        height: *scale_y,
+                    },
                     *rotation,
                     pivot_x_abs,
                     pivot_y_abs,
@@ -145,8 +147,17 @@ impl RasterRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
                 else {
                     return;
@@ -160,8 +171,17 @@ impl RasterRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
                 else {
                     return;
@@ -189,8 +209,17 @@ impl RasterRenderer {
                 sh_theme,
                 ..
             } => {
-                let transform =
-                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+                let transform = positional_transform(
+                    position,
+                    Size {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    0.0,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 let lines = lines.clone();
                 let sh = sh_language.as_ref().map(|lang| {
                     let theme = sh_theme
@@ -216,11 +245,13 @@ impl RasterRenderer {
                 let layers = layers.clone();
                 let hidden_layers = hidden_layers.clone();
                 render_image(
-                    path,
-                    size,
-                    *keep_aspect,
-                    &layers,
-                    &hidden_layers,
+                    &ImageSpec {
+                        path,
+                        size,
+                        keep_aspect: *keep_aspect,
+                        layers: &layers,
+                        hidden_layers: &hidden_layers,
+                    },
                     pixmap,
                     parent_transform,
                     position,
@@ -405,8 +436,7 @@ pub fn render_scene_to_buffer(scene: &Scene, width: u32, height: u32, buffer: &m
 
 fn positional_transform(
     position: &Position,
-    scale_x: f64,
-    scale_y: f64,
+    scale: Size,
     rotation: f64,
     pivot_x: f32,
     pivot_y: f32,
@@ -414,8 +444,7 @@ fn positional_transform(
 ) -> Transform {
     let t = core_positional_transform(
         position,
-        scale_x,
-        scale_y,
+        scale,
         rotation,
         pivot_x,
         pivot_y,
@@ -514,17 +543,30 @@ fn build_cropped_path(
 
 // ── Image rendering ───────────────────────────────────────────────────────────
 
-fn render_raster_pixmap(
-    src: &RawPixmap,
+struct ImageSpec<'a> {
+    path: &'a str,
+    size: &'a Size,
+    keep_aspect: bool,
+    layers: &'a [ImageLayer],
+    hidden_layers: &'a [Arc<String>],
+}
+
+/// How a source image is scaled and offset within its destination rect.
+struct ImagePlacement {
     sx: f32,
     sy: f32,
     offset_x: f32,
     offset_y: f32,
+    dest_w: f32,
+    dest_h: f32,
+}
+
+fn render_raster_pixmap(
+    src: &RawPixmap,
+    placement: &ImagePlacement,
     node_transform: Transform,
     pixmap: &mut Pixmap,
     effective_alpha: f32,
-    dest_w: f32,
-    dest_h: f32,
 ) {
     let Some(src_pixmap) = raw_to_pixmap(src) else {
         return;
@@ -534,17 +576,18 @@ fn render_raster_pixmap(
         ..Default::default()
     };
     if (effective_alpha - 1.0).abs() < 1e-6 {
-        let transform = Transform::from_scale(sx, sy)
-            .post_translate(offset_x, offset_y)
+        let transform = Transform::from_scale(placement.sx, placement.sy)
+            .post_translate(placement.offset_x, placement.offset_y)
             .post_concat(node_transform);
         pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, transform, None);
     } else {
-        let w_u32 = dest_w.ceil() as u32;
-        let h_u32 = dest_h.ceil() as u32;
+        let w_u32 = placement.dest_w.ceil() as u32;
+        let h_u32 = placement.dest_h.ceil() as u32;
         let Some(mut img_pixmap) = Pixmap::new(w_u32.max(1), h_u32.max(1)) else {
             return;
         };
-        let inner_transform = Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
+        let inner_transform = Transform::from_scale(placement.sx, placement.sy)
+            .post_translate(placement.offset_x, placement.offset_y);
         img_pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, inner_transform, None);
         let composite_paint = PixmapPaint {
             opacity: effective_alpha.clamp(0.0, 1.0),
@@ -563,28 +606,24 @@ fn render_raster_pixmap(
 
 fn render_svg_tree(
     tree: &usvg::Tree,
-    sx: f32,
-    sy: f32,
-    offset_x: f32,
-    offset_y: f32,
+    placement: &ImagePlacement,
     node_transform: Transform,
     pixmap: &mut Pixmap,
     effective_alpha: f32,
-    dest_w: f32,
-    dest_h: f32,
 ) {
     if (effective_alpha - 1.0).abs() < 1e-6 {
-        let svg_transform = Transform::from_scale(sx, sy)
-            .post_translate(offset_x, offset_y)
+        let svg_transform = Transform::from_scale(placement.sx, placement.sy)
+            .post_translate(placement.offset_x, placement.offset_y)
             .post_concat(node_transform);
         resvg::render(tree, svg_transform, &mut pixmap.as_mut());
     } else {
-        let w_u32 = dest_w.ceil() as u32;
-        let h_u32 = dest_h.ceil() as u32;
+        let w_u32 = placement.dest_w.ceil() as u32;
+        let h_u32 = placement.dest_h.ceil() as u32;
         let Some(mut img_pixmap) = Pixmap::new(w_u32.max(1), h_u32.max(1)) else {
             return;
         };
-        let svg_transform = Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
+        let svg_transform = Transform::from_scale(placement.sx, placement.sy)
+            .post_translate(placement.offset_x, placement.offset_y);
         resvg::render(tree, svg_transform, &mut img_pixmap.as_mut());
         let paint = PixmapPaint {
             opacity: effective_alpha.clamp(0.0, 1.0),
@@ -595,72 +634,71 @@ fn render_svg_tree(
 }
 
 fn render_image(
-    path: &str,
-    size: &Size,
-    keep_aspect: bool,
-    layers: &[ImageLayer],
-    hidden_layers: &[Arc<String>],
+    spec: &ImageSpec<'_>,
     pixmap: &mut Pixmap,
     parent_transform: Transform,
     position: &Position,
     effective_alpha: f32,
 ) {
-    let Some(cached) = image_cache::load_image(path) else {
+    let Some(cached) = image_cache::load_image(spec.path) else {
         return;
     };
-    let dest_w = size.width as f32;
-    let dest_h = size.height as f32;
+    let dest_w = spec.size.width as f32;
+    let dest_h = spec.size.height as f32;
     if dest_w <= 0.0 || dest_h <= 0.0 || cached.width <= 0.0 || cached.height <= 0.0 {
         return;
     }
 
-    let (sx, sy, offset_x, offset_y) = if keep_aspect {
+    let placement = if spec.keep_aspect {
         let s = (dest_w / cached.width).min(dest_h / cached.height);
         let actual_w = cached.width * s;
         let actual_h = cached.height * s;
-        (s, s, (dest_w - actual_w) / 2.0, (dest_h - actual_h) / 2.0)
+        ImagePlacement {
+            sx: s,
+            sy: s,
+            offset_x: (dest_w - actual_w) / 2.0,
+            offset_y: (dest_h - actual_h) / 2.0,
+            dest_w,
+            dest_h,
+        }
     } else {
-        (dest_w / cached.width, dest_h / cached.height, 0.0, 0.0)
+        ImagePlacement {
+            sx: dest_w / cached.width,
+            sy: dest_h / cached.height,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            dest_w,
+            dest_h,
+        }
     };
 
-    let node_transform = positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
+    let node_transform = positional_transform(
+        position,
+        Size {
+            width: 1.0,
+            height: 1.0,
+        },
+        0.0,
+        0.0,
+        0.0,
+        parent_transform,
+    );
 
     match &cached.kind {
         CachedImageKind::Svg { tree, .. } => {
-            if layers.is_empty() && hidden_layers.is_empty() {
-                render_svg_tree(
-                    tree,
-                    sx,
-                    sy,
-                    offset_x,
-                    offset_y,
-                    node_transform,
-                    pixmap,
-                    effective_alpha,
-                    dest_w,
-                    dest_h,
-                );
+            if spec.layers.is_empty() && spec.hidden_layers.is_empty() {
+                render_svg_tree(tree, &placement, node_transform, pixmap, effective_alpha);
             } else {
                 let all_labels = cached.image_layers.as_ref();
                 if all_labels.is_none_or(|labels| labels.is_empty()) {
-                    render_svg_tree(
-                        tree,
-                        sx,
-                        sy,
-                        offset_x,
-                        offset_y,
-                        node_transform,
-                        pixmap,
-                        effective_alpha,
-                        dest_w,
-                        dest_h,
-                    );
+                    render_svg_tree(tree, &placement, node_transform, pixmap, effective_alpha);
                 } else {
                     for label in all_labels.unwrap().iter() {
-                        if hidden_layers.iter().any(|h| **h == *label) {
+                        if spec.hidden_layers.iter().any(|h| **h == *label) {
                             continue;
                         }
-                        let override_ = layers
+                        let override_ = spec
+                            .layers
                             .iter()
                             .find(|l| l.layer_name.as_str() == label.as_str());
                         let layer_alpha = override_
@@ -672,7 +710,8 @@ fn render_image(
                         let (lx, ly) = override_
                             .map(|ov| (ov.position.x as f32, ov.position.y as f32))
                             .unwrap_or((0.0, 0.0));
-                        let Some(layer_cached) = image_cache::load_svg_layer(path, label) else {
+                        let Some(layer_cached) = image_cache::load_svg_layer(spec.path, label)
+                        else {
                             continue;
                         };
                         let layer_tree = match &layer_cached.kind {
@@ -682,63 +721,46 @@ fn render_image(
                         let layer_transform = node_transform.post_translate(lx, ly);
                         render_svg_tree(
                             layer_tree,
-                            sx,
-                            sy,
-                            offset_x,
-                            offset_y,
+                            &placement,
                             layer_transform,
                             pixmap,
                             layer_alpha,
-                            dest_w,
-                            dest_h,
                         );
                     }
                 }
             }
         }
         CachedImageKind::Raster { pixmap: src } => {
-            render_raster_pixmap(
-                src,
-                sx,
-                sy,
-                offset_x,
-                offset_y,
-                node_transform,
-                pixmap,
-                effective_alpha,
-                dest_w,
-                dest_h,
-            );
+            render_raster_pixmap(src, &placement, node_transform, pixmap, effective_alpha);
         }
         CachedImageKind::Ora { layers: ora_layers } => {
             let all_labels = &cached.image_layers;
-            if layers.is_empty() && hidden_layers.is_empty() {
+            if spec.layers.is_empty() && spec.hidden_layers.is_empty() {
                 for layer_data in ora_layers.iter() {
-                    let layer_ox = offset_x + layer_data.x as f32 * sx;
-                    let layer_oy = offset_y + layer_data.y as f32 * sy;
+                    let layer_placement = ImagePlacement {
+                        offset_x: placement.offset_x + layer_data.x as f32 * placement.sx,
+                        offset_y: placement.offset_y + layer_data.y as f32 * placement.sy,
+                        ..placement
+                    };
                     render_raster_pixmap(
                         &layer_data.pixmap,
-                        sx,
-                        sy,
-                        layer_ox,
-                        layer_oy,
+                        &layer_placement,
                         node_transform,
                         pixmap,
                         effective_alpha,
-                        dest_w,
-                        dest_h,
                     );
                 }
             } else if let Some(all_labels) = all_labels {
                 for label in all_labels.iter() {
-                    if hidden_layers.iter().any(|h| **h == *label) {
+                    if spec.hidden_layers.iter().any(|h| **h == *label) {
                         continue;
                     }
                     let Some(layer_data) = ora_layers.iter().find(|l| l.name == label.as_str())
                     else {
                         continue;
                     };
-                    let override_ = layers
+                    let override_ = spec
+                        .layers
                         .iter()
                         .find(|l| l.layer_name.as_str() == label.as_str());
                     let layer_alpha = override_
@@ -750,19 +772,17 @@ fn render_image(
                     let (lx, ly) = override_
                         .map(|ov| (ov.position.x as f32, ov.position.y as f32))
                         .unwrap_or((0.0, 0.0));
-                    let layer_ox = offset_x + layer_data.x as f32 * sx + lx;
-                    let layer_oy = offset_y + layer_data.y as f32 * sy + ly;
+                    let layer_placement = ImagePlacement {
+                        offset_x: placement.offset_x + layer_data.x as f32 * placement.sx + lx,
+                        offset_y: placement.offset_y + layer_data.y as f32 * placement.sy + ly,
+                        ..placement
+                    };
                     render_raster_pixmap(
                         &layer_data.pixmap,
-                        sx,
-                        sy,
-                        layer_ox,
-                        layer_oy,
+                        &layer_placement,
                         node_transform,
                         pixmap,
                         layer_alpha,
-                        dest_w,
-                        dest_h,
                     );
                 }
             }

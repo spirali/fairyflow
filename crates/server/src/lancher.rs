@@ -150,7 +150,7 @@ pub async fn run_python(
 
     if exit_code == Some(0) {
         match tokio::fs::read_to_string(&tree_path).await {
-            Ok(json_str) => match AnimationDef::from_str(&json_str) {
+            Ok(json_str) => match AnimationDef::from_json(&json_str) {
                 Ok(anim) => {
                     let key_frames: Vec<_> = anim
                         .key_frames(SceneSelection::All)

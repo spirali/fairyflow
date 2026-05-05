@@ -148,7 +148,7 @@ pub async fn export_pdf_handler(
 
         for json_path in &json_paths {
             let text = std::fs::read_to_string(json_path)?;
-            let anim = AnimationDef::from_str(&text)?;
+            let anim = AnimationDef::from_json(&text)?;
 
             // Collect frame indices based on selection.
             let frames: Vec<u32> = match frame_selection {

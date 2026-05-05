@@ -1,4 +1,5 @@
 use crate::PathCommand;
+use crate::Position;
 use crate::glyph_cache::PathVerb;
 
 /// Convert `PathCommand` list to backend-independent path verbs.
@@ -51,46 +52,36 @@ pub fn build_cropped_path_verbs(
     #[derive(Clone)]
     enum SegKind {
         Line {
-            ex: f32,
-            ey: f32,
+            end: Position,
         },
         Cubic {
-            c1x: f32,
-            c1y: f32,
-            c2x: f32,
-            c2y: f32,
-            ex: f32,
-            ey: f32,
+            c1: Position,
+            c2: Position,
+            end: Position,
         },
     }
+
     struct Seg {
-        sx: f32,
-        sy: f32,
+        start: Position,
         kind: SegKind,
-        len: f32,
+        len: f64,
     }
 
     let mut segs: Vec<Seg> = Vec::new();
-    let mut cur = (0.0f32, 0.0f32);
-    let mut subpath_start = (0.0f32, 0.0f32);
+    let mut cur = Position::new(0.0, 0.0);
+    let mut subpath_start = Position::new(0.0, 0.0);
     for cmd in commands {
         match cmd {
             PathCommand::Move { position, .. } => {
-                cur = (position.x as f32, position.y as f32);
+                cur = Position::new(position.x, position.y);
                 subpath_start = cur;
             }
             PathCommand::Line { position, .. } => {
-                let end = (position.x as f32, position.y as f32);
-                let dx = end.0 - cur.0;
-                let dy = end.1 - cur.1;
-                let len = (dx * dx + dy * dy).sqrt();
+                let end = Position::new(position.x, position.y);
+                let len = (end.x - cur.x).hypot(end.y - cur.y);
                 segs.push(Seg {
-                    sx: cur.0,
-                    sy: cur.1,
-                    kind: SegKind::Line {
-                        ex: end.0,
-                        ey: end.1,
-                    },
+                    start: cur,
+                    kind: SegKind::Line { end },
                     len,
                 });
                 cur = end;
@@ -103,35 +94,31 @@ pub fn build_cropped_path_verbs(
                 c2_y,
                 ..
             } => {
-                let end = (position.x as f32, position.y as f32);
-                let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);
-                let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
-                let len = cubic_arc_length_f32(cur.0, cur.1, c1.0, c1.1, c2.0, c2.1, end.0, end.1);
+                let end = Position::new(position.x, position.y);
+                let bezier = CubicBezier {
+                    p0: cur,
+                    c1: Position::new(cur.x + c1_x, cur.y + c1_y),
+                    c2: Position::new(end.x + c2_x, end.y + c2_y),
+                    p3: end,
+                };
+                let len = bezier.arc_length();
                 segs.push(Seg {
-                    sx: cur.0,
-                    sy: cur.1,
+                    start: cur,
                     kind: SegKind::Cubic {
-                        c1x: c1.0,
-                        c1y: c1.1,
-                        c2x: c2.0,
-                        c2y: c2.1,
-                        ex: end.0,
-                        ey: end.1,
+                        c1: bezier.c1,
+                        c2: bezier.c2,
+                        end,
                     },
                     len,
                 });
                 cur = end;
             }
             PathCommand::Close { .. } => {
-                let (sx, sy) = subpath_start;
-                if cur.0 != sx || cur.1 != sy {
-                    let dx = sx - cur.0;
-                    let dy = sy - cur.1;
-                    let len = (dx * dx + dy * dy).sqrt();
+                if cur != subpath_start {
+                    let len = (subpath_start.x - cur.x).hypot(subpath_start.y - cur.y);
                     segs.push(Seg {
-                        sx: cur.0,
-                        sy: cur.1,
-                        kind: SegKind::Line { ex: sx, ey: sy },
+                        start: cur,
+                        kind: SegKind::Line { end: subpath_start },
                         len,
                     });
                     cur = subpath_start;
@@ -140,20 +127,20 @@ pub fn build_cropped_path_verbs(
         }
     }
 
-    let total_len: f32 = segs.iter().map(|s| s.len).sum();
+    let total_len: f64 = segs.iter().map(|s| s.len).sum();
     if total_len == 0.0 {
         return build_path_verbs(commands);
     }
 
-    let start_dist = (crop_start as f32 * total_len).max(0.0);
-    let end_dist = (crop_end as f32 * total_len).min(total_len);
+    let start_dist = (crop_start * total_len).max(0.0);
+    let end_dist = (crop_end * total_len).min(total_len);
     if start_dist >= end_dist {
         return Vec::new();
     }
 
     let mut verbs = Vec::new();
-    let mut accumulated = 0.0f32;
-    let mut last_end: Option<(f32, f32)> = None;
+    let mut accumulated = 0.0f64;
+    let mut last_end: Option<Position> = None;
 
     for seg in &segs {
         let seg_end_acc = accumulated + seg.len;
@@ -178,33 +165,41 @@ pub fn build_cropped_path_verbs(
         };
 
         match &seg.kind {
-            SegKind::Line { ex, ey } => {
-                let start_pt = (seg.sx + t1 * (ex - seg.sx), seg.sy + t1 * (ey - seg.sy));
-                let end_pt = (seg.sx + t2 * (ex - seg.sx), seg.sy + t2 * (ey - seg.sy));
+            SegKind::Line { end } => {
+                let start_pt = Position::new(
+                    seg.start.x + t1 * (end.x - seg.start.x),
+                    seg.start.y + t1 * (end.y - seg.start.y),
+                );
+                let end_pt = Position::new(
+                    seg.start.x + t2 * (end.x - seg.start.x),
+                    seg.start.y + t2 * (end.y - seg.start.y),
+                );
                 if last_end != Some(start_pt) {
-                    verbs.push(PathVerb::MoveTo(start_pt.0, start_pt.1));
+                    verbs.push(PathVerb::MoveTo(start_pt.x as f32, start_pt.y as f32));
                 }
-                verbs.push(PathVerb::LineTo(end_pt.0, end_pt.1));
+                verbs.push(PathVerb::LineTo(end_pt.x as f32, end_pt.y as f32));
                 last_end = Some(end_pt);
             }
-            SegKind::Cubic {
-                c1x,
-                c1y,
-                c2x,
-                c2y,
-                ex,
-                ey,
-            } => {
-                let p0 = (seg.sx, seg.sy);
-                let c1 = (*c1x, *c1y);
-                let c2 = (*c2x, *c2y);
-                let p3 = (*ex, *ey);
-                let (sp0, sc1, sc2, sp3) = cubic_subsegment(p0, c1, c2, p3, t1, t2);
-                if last_end != Some(sp0) {
-                    verbs.push(PathVerb::MoveTo(sp0.0, sp0.1));
+            SegKind::Cubic { c1, c2, end } => {
+                let sub = CubicBezier {
+                    p0: seg.start,
+                    c1: *c1,
+                    c2: *c2,
+                    p3: *end,
                 }
-                verbs.push(PathVerb::CubicTo(sc1.0, sc1.1, sc2.0, sc2.1, sp3.0, sp3.1));
-                last_end = Some(sp3);
+                .subsegment(t1, t2);
+                if last_end != Some(sub.p0) {
+                    verbs.push(PathVerb::MoveTo(sub.p0.x as f32, sub.p0.y as f32));
+                }
+                verbs.push(PathVerb::CubicTo(
+                    sub.c1.x as f32,
+                    sub.c1.y as f32,
+                    sub.c2.x as f32,
+                    sub.c2.y as f32,
+                    sub.p3.x as f32,
+                    sub.p3.y as f32,
+                ));
+                last_end = Some(sub.p3);
             }
         }
 
@@ -214,74 +209,82 @@ pub fn build_cropped_path_verbs(
     verbs
 }
 
-// ── Private helpers (ported from renderer-skia) ───────────────────────────────
+// ── Private helpers ───────────────────────────────────────────────────────────
 
-fn cubic_arc_length_f32(
-    p0x: f32,
-    p0y: f32,
-    c1x: f32,
-    c1y: f32,
-    c2x: f32,
-    c2y: f32,
-    p1x: f32,
-    p1y: f32,
-) -> f32 {
-    const STEPS: usize = 16;
-    let mut len = 0.0f32;
-    let mut prev = (p0x, p0y);
-    for i in 1..=STEPS {
-        let t = i as f32 / STEPS as f32;
-        let inv = 1.0 - t;
-        let inv2 = inv * inv;
-        let inv3 = inv2 * inv;
-        let t2 = t * t;
-        let t3 = t2 * t;
-        let x = inv3 * p0x + 3.0 * inv2 * t * c1x + 3.0 * inv * t2 * c2x + t3 * p1x;
-        let y = inv3 * p0y + 3.0 * inv2 * t * c1y + 3.0 * inv * t2 * c2y + t3 * p1y;
-        let dx = x - prev.0;
-        let dy = y - prev.1;
-        len += (dx * dx + dy * dy).sqrt();
-        prev = (x, y);
+#[derive(Clone, Copy)]
+struct CubicBezier {
+    p0: Position,
+    c1: Position,
+    c2: Position,
+    p3: Position,
+}
+
+impl CubicBezier {
+    /// Arc length via fixed-step numerical integration.
+    fn arc_length(self) -> f64 {
+        const STEPS: usize = 16;
+        let mut len = 0.0f64;
+        let mut prev = self.p0;
+        for i in 1..=STEPS {
+            let t = i as f64 / STEPS as f64;
+            let inv = 1.0 - t;
+            let inv2 = inv * inv;
+            let inv3 = inv2 * inv;
+            let t2 = t * t;
+            let t3 = t2 * t;
+            let cur = Position::new(
+                inv3 * self.p0.x
+                    + 3.0 * inv2 * t * self.c1.x
+                    + 3.0 * inv * t2 * self.c2.x
+                    + t3 * self.p3.x,
+                inv3 * self.p0.y
+                    + 3.0 * inv2 * t * self.c1.y
+                    + 3.0 * inv * t2 * self.c2.y
+                    + t3 * self.p3.y,
+            );
+            let dx = cur.x - prev.x;
+            let dy = cur.y - prev.y;
+            len += (dx * dx + dy * dy).sqrt();
+            prev = cur;
+        }
+        len
     }
-    len
-}
 
-fn split_cubic(
-    p0: (f32, f32),
-    c1: (f32, f32),
-    c2: (f32, f32),
-    p3: (f32, f32),
-    t: f32,
-) -> (
-    ((f32, f32), (f32, f32), (f32, f32), (f32, f32)),
-    ((f32, f32), (f32, f32), (f32, f32), (f32, f32)),
-) {
-    let lerp = |(ax, ay): (f32, f32), (bx, by): (f32, f32)| -> (f32, f32) {
-        (ax + t * (bx - ax), ay + t * (by - ay))
-    };
-    let m01 = lerp(p0, c1);
-    let m12 = lerp(c1, c2);
-    let m23 = lerp(c2, p3);
-    let m012 = lerp(m01, m12);
-    let m123 = lerp(m12, m23);
-    let m0123 = lerp(m012, m123);
-    ((p0, m01, m012, m0123), (m0123, m123, m23, p3))
-}
+    /// Split at parameter `t`, returning the left and right halves.
+    fn split(self, t: f64) -> (CubicBezier, CubicBezier) {
+        let lerp =
+            |a: Position, b: Position| Position::new(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y));
+        let m01 = lerp(self.p0, self.c1);
+        let m12 = lerp(self.c1, self.c2);
+        let m23 = lerp(self.c2, self.p3);
+        let m012 = lerp(m01, m12);
+        let m123 = lerp(m12, m23);
+        let m0123 = lerp(m012, m123);
+        (
+            CubicBezier {
+                p0: self.p0,
+                c1: m01,
+                c2: m012,
+                p3: m0123,
+            },
+            CubicBezier {
+                p0: m0123,
+                c1: m123,
+                c2: m23,
+                p3: self.p3,
+            },
+        )
+    }
 
-fn cubic_subsegment(
-    p0: (f32, f32),
-    c1: (f32, f32),
-    c2: (f32, f32),
-    p3: (f32, f32),
-    t1: f32,
-    t2: f32,
-) -> ((f32, f32), (f32, f32), (f32, f32), (f32, f32)) {
-    let (_, right) = split_cubic(p0, c1, c2, p3, t1);
-    let t_new = if t1 < 1.0 {
-        (t2 - t1) / (1.0 - t1)
-    } else {
-        1.0
-    };
-    let (left, _) = split_cubic(right.0, right.1, right.2, right.3, t_new.clamp(0.0, 1.0));
-    left
+    /// Extract the sub-curve between parameters `t1` and `t2`.
+    fn subsegment(self, t1: f64, t2: f64) -> CubicBezier {
+        let (_, right) = self.split(t1);
+        let t_new = if t1 < 1.0 {
+            (t2 - t1) / (1.0 - t1)
+        } else {
+            1.0
+        };
+        let (left, _) = right.split(t_new.clamp(0.0, 1.0));
+        left
+    }
 }

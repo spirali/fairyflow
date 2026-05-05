@@ -177,10 +177,12 @@ async fn main() {
                 output_file,
                 threads,
                 font_dirs,
-                target_resolution,
-                fps,
-                codec,
-                crf,
+                VideoOptions {
+                    target_resolution,
+                    fps,
+                    codec,
+                    crf,
+                },
             )
             .await
         }
@@ -282,15 +284,19 @@ async fn run_render_png(
     .await;
 }
 
+struct VideoOptions {
+    target_resolution: Option<(u32, u32)>,
+    fps: u32,
+    codec: String,
+    crf: u32,
+}
+
 async fn run_render_video(
     json_path: PathBuf,
     output_file: PathBuf,
     threads: Option<usize>,
     font_dirs: Vec<PathBuf>,
-    target_resolution: Option<(u32, u32)>,
-    fps: u32,
-    codec: String,
-    crf: u32,
+    opts: VideoOptions,
 ) {
     let anim = load_anim(&json_path).await;
     if !font_dirs.is_empty() {
@@ -300,10 +306,10 @@ async fn run_render_video(
         anim,
         output_file,
         threads,
-        target_resolution,
-        fps,
-        codec,
-        crf,
+        opts.target_resolution,
+        opts.fps,
+        opts.codec,
+        opts.crf,
     )
     .await;
 }
@@ -329,7 +335,7 @@ async fn load_anim(json_path: &PathBuf) -> AnimationDef {
             std::process::exit(1);
         }
     };
-    match AnimationDef::from_str(&json_str) {
+    match AnimationDef::from_json(&json_str) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: failed to parse animation JSON: {e}");

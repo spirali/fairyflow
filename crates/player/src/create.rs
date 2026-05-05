@@ -41,7 +41,7 @@ pub fn create_package(
         archive.start_file(&archive_path, options)?;
         archive.write_all(scene.as_bytes())?;
         scene_archive_paths.push(archive_path);
-        let anim = AnimationDef::from_str(&scene)?;
+        let anim = AnimationDef::from_json(&scene)?;
         image_tmp_paths.clear();
         anim.collect_images(&mut image_tmp_paths);
         for image_path in &image_tmp_paths {

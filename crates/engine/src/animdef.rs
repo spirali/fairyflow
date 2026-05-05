@@ -3,7 +3,9 @@ use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::nodes::{Node, NodeKind, SceneDef};
 use crate::values::Eval;
-use renderer_core::{AffineTransform, Position as RcPosition, positional_transform};
+use renderer_core::{
+    AffineTransform, Position as RcPosition, Size as RcSize, positional_transform,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -249,7 +251,7 @@ impl AnimationDef {
         self.scenes.len()
     }
 
-    pub fn from_str(s: &str) -> anyhow::Result<Self> {
+    pub fn from_json(s: &str) -> anyhow::Result<Self> {
         let raws: Vec<RawAnimationDef> = if s.trim_start().starts_with('[') {
             serde_json::from_str(s)?
         } else {
@@ -326,7 +328,17 @@ fn collect_world_bounds(
         let pos = RcPosition { x, y };
 
         // Maps group-local coordinates → world coordinates
-        let child_transform = positional_transform(&pos, sx, sy, rot, pvx, pvy, parent_transform);
+        let child_transform = positional_transform(
+            &pos,
+            RcSize {
+                width: sx,
+                height: sy,
+            },
+            rot,
+            pvx,
+            pvy,
+            parent_transform,
+        );
 
         // Group's own AABB: corners (0,0)-(w,h) in group-local space
         map.insert(
@@ -378,7 +390,7 @@ mod tests {
 
     /// A minimal single-scene JSON using the current inline-expression format.
     const SCENE_JSON: &str = r#"{
-  "scene": {"kind": "scene", "id": 0, "width": 200, "height": 200,
+  "scene": {"kind": "scene", "id": 0, "width": 200, "height": 200, "frames": 1,
             "fill_color": "white", "children": [1], "name": "Test"},
   "animated_values": [],
   "nodes": [
@@ -392,7 +404,7 @@ mod tests {
 
     #[test]
     fn parse_flat_format() {
-        let anim = AnimationDef::from_str(SCENE_JSON).unwrap();
+        let anim = AnimationDef::from_json(SCENE_JSON).unwrap();
         assert_eq!(anim.scene_count(), 1);
         assert_eq!(anim.scenes[0].name, "Test");
         let kf = anim.key_frames(SceneSelection::All);
@@ -402,14 +414,14 @@ mod tests {
     #[test]
     fn parse_array_format() {
         let json = format!("[{}]", SCENE_JSON);
-        let anim = AnimationDef::from_str(&json).unwrap();
+        let anim = AnimationDef::from_json(&json).unwrap();
         assert_eq!(anim.scene_count(), 1);
     }
 
     #[test]
     fn multi_scene_frame_offsets() {
         let json = format!("[{0}, {0}]", SCENE_JSON);
-        let anim = AnimationDef::from_str(&json).unwrap();
+        let anim = AnimationDef::from_json(&json).unwrap();
         assert_eq!(anim.scene_count(), 2);
         // Each scene has only frame 0 → frame_count = 1.
         // Scene 0 offset = 0, scene 1 offset = 1.
@@ -422,7 +434,7 @@ mod tests {
 
     #[test]
     fn build_scene_all() {
-        let anim = AnimationDef::from_str(SCENE_JSON).unwrap();
+        let anim = AnimationDef::from_json(SCENE_JSON).unwrap();
         anim.build_scene(FrameId::new(0), SceneSelection::All)
             .unwrap();
     }
@@ -430,7 +442,7 @@ mod tests {
     #[test]
     fn build_scene_multi_resolves_correctly() {
         let json = format!("[{0}, {0}]", SCENE_JSON);
-        let anim = AnimationDef::from_str(&json).unwrap();
+        let anim = AnimationDef::from_json(&json).unwrap();
         // Frame 0 → scene 0, local 0
         anim.build_scene(FrameId::new(0), SceneSelection::All)
             .unwrap();

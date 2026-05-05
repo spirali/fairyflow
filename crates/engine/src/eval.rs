@@ -3,7 +3,7 @@ use crate::basictypes::NodeId;
 use crate::nodes::{AttrExpr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle};
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Eval, Expr, FloatCall, FloatParamsPair, Value};
-use renderer_core::Inheritable;
+use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
 use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -80,12 +80,42 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     chain
 }
 
-/// Get the affine transform parameters of a Group node at the current frame.
-/// Returns (tx, ty, sx, sy, cos_r, sin_r, pivot_x_abs, pivot_y_abs).
-fn group_transform(
-    node: &Node,
-    ctx: &EvalCtx,
-) -> anyhow::Result<(f64, f64, f64, f64, f64, f64, f64, f64)> {
+struct GroupTransform {
+    pos: RcPosition,
+    scale: RcSize,
+    cos_r: f64,
+    sin_r: f64,
+    pivot: RcPosition,
+}
+
+impl GroupTransform {
+    /// Transform `local` from this group's local space into its parent space.
+    fn to_parent(&self, local: RcPosition) -> RcPosition {
+        let qx = local.x - self.pivot.x;
+        let qy = local.y - self.pivot.y;
+        RcPosition::new(
+            self.cos_r * self.scale.width * qx - self.sin_r * self.scale.height * qy
+                + self.pivot.x
+                + self.pos.x,
+            self.sin_r * self.scale.width * qx
+                + self.cos_r * self.scale.height * qy
+                + self.pivot.y
+                + self.pos.y,
+        )
+    }
+
+    /// Transform `parent_pt` from the parent space into this group's local space.
+    fn to_local(&self, parent_pt: RcPosition) -> RcPosition {
+        let qx = parent_pt.x - self.pivot.x - self.pos.x;
+        let qy = parent_pt.y - self.pivot.y - self.pos.y;
+        RcPosition::new(
+            (self.cos_r * qx + self.sin_r * qy) / self.scale.width + self.pivot.x,
+            (-self.sin_r * qx + self.cos_r * qy) / self.scale.height + self.pivot.y,
+        )
+    }
+}
+
+fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform> {
     match &node.kind {
         NodeKind::Group {
             position,
@@ -97,83 +127,44 @@ fn group_transform(
             pivot_y,
             ..
         } => {
-            let tx = position.x.eval(ctx)?;
-            let ty = position.y.eval(ctx)?;
-            let sx = scale_x.eval(ctx)?;
-            let sy = scale_y.eval(ctx)?;
+            let pos = RcPosition::new(position.x.eval(ctx)?, position.y.eval(ctx)?);
+            let scale = RcSize {
+                width: scale_x.eval(ctx)?,
+                height: scale_y.eval(ctx)?,
+            };
             let r = rotation.eval(ctx)?.to_radians();
             let w = size.width.eval(ctx)?;
             let h = size.height.eval(ctx)?;
-            let pvx = pivot_x.eval(ctx)? * w;
-            let pvy = pivot_y.eval(ctx)? * h;
-            Ok((tx, ty, sx, sy, r.cos(), r.sin(), pvx, pvy))
+            let pivot = RcPosition::new(pivot_x.eval(ctx)? * w, pivot_y.eval(ctx)? * h);
+            Ok(GroupTransform {
+                pos,
+                scale,
+                cos_r: r.cos(),
+                sin_r: r.sin(),
+                pivot,
+            })
         }
         _ => anyhow::bail!("node {:?} has no group transform (not a group)", node.id),
     }
 }
 
-/// Transform (lx, ly) from node n's local space into n's parent space.
-/// Pivot is expressed in absolute local-space coordinates (pivot_x * width, pivot_y * height).
-fn from_node_pos(
-    tx: f64,
-    ty: f64,
-    sx: f64,
-    sy: f64,
-    cos_r: f64,
-    sin_r: f64,
-    pvx: f64,
-    pvy: f64,
-    lx: f64,
-    ly: f64,
-) -> (f64, f64) {
-    let qx = lx - pvx;
-    let qy = ly - pvy;
-    (
-        cos_r * sx * qx - sin_r * sy * qy + pvx + tx,
-        sin_r * sx * qx + cos_r * sy * qy + pvy + ty,
-    )
-}
-
-/// Transform (px, py) from parent space into node n's local space.
-/// Pivot is expressed in absolute local-space coordinates (pivot_x * width, pivot_y * height).
-fn into_node_pos(
-    tx: f64,
-    ty: f64,
-    sx: f64,
-    sy: f64,
-    cos_r: f64,
-    sin_r: f64,
-    pvx: f64,
-    pvy: f64,
-    px: f64,
-    py: f64,
-) -> (f64, f64) {
-    let qx = px - pvx - tx;
-    let qy = py - pvy - ty;
-    (
-        (cos_r * qx + sin_r * qy) / sx + pvx,
-        (-sin_r * qx + cos_r * qy) / sy + pvy,
-    )
-}
-
-/// Transform point (x, y) from source node's local coordinate space into target node's local space.
+/// Transform `pt` from source node's local coordinate space into target node's local space.
 fn node_transform(
     source: NodeId,
     target: NodeId,
-    x: f64,
-    y: f64,
+    mut pt: RcPosition,
     ctx: &EvalCtx,
-) -> anyhow::Result<(f64, f64)> {
+) -> anyhow::Result<RcPosition> {
     let _span = tracing::trace_span!(
         "node_transform",
         source = source.as_u64(),
         target = target.as_u64(),
-        x,
-        y
+        x = pt.x,
+        y = pt.y
     )
     .entered();
     if source == target {
-        return Ok((x, y));
+        return Ok(pt);
     }
 
     let mut cs = ancestor_chain(ctx, source); // [source, ..., top]
@@ -188,24 +179,19 @@ fn node_transform(
     // ct reversed = path from just-below-LCA down to target
     ct.reverse();
 
-    let mut px = x;
-    let mut py = y;
-
     // Go up: each node transforms from its local space to its parent's space
     for node_id in cs {
         let node = ctx.node(node_id)?;
-        let (tx, ty, sx, sy, cos_r, sin_r, pvx, pvy) = group_transform(node, ctx)?;
-        (px, py) = from_node_pos(tx, ty, sx, sy, cos_r, sin_r, pvx, pvy, px, py);
+        pt = group_transform(node, ctx)?.to_parent(pt);
     }
 
     // Go down: each node transforms from parent space into its local space
     for node_id in ct {
         let node = ctx.node(node_id)?;
-        let (tx, ty, sx, sy, cos_r, sin_r, pvx, pvy) = group_transform(node, ctx)?;
-        (px, py) = into_node_pos(tx, ty, sx, sy, cos_r, sin_r, pvx, pvy, px, py);
+        pt = group_transform(node, ctx)?.to_local(pt);
     }
 
-    Ok((px, py))
+    Ok(pt)
 }
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
@@ -281,8 +267,7 @@ impl Eval<f64> for FloatCall {
                 );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
-                let (px, _py) = node_transform(params.source, params.target, xv, yv, ctx)?;
-                Ok(px)
+                Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.x)
             }
             FloatCall::NodeTransformY(params) => {
                 tracing::trace!(
@@ -292,8 +277,7 @@ impl Eval<f64> for FloatCall {
                 );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
-                let (_px, py) = node_transform(params.source, params.target, xv, yv, ctx)?;
-                Ok(py)
+                Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.y)
             }
             FloatCall::DefaultWidth { node } => {
                 let node = ctx.node(*node)?;
@@ -313,11 +297,11 @@ impl Eval<f64> for FloatCall {
             }
             FloatCall::PathX(p) => {
                 let t = p.t.eval(ctx)?;
-                Ok(point_in_path(ctx, p.node, t)?.0)
+                Ok(point_in_path(ctx, p.node, t)?.x)
             }
             FloatCall::PathY(p) => {
                 let t = p.t.eval(ctx)?;
-                Ok(point_in_path(ctx, p.node, t)?.1)
+                Ok(point_in_path(ctx, p.node, t)?.y)
             }
             FloatCall::PathLength { node } => path_length(ctx, *node),
         }

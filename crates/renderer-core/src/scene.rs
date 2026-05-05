@@ -40,14 +40,20 @@ impl<T: Debug + Clone> Inheritable<T> {
 }
 
 /// Mirrors PositionMixin in Python.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Position {
     pub x: f64,
     pub y: f64,
 }
 
+impl Position {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+}
+
 /// Mirrors SizeMixin in Python.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Size {
     pub width: f64,
     pub height: f64,

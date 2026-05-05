@@ -1,6 +1,7 @@
 use crate::eval::EvalCtx;
 use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::values::Eval;
+use renderer_core::Position as RcPosition;
 
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
@@ -67,10 +68,10 @@ impl Node {
         s.height.eval(ctx)
     }
 
-    /// Returns `(offset_x, offset_y)`: the position of the AABB's top-left corner
-    /// relative to the node's own (x, y) position in the parent space.
+    /// Returns the position of the AABB's top-left corner relative to the node's
+    /// own (x, y) position in the parent space.
     /// For non-group nodes (no rotation/scale) this is always (0, 0).
-    pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
+    pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<RcPosition> {
         match &self.kind {
             NodeKind::Group {
                 size,
@@ -104,9 +105,9 @@ impl Node {
                     + (if cy >= 0.0 { -cy * pvx } else { cy * (w - pvx) })
                     + (if dy >= 0.0 { -dy * pvy } else { dy * (h - pvy) });
 
-                Ok((min_x, min_y))
+                Ok(RcPosition::new(min_x, min_y))
             }
-            _ => Ok((0.0, 0.0)),
+            _ => Ok(RcPosition::new(0.0, 0.0)),
         }
     }
 
@@ -187,17 +188,17 @@ impl Node {
             | NodeKind::Ellipse { .. }
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
-                let (off_x, _) = self.aabb_offset(ctx)?;
+                let off = self.aabb_offset(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) / 2.0 - off_x
+                        (parent_w - self_w) / 2.0 - off.x
                     }
                     Layout::Column { align, .. } => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) * align.eval(ctx)? - off_x
+                        (parent_w - self_w) * align.eval(ctx)? - off.x
                     }
                     Layout::Row { gap, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
@@ -208,7 +209,7 @@ impl Node {
                         let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
-                                return Ok(x - off_x);
+                                return Ok(x - off.x);
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
@@ -238,12 +239,12 @@ impl Node {
             | NodeKind::Ellipse { .. }
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
-                let (_, off_y) = self.aabb_offset(ctx)?;
+                let off = self.aabb_offset(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) / 2.0 - off_y
+                        (parent_h - self_h) / 2.0 - off.y
                     }
                     Layout::Column { gap, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
@@ -254,7 +255,7 @@ impl Node {
                         let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
-                                return Ok(y - off_y);
+                                return Ok(y - off.y);
                             }
                             let node = ctx.node(*child)?;
                             if node.is_active(ctx.frame()) {
@@ -266,7 +267,7 @@ impl Node {
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) * align.eval(ctx)? - off_y
+                        (parent_h - self_h) * align.eval(ctx)? - off.y
                     }
                 }
             }

@@ -394,7 +394,7 @@ async fn do_export_seq_video(
         let mut anims: Vec<AnimationDef> = Vec::new();
         for json_path in &json_paths {
             let text = std::fs::read_to_string(json_path)?;
-            let anim = AnimationDef::from_str(&text)?;
+            let anim = AnimationDef::from_json(&text)?;
             anims.push(anim);
         }
 

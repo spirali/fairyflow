@@ -1,4 +1,4 @@
-use crate::{Node, NodeKind, Position};
+use crate::{Node, NodeKind, Position, Size};
 
 /// Portable 2D affine transform.
 ///
@@ -81,15 +81,17 @@ impl AffineTransform {
 /// `translate(-pivot) · scale · rotate · translate(pos + pivot) · parent`
 pub fn positional_transform(
     position: &Position,
-    scale_x: f64,
-    scale_y: f64,
+    scale: Size,
     rotation: f64,
     pivot_x: f32,
     pivot_y: f32,
     parent: AffineTransform,
 ) -> AffineTransform {
     AffineTransform::from_translate(-pivot_x, -pivot_y)
-        .concat(AffineTransform::from_scale(scale_x as f32, scale_y as f32))
+        .concat(AffineTransform::from_scale(
+            scale.width as f32,
+            scale.height as f32,
+        ))
         .concat(AffineTransform::from_rotate_degrees(rotation as f32))
         .concat(AffineTransform::from_translate(
             position.x as f32 + pivot_x,

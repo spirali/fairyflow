@@ -93,7 +93,7 @@ fn load_package(path: &Path) -> anyhow::Result<LoadedPackage> {
             scene_json = scene_json.replace(from.as_str(), to.as_str());
         }
 
-        animations.push(AnimationDef::from_str(&scene_json)?);
+        animations.push(AnimationDef::from_json(&scene_json)?);
     }
 
     if animations.is_empty() {

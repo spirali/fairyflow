@@ -94,10 +94,7 @@ impl Resources {
                     .extension()
                     .and_then(|e| e.to_str())
                     .map(|e| e.to_ascii_lowercase());
-                if ext
-                    .as_deref()
-                    .map_or(false, |e| FONT_EXTENSIONS.contains(&e))
-                {
+                if ext.as_deref().is_some_and(|e| FONT_EXTENSIONS.contains(&e)) {
                     match std::fs::read(&path) {
                         Ok(data) => {
                             font_cx_guard

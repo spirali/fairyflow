@@ -13,7 +13,9 @@ use renderer_core::{
 };
 use resvg::usvg;
 use std::sync::Arc;
-use tiny_skia::{FillRule, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Stroke, Transform};
+use tiny_skia::{
+    FillRule, FilterQuality, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Stroke, Transform,
+};
 
 // ── Color conversion ──────────────────────────────────────────────────────────
 
@@ -313,21 +315,21 @@ impl RasterRenderer {
                                     .fill_color
                                     .value()
                                     .as_ref()
-                                    .map(|c| color_to_skia(c))
+                                    .map(color_to_skia)
                             })
                     } else {
                         span.text_style
                             .fill_color
                             .value()
                             .as_ref()
-                            .map(|c| color_to_skia(c))
+                            .map(color_to_skia)
                     }
                 } else {
                     span.text_style
                         .fill_color
                         .value()
                         .as_ref()
-                        .map(|c| color_to_skia(c))
+                        .map(color_to_skia)
                 };
 
                 let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
@@ -527,8 +529,10 @@ fn render_raster_pixmap(
     let Some(src_pixmap) = raw_to_pixmap(src) else {
         return;
     };
-    let mut paint = PixmapPaint::default();
-    paint.quality = tiny_skia::FilterQuality::Bilinear;
+    let paint = PixmapPaint {
+        quality: FilterQuality::Bilinear,
+        ..Default::default()
+    };
     if (effective_alpha - 1.0).abs() < 1e-6 {
         let transform = Transform::from_scale(sx, sy)
             .post_translate(offset_x, offset_y)
@@ -542,8 +546,10 @@ fn render_raster_pixmap(
         };
         let inner_transform = Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
         img_pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, inner_transform, None);
-        let mut composite_paint = PixmapPaint::default();
-        composite_paint.opacity = effective_alpha.clamp(0.0, 1.0);
+        let composite_paint = PixmapPaint {
+            opacity: effective_alpha.clamp(0.0, 1.0),
+            ..Default::default()
+        };
         pixmap.draw_pixmap(
             0,
             0,
@@ -580,8 +586,10 @@ fn render_svg_tree(
         };
         let svg_transform = Transform::from_scale(sx, sy).post_translate(offset_x, offset_y);
         resvg::render(tree, svg_transform, &mut img_pixmap.as_mut());
-        let mut paint = PixmapPaint::default();
-        paint.opacity = effective_alpha.clamp(0.0, 1.0);
+        let paint = PixmapPaint {
+            opacity: effective_alpha.clamp(0.0, 1.0),
+            ..Default::default()
+        };
         pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, node_transform, None);
     }
 }

@@ -13,7 +13,7 @@ impl Node {
             | NodeKind::Text { position, .. }
             | NodeKind::Image { position, .. }
             | NodeKind::Layer { position, .. }
-            | NodeKind::Cubic { position, .. } => Some(&position),
+            | NodeKind::Cubic { position, .. } => Some(position),
             NodeKind::TextGroup { .. }
             | NodeKind::TextSpan { .. }
             | NodeKind::Path { .. }
@@ -27,7 +27,7 @@ impl Node {
             | NodeKind::Rect { size, .. }
             | NodeKind::Ellipse { size, .. }
             | NodeKind::Image { size, .. }
-            | NodeKind::Layer { size, .. } => Some(&size),
+            | NodeKind::Layer { size, .. } => Some(size),
             NodeKind::Text { .. }
             | NodeKind::Move { .. }
             | NodeKind::Line { .. }

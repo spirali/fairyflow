@@ -181,7 +181,7 @@ async fn file_save_handler(
 
     let is_config = std::path::Path::new(&params.path)
         .file_name()
-        .map_or(false, |n| n == "fairyflow.toml");
+        .is_some_and(|n| n == "fairyflow.toml");
 
     if is_config {
         match ProjectConfig::load(std::path::Path::new("fairyflow.toml")) {
@@ -371,7 +371,7 @@ async fn trees_handler(
         renderer_skia::clear_image_cache();
         (params.from..=params.to)
             .map(|n| {
-                anim.build_scene(FrameId::new(n as u32), sel)
+                anim.build_scene(FrameId::new(n), sel)
                     .map(|scene| TreeFrame { n, scene })
             })
             .collect::<Result<Vec<_>, _>>()
@@ -460,7 +460,7 @@ async fn frames_handler(
         (from..=to)
             .into_par_iter()
             .filter_map(|n| {
-                let scene = anim.build_scene(FrameId::new(n as u32), sel).ok()?;
+                let scene = anim.build_scene(FrameId::new(n), sel).ok()?;
                 let pixmap = renderer_skia::render_scene(&scene, scale);
                 let png = pixmap.encode_png().ok()?;
                 Some(RenderedFrame {

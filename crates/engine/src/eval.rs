@@ -510,10 +510,10 @@ impl Node {
                     let mut result = Vec::new();
                     for &id in children {
                         let node = ctx.node(id)?;
-                        if !node.is_active(ctx.frame()) {
-                            if let NodeKind::Layer { layer_name, .. } = &node.kind {
-                                result.push(layer_name.clone());
-                            }
+                        if !node.is_active(ctx.frame())
+                            && let NodeKind::Layer { layer_name, .. } = &node.kind
+                        {
+                            result.push(layer_name.clone());
                         }
                     }
                     result

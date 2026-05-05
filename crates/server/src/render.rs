@@ -222,12 +222,12 @@ pub async fn render_anim_to_video(
     .await;
 
     // Ensure output parent directory exists
-    if let Some(parent) = output_path.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            eprintln!("error: failed to create output directory: {e}");
-            let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-            std::process::exit(1);
-        }
+    if let Some(parent) = output_path.parent()
+        && let Err(e) = tokio::fs::create_dir_all(parent).await
+    {
+        eprintln!("error: failed to create output directory: {e}");
+        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+        std::process::exit(1);
     }
 
     // Run ffmpeg to produce the video

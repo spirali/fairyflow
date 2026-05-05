@@ -4,7 +4,7 @@ use crate::nodes::Transition;
 use crate::values::{Eval, Expr, Value};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 #[serde(bound(deserialize = "T: DeserializeOwned"))]

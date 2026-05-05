@@ -175,12 +175,12 @@ impl Value for Option<Color> {
             (None, Some(rc)) => {
                 let mut lc = rc.clone();
                 lc.set_alpha(0.0);
-                Some(Color::interpolate(&lc, &rc, t))
+                Some(Color::interpolate(&lc, rc, t))
             }
             (Some(lc), None) => {
                 let mut rc = lc.clone();
                 rc.set_alpha(0.0);
-                Some(Color::interpolate(&lc, &rc, t))
+                Some(Color::interpolate(lc, &rc, t))
             }
         }
     }

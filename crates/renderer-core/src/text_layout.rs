@@ -194,10 +194,10 @@ impl TextLayoutEngine {
             let cached = self.get_or_build_line(&spans);
 
             let first_target_idx = tagged.iter().position(|(is_target, _)| *is_target);
-            if let Some(target_span_idx) = first_target_idx {
-                if let Some(glyph) = cached.glyphs.iter().find(|g| g.span_idx == target_span_idx) {
-                    return Some((glyph.x, y_offset));
-                }
+            if let Some(target_span_idx) = first_target_idx
+                && let Some(glyph) = cached.glyphs.iter().find(|g| g.span_idx == target_span_idx)
+            {
+                return Some((glyph.x, y_offset));
             }
 
             y_offset += cached.height;

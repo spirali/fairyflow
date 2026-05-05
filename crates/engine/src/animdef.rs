@@ -73,10 +73,8 @@ fn check_no_cycles(
     stack: &mut Vec<NodeId>,
 ) -> anyhow::Result<()> {
     for child_id in children {
-        if !visited.insert(*child_id) {
-            if visited.contains(&child_id) {
-                anyhow::bail!("cycle detected; path: {:?}", &stack);
-            }
+        if !visited.insert(*child_id) && visited.contains(child_id) {
+            anyhow::bail!("cycle detected; path: {:?}", &stack);
         }
         stack.push(*child_id);
         let node = nodes.get(child_id).unwrap();

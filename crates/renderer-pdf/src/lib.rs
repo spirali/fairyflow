@@ -733,7 +733,7 @@ fn build_ellipse_path(w: f32, h: f32) -> Option<Path> {
     let rx = w * 0.5;
     let ry = h * 0.5;
     // Bézier approximation constant ≈ 4*(√2-1)/3
-    const K: f32 = 0.5522847498;
+    const K: f32 = 0.552_284_8;
     let mut pb = PathBuilder::new();
     pb.move_to(cx + rx, cy);
     pb.cubic_to(cx + rx, cy - K * ry, cx + K * rx, cy - ry, cx, cy - ry);

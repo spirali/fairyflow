@@ -19,7 +19,7 @@ pub struct OraLayer {
 
 pub enum CachedImageKind {
     Svg {
-        tree: usvg::Tree,
+        tree: Box<usvg::Tree>,
         /// Raw SVG bytes, kept so individual layers can be extracted.
         raw_data: Vec<u8>,
     },
@@ -106,7 +106,7 @@ pub fn load_svg_from_data(path: &str, data: Vec<u8>) -> Option<Arc<CachedImage>>
     let image_layers = Arc::new(svg_layer_labels(&data));
     let cached = CachedImage {
         kind: CachedImageKind::Svg {
-            tree,
+            tree: Box::new(tree),
             raw_data: data,
         },
         width: svg_size.width(),
@@ -328,7 +328,7 @@ pub fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<CachedImage>>
     let svg_size = tree.size();
     let cached = CachedImage {
         kind: CachedImageKind::Svg {
-            tree,
+            tree: Box::new(tree),
             raw_data: modified,
         },
         width: svg_size.width(),

@@ -1,9 +1,9 @@
 mod animdef;
 mod avalue;
 mod basictypes;
-mod nodes;
 mod eval;
 mod layout;
+mod nodes;
 mod paths;
 mod values;
 

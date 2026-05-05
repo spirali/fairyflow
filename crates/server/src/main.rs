@@ -1,28 +1,9 @@
 use crate::render::render_anim_to_dir;
 use crate::service::start_service;
-use axum::{
-    Router,
-    extract::{
-        Path, Query, State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
-    http::{StatusCode, header},
-    response::IntoResponse,
-    routing::get,
-};
 use clap::{Parser, Subcommand};
-use engine::{AnimationDef, FrameId};
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use engine::AnimationDef;
 use std::path::PathBuf;
-use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio::sync::{broadcast, mpsc};
-use tower_http::services::ServeDir;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 mod config;
 mod export;
@@ -156,7 +137,11 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Cmd::Open { port, token, directory } => run_serve(port, token, directory).await,
+        Cmd::Open {
+            port,
+            token,
+            directory,
+        } => run_serve(port, token, directory).await,
         Cmd::RenderPng {
             json_path,
             output_dir,
@@ -165,7 +150,18 @@ async fn main() {
             font_dirs,
             target_resolution,
             write_tree,
-        } => run_render_png(json_path, output_dir, threads, frames, font_dirs, target_resolution, write_tree).await,
+        } => {
+            run_render_png(
+                json_path,
+                output_dir,
+                threads,
+                frames,
+                font_dirs,
+                target_resolution,
+                write_tree,
+            )
+            .await
+        }
         Cmd::RenderVideo {
             json_path,
             output_file,
@@ -175,7 +171,19 @@ async fn main() {
             fps,
             codec,
             crf,
-        } => run_render_video(json_path, output_file, threads, font_dirs, target_resolution, fps, codec, crf).await,
+        } => {
+            run_render_video(
+                json_path,
+                output_file,
+                threads,
+                font_dirs,
+                target_resolution,
+                fps,
+                codec,
+                crf,
+            )
+            .await
+        }
         Cmd::RenderPdf {
             json_path,
             output_file,
@@ -263,7 +271,15 @@ async fn run_render_png(
     if !font_dirs.is_empty() {
         renderer_skia::Resources::get().load_font_directories(&font_dirs);
     }
-    render_anim_to_dir(anim, output_dir, threads, frames, target_resolution, write_tree).await;
+    render_anim_to_dir(
+        anim,
+        output_dir,
+        threads,
+        frames,
+        target_resolution,
+        write_tree,
+    )
+    .await;
 }
 
 async fn run_render_video(
@@ -280,7 +296,16 @@ async fn run_render_video(
     if !font_dirs.is_empty() {
         renderer_skia::Resources::get().load_font_directories(&font_dirs);
     }
-    crate::render::render_anim_to_video(anim, output_file, threads, target_resolution, fps, codec, crf).await;
+    crate::render::render_anim_to_video(
+        anim,
+        output_file,
+        threads,
+        target_resolution,
+        fps,
+        codec,
+        crf,
+    )
+    .await;
 }
 
 async fn run_render_pdf(
@@ -314,14 +339,14 @@ async fn load_anim(json_path: &PathBuf) -> AnimationDef {
 }
 
 async fn run_init(directory: PathBuf) {
-    let r    = "\x1b[0m";  // reset
-    let b    = "\x1b[1m";  // bold
+    let r = "\x1b[0m"; // reset
+    let b = "\x1b[1m"; // bold
     let pink = "\x1b[95m"; // bright magenta
     let blue = "\x1b[94m"; // bright blue
-    let gray = "\x1b[90m"; // dark gray
-    let grn  = "\x1b[92m"; // bright green
-    let yel  = "\x1b[93m"; // bright yellow
-    let red  = "\x1b[91m"; // bright red
+    let _gray = "\x1b[90m"; // dark gray
+    let grn = "\x1b[92m"; // bright green
+    let yel = "\x1b[93m"; // bright yellow
+    let red = "\x1b[91m"; // bright red
 
     println!();
     println!("  {b}{pink}Fairy{r}");
@@ -376,13 +401,22 @@ async fn run_init(directory: PathBuf) {
             continue;
         }
         if let Err(e) = tokio::fs::write(&path, content).await {
-            eprintln!("  {red}{b}error:{r} failed to create {}: {e}", path.display());
+            eprintln!(
+                "  {red}{b}error:{r} failed to create {}: {e}",
+                path.display()
+            );
             std::process::exit(1);
         }
         println!("  {grn}created{r} {}", path.display());
     }
 
-    println!("\n  {b}{grn}initialized{r} project in {b}{}{r}", directory.display());
-    println!("\n  open your project with:\n\n     {b}fairyflow open {}{r}", directory.display());
+    println!(
+        "\n  {b}{grn}initialized{r} project in {b}{}{r}",
+        directory.display()
+    );
+    println!(
+        "\n  open your project with:\n\n     {b}fairyflow open {}{r}",
+        directory.display()
+    );
     println!();
 }

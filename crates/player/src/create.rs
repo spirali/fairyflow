@@ -1,9 +1,9 @@
+use crate::config::PackageConfig;
+use engine::AnimationDef;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use engine::AnimationDef;
-use crate::config::PackageConfig;
 
 pub struct CreateConfig {
     pub fps: u32,
@@ -21,7 +21,6 @@ pub fn create_package(
     create_config: CreateConfig,
     output: &Path,
 ) -> anyhow::Result<()> {
-
     let mut scene_archive_paths: Vec<String> = Vec::with_capacity(scenes.len());
 
     // Create the zip archive.
@@ -29,8 +28,8 @@ pub fn create_package(
         .map_err(|e| anyhow::anyhow!("creating {}: {}", output.display(), e))?;
     let mut archive = zip::ZipWriter::new(file);
 
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
 
     let mut image_tmp_paths: HashSet<Arc<String>> = HashSet::new();
     let mut image_map = HashMap::new();
@@ -50,7 +49,10 @@ pub fn create_package(
             let archive_path = image_paths.entry(path).or_insert_with(|| {
                 let image_id = counter;
                 counter += 1;
-                if let Some(ext) = PathBuf::from(image_path.as_str()).extension().and_then(|e| e.to_str()) {
+                if let Some(ext) = PathBuf::from(image_path.as_str())
+                    .extension()
+                    .and_then(|e| e.to_str())
+                {
                     format!("images/{image_id}.{ext}")
                 } else {
                     format!("images/{image_id}")
@@ -72,7 +74,7 @@ pub fn create_package(
     let config = PackageConfig {
         scenes: scene_archive_paths,
         fps: create_config.fps,
-        image_map
+        image_map,
     };
     archive.start_file("ffpackage.json", options)?;
     let config_bytes = serde_json::to_vec(&config)?;

@@ -1,5 +1,5 @@
-use crate::glyph_cache::PathVerb;
 use crate::PathCommand;
+use crate::glyph_cache::PathVerb;
 
 /// Convert `PathCommand` list to backend-independent path verbs.
 pub fn build_path_verbs(commands: &[PathCommand]) -> Vec<PathVerb> {
@@ -15,7 +15,14 @@ pub fn build_path_verbs(commands: &[PathCommand]) -> Vec<PathVerb> {
                 cur = (position.x as f32, position.y as f32);
                 verbs.push(PathVerb::LineTo(cur.0, cur.1));
             }
-            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y, .. } => {
+            PathCommand::Cubic {
+                position,
+                c1_x,
+                c1_y,
+                c2_x,
+                c2_y,
+                ..
+            } => {
                 let end = (position.x as f32, position.y as f32);
                 let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);
                 let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
@@ -43,8 +50,18 @@ pub fn build_cropped_path_verbs(
 
     #[derive(Clone)]
     enum SegKind {
-        Line { ex: f32, ey: f32 },
-        Cubic { c1x: f32, c1y: f32, c2x: f32, c2y: f32, ex: f32, ey: f32 },
+        Line {
+            ex: f32,
+            ey: f32,
+        },
+        Cubic {
+            c1x: f32,
+            c1y: f32,
+            c2x: f32,
+            c2y: f32,
+            ex: f32,
+            ey: f32,
+        },
     }
     struct Seg {
         sx: f32,
@@ -70,12 +87,22 @@ pub fn build_cropped_path_verbs(
                 segs.push(Seg {
                     sx: cur.0,
                     sy: cur.1,
-                    kind: SegKind::Line { ex: end.0, ey: end.1 },
+                    kind: SegKind::Line {
+                        ex: end.0,
+                        ey: end.1,
+                    },
                     len,
                 });
                 cur = end;
             }
-            PathCommand::Cubic { position, c1_x, c1_y, c2_x, c2_y, .. } => {
+            PathCommand::Cubic {
+                position,
+                c1_x,
+                c1_y,
+                c2_x,
+                c2_y,
+                ..
+            } => {
                 let end = (position.x as f32, position.y as f32);
                 let c1 = (cur.0 + *c1_x as f32, cur.1 + *c1_y as f32);
                 let c2 = (end.0 + *c2_x as f32, end.1 + *c2_y as f32);
@@ -160,7 +187,14 @@ pub fn build_cropped_path_verbs(
                 verbs.push(PathVerb::LineTo(end_pt.0, end_pt.1));
                 last_end = Some(end_pt);
             }
-            SegKind::Cubic { c1x, c1y, c2x, c2y, ex, ey } => {
+            SegKind::Cubic {
+                c1x,
+                c1y,
+                c2x,
+                c2y,
+                ex,
+                ey,
+            } => {
                 let p0 = (seg.sx, seg.sy);
                 let c1 = (*c1x, *c1y);
                 let c2 = (*c2x, *c2y);
@@ -243,7 +277,11 @@ fn cubic_subsegment(
     t2: f32,
 ) -> ((f32, f32), (f32, f32), (f32, f32), (f32, f32)) {
     let (_, right) = split_cubic(p0, c1, c2, p3, t1);
-    let t_new = if t1 < 1.0 { (t2 - t1) / (1.0 - t1) } else { 1.0 };
+    let t_new = if t1 < 1.0 {
+        (t2 - t1) / (1.0 - t1)
+    } else {
+        1.0
+    };
     let (left, _) = split_cubic(right.0, right.1, right.2, right.3, t_new.clamp(0.0, 1.0));
     left
 }

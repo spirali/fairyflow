@@ -1,17 +1,21 @@
-use anyhow::bail;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::nodes::NodeKind;
 use crate::values::Eval;
+use anyhow::bail;
 
 /// Evaluate a cubic Bézier at parameter `u` ∈ [0, 1].
 /// p0/c1/c2/p1 are all absolute coordinates.
 #[inline]
 fn cubic_bezier_point(
-    p0x: f64, p0y: f64,
-    c1x: f64, c1y: f64,
-    c2x: f64, c2y: f64,
-    p1x: f64, p1y: f64,
+    p0x: f64,
+    p0y: f64,
+    c1x: f64,
+    c1y: f64,
+    c2x: f64,
+    c2y: f64,
+    p1x: f64,
+    p1y: f64,
     u: f64,
 ) -> (f64, f64) {
     let inv = 1.0 - u;
@@ -27,10 +31,14 @@ fn cubic_bezier_point(
 
 /// Arc length of a cubic Bézier via fixed-step numerical integration.
 fn cubic_arc_length(
-    p0x: f64, p0y: f64,
-    c1x: f64, c1y: f64,
-    c2x: f64, c2y: f64,
-    p1x: f64, p1y: f64,
+    p0x: f64,
+    p0y: f64,
+    c1x: f64,
+    c1y: f64,
+    c2x: f64,
+    c2y: f64,
+    p1x: f64,
+    p1y: f64,
 ) -> f64 {
     const STEPS: usize = 64;
     let mut len = 0.0;
@@ -105,7 +113,13 @@ fn build_segments(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<PathSegments> {
                 cur_x = x;
                 cur_y = y;
             }
-            NodeKind::Cubic { position, c1_x, c1_y, c2_x, c2_y } => {
+            NodeKind::Cubic {
+                position,
+                c1_x,
+                c1_y,
+                c2_x,
+                c2_y,
+            } => {
                 let x = position.x.eval(ctx)?;
                 let y = position.y.eval(ctx)?;
                 // c1 is relative to the start point, c2 is relative to the end point
@@ -146,7 +160,11 @@ pub(crate) fn path_length(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<f64> {
 
 pub(crate) fn point_in_path(ctx: &EvalCtx, node: NodeId, t: f64) -> anyhow::Result<(f64, f64)> {
     let path = build_segments(ctx, node)?;
-    let PathSegments { segments, first, last } = path;
+    let PathSegments {
+        segments,
+        first,
+        last,
+    } = path;
 
     if segments.is_empty() {
         return Ok(first);
@@ -179,10 +197,7 @@ pub(crate) fn point_in_path(ctx: &EvalCtx, node: NodeId, t: f64) -> anyhow::Resu
                 0.0
             };
             return Ok(match seg {
-                Seg::Line(x0, y0, x1, y1) => (
-                    x0 + local_t * (x1 - x0),
-                    y0 + local_t * (y1 - y0),
-                ),
+                Seg::Line(x0, y0, x1, y1) => (x0 + local_t * (x1 - x0), y0 + local_t * (y1 - y0)),
                 Seg::Cubic(p0x, p0y, c1x, c1y, c2x, c2y, p1x, p1y) => {
                     cubic_bezier_point(*p0x, *p0y, *c1x, *c1y, *c2x, *c2y, *p1x, *p1y, local_t)
                 }

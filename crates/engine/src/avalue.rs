@@ -1,11 +1,10 @@
-use crate::basictypes::{AvId, FrameId, NodeId};
-use crate::nodes::{Node, AttrExpr, Transition};
+use crate::basictypes::FrameId;
 use crate::eval::EvalCtx;
-use anyhow::bail;
-use serde::{Deserialize, Deserializer};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use crate::nodes::Transition;
+use crate::values::{Eval, Expr, Value};
 use serde::de::DeserializeOwned;
-use crate::values::{Expr, Value, Eval};
+use serde::{Deserialize, Deserializer};
+use std::collections::{BTreeMap};
 
 #[derive(Debug, Deserialize)]
 #[serde(bound(deserialize = "T: DeserializeOwned"))]
@@ -28,7 +27,9 @@ pub enum FrameValue<T: Value + DeserializeOwned> {
     Hold,
 }
 
-fn deserialize_keyframes<'de, D, T: Value + DeserializeOwned>(d: D) -> Result<BTreeMap<FrameId, FrameValue<T>>, D::Error>
+fn deserialize_keyframes<'de, D, T: Value + DeserializeOwned>(
+    d: D,
+) -> Result<BTreeMap<FrameId, FrameValue<T>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -72,10 +73,8 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
         let Some((left_f, left_fv)) = self.scan_left(frame) else {
             let (_key, value) = self.values.first_key_value().unwrap();
             match value {
-                FrameValue::KeyFrame(kf) => {
-                    return kf.value.eval(ctx)
-                }
-                FrameValue::Hold => unreachable!()
+                FrameValue::KeyFrame(kf) => return kf.value.eval(ctx),
+                FrameValue::Hold => unreachable!(),
             }
         };
         let left_v = left_fv.value.eval(ctx)?;
@@ -84,7 +83,11 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
             return Ok(left_v);
         };
         let Some((right_f, right_fv)) = self.scan_right(frame) else {
-            tracing::trace!(frame = frame.as_u32(), left_f = left_f.as_u32(), "holding (no right keyframe)");
+            tracing::trace!(
+                frame = frame.as_u32(),
+                left_f = left_f.as_u32(),
+                "holding (no right keyframe)"
+            );
             return Ok(left_v);
         };
         let right_v = match right_fv {
@@ -101,14 +104,14 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
         let start_frame = left_f.as_u32();
         let end_frame = right_f.as_u32();
         let t = (frame.as_u32() - start_frame) as f64 / (end_frame - start_frame) as f64;
-        tracing::trace!(frame = frame.as_u32(), left_f = start_frame, right_f = end_frame, t, "interpolating");
+        tracing::trace!(
+            frame = frame.as_u32(),
+            left_f = start_frame,
+            right_f = end_frame,
+            t,
+            "interpolating"
+        );
         Ok(left_v.interpolate(&right_v, t))
-    }
-
-    pub fn collect_key_frames(&self, frames: &mut HashSet<FrameId>) {
-        for frame in self.values.keys() {
-            frames.insert(*frame);
-        }
     }
 
     /// Look to smaller frames and find key frame (skips "hold")

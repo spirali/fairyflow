@@ -24,13 +24,9 @@ pub enum CachedImageKind {
         raw_data: Vec<u8>,
     },
     /// Decoded raster image (PNG or JPEG).  No layer support.
-    Raster {
-        pixmap: RawPixmap,
-    },
+    Raster { pixmap: RawPixmap },
     /// Open Raster (ORA) image.  Layers are stored in bottom-to-top render order.
-    Ora {
-        layers: Vec<OraLayer>,
-    },
+    Ora { layers: Vec<OraLayer> },
 }
 
 pub struct CachedImage {
@@ -109,7 +105,10 @@ pub fn load_svg_from_data(path: &str, data: Vec<u8>) -> Option<Arc<CachedImage>>
     let svg_size = tree.size();
     let image_layers = Arc::new(svg_layer_labels(&data));
     let cached = CachedImage {
-        kind: CachedImageKind::Svg { tree, raw_data: data },
+        kind: CachedImageKind::Svg {
+            tree,
+            raw_data: data,
+        },
         width: svg_size.width(),
         height: svg_size.height(),
         image_layers: Some(image_layers),
@@ -148,7 +147,11 @@ fn load_ora_from_data(path: &str, data: Vec<u8>) -> Option<Arc<CachedImage>> {
 
     let stack_elem = root.children.iter().find_map(|child| {
         if let xmltree::XMLNode::Element(elem) = child {
-            if elem.name == "stack" { Some(elem) } else { None }
+            if elem.name == "stack" {
+                Some(elem)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -157,14 +160,24 @@ fn load_ora_from_data(path: &str, data: Vec<u8>) -> Option<Arc<CachedImage>> {
     // Collect layer metadata in top-to-bottom stack.xml order.
     let mut layers_info: Vec<(String, String, i32, i32)> = Vec::new();
     for child in &stack_elem.children {
-        let xmltree::XMLNode::Element(elem) = child else { continue };
+        let xmltree::XMLNode::Element(elem) = child else {
+            continue;
+        };
         if elem.name != "layer" {
             continue;
         }
         let name = elem.attributes.get("name").cloned().unwrap_or_default();
         let src = elem.attributes.get("src").cloned().unwrap_or_default();
-        let x: i32 = elem.attributes.get("x").and_then(|v| v.parse().ok()).unwrap_or(0);
-        let y: i32 = elem.attributes.get("y").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let x: i32 = elem
+            .attributes
+            .get("x")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let y: i32 = elem
+            .attributes
+            .get("y")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
         layers_info.push((name, src, x, y));
     }
 
@@ -175,16 +188,27 @@ fn load_ora_from_data(path: &str, data: Vec<u8>) -> Option<Arc<CachedImage>> {
     let mut ora_layers: Vec<OraLayer> = Vec::new();
     for (name, src, x, y) in layers_info.iter().rev() {
         let png_data = {
-            let Ok(mut file) = archive.by_name(src) else { continue };
+            let Ok(mut file) = archive.by_name(src) else {
+                continue;
+            };
             let mut buf = Vec::new();
             if file.read_to_end(&mut buf).is_err() {
                 continue;
             }
             buf
         };
-        let Ok(img) = image::load_from_memory(&png_data) else { continue };
-        let Some(pixmap) = image_to_raw_pixmap(img) else { continue };
-        ora_layers.push(OraLayer { name: name.clone(), pixmap, x: *x, y: *y });
+        let Ok(img) = image::load_from_memory(&png_data) else {
+            continue;
+        };
+        let Some(pixmap) = image_to_raw_pixmap(img) else {
+            continue;
+        };
+        ora_layers.push(OraLayer {
+            name: name.clone(),
+            pixmap,
+            x: *x,
+            y: *y,
+        });
     }
 
     let cached = CachedImage {
@@ -209,7 +233,11 @@ pub fn image_to_raw_pixmap(img: image::DynamicImage) -> Option<RawPixmap> {
             [pm(r), pm(g), pm(b), a]
         })
         .collect();
-    Some(RawPixmap { data, width, height })
+    Some(RawPixmap {
+        data,
+        width,
+        height,
+    })
 }
 
 /// Return the `inkscape:label` values of all direct-child `<g>` layer elements
@@ -221,7 +249,9 @@ pub fn svg_layer_labels(data: &[u8]) -> Vec<String> {
     root.children
         .iter()
         .filter_map(|child| {
-            let xmltree::XMLNode::Element(elem) = child else { return None };
+            let xmltree::XMLNode::Element(elem) = child else {
+                return None;
+            };
             if elem.name != "g" {
                 return None;
             }
@@ -239,16 +269,21 @@ pub fn svg_show_only_layer(data: &[u8], target_label: &str) -> Vec<u8> {
     };
 
     for child in &mut root.children {
-        let xmltree::XMLNode::Element(elem) = child else { continue };
+        let xmltree::XMLNode::Element(elem) = child else {
+            continue;
+        };
         if elem.name != "g" {
             continue;
         }
-        let Some(label) = inkscape_label(elem) else { continue };
+        let Some(label) = inkscape_label(elem) else {
+            continue;
+        };
         if label == target_label {
             continue;
         }
         let current = elem.attributes.get("style").cloned().unwrap_or_default();
-        elem.attributes.insert("style".to_string(), css_display_none(&current));
+        elem.attributes
+            .insert("style".to_string(), css_display_none(&current));
     }
 
     let mut output = Vec::new();
@@ -292,7 +327,10 @@ pub fn load_svg_layer(path: &str, layer_label: &str) -> Option<Arc<CachedImage>>
     let tree = usvg::Tree::from_data(&modified, &opt).ok()?;
     let svg_size = tree.size();
     let cached = CachedImage {
-        kind: CachedImageKind::Svg { tree, raw_data: modified },
+        kind: CachedImageKind::Svg {
+            tree,
+            raw_data: modified,
+        },
         width: svg_size.width(),
         height: svg_size.height(),
         image_layers: None,
@@ -308,5 +346,7 @@ pub fn measure_image(path: &str) -> Option<(f32, f32)> {
 
 /// Return all layer names for the image at `path`, in document order.
 pub fn svg_image_layers(path: &str) -> Arc<Vec<String>> {
-    load_image(path).map(|c| c.image_layers.clone().unwrap_or_default()).unwrap_or_default()
+    load_image(path)
+        .map(|c| c.image_layers.clone().unwrap_or_default())
+        .unwrap_or_default()
 }

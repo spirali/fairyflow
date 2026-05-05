@@ -1,17 +1,13 @@
 use crate::FrameId;
-use crate::avalue::AnimatedValue;
-use crate::basictypes::{AvId, NodeId};
-use crate::nodes::{Node, NodeKind, Position, SceneDef, Size, Style, TextStyle, AttrExpr};
-use anyhow::bail;
-use by_address::ByAddress;
+use crate::basictypes::NodeId;
+use crate::nodes::{AttrExpr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle};
+use crate::paths::{path_length, point_in_path};
+use crate::values::{Eval, Expr, FloatCall, FloatParamsPair, Value};
 use renderer_core::Inheritable;
-use std::cell::{Cell, RefCell};
+use serde::de::DeserializeOwned;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use crate::paths::{point_in_path, path_length};
-use crate::values::{CallParamsPathPoint, Eval, Expr, FloatCall, FloatParamsPair, Value};
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
@@ -21,11 +17,7 @@ pub(crate) struct EvalCtx<'a> {
 }
 
 impl<'a> EvalCtx<'a> {
-    pub fn new(
-        frame: FrameId,
-        scene_def: &'a SceneDef,
-        nodes: &'a HashMap<NodeId, Node>,
-    ) -> Self {
+    pub fn new(frame: FrameId, scene_def: &'a SceneDef, nodes: &'a HashMap<NodeId, Node>) -> Self {
         Self {
             frame,
             scene_def,
@@ -49,7 +41,9 @@ impl<'a> EvalCtx<'a> {
 
     #[must_use]
     pub(crate) fn begin_eval<T: Value + DeserializeOwned>(&self, expr: &'a Expr<T>) -> bool {
-        self.evaluating_exprs.borrow_mut().insert(expr as *const _ as usize)
+        self.evaluating_exprs
+            .borrow_mut()
+            .insert(expr as *const _ as usize)
     }
 
     pub(crate) fn end_eval<T: Value + DeserializeOwned>(&self, expr: &'a Expr<T>) {
@@ -88,7 +82,10 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
 
 /// Get the affine transform parameters of a Group node at the current frame.
 /// Returns (tx, ty, sx, sy, cos_r, sin_r, pivot_x_abs, pivot_y_abs).
-fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64, f64, f64, f64, f64)> {
+fn group_transform(
+    node: &Node,
+    ctx: &EvalCtx,
+) -> anyhow::Result<(f64, f64, f64, f64, f64, f64, f64, f64)> {
     match &node.kind {
         NodeKind::Group {
             position,
@@ -264,11 +261,7 @@ impl Eval<f64> for FloatCall {
             FloatCall::Div(pair) => {
                 tracing::trace!("Call::Div");
                 let (va, vb) = pair.eval(ctx)?;
-                let result = if vb.abs() < 0.000001 {
-                    0.0
-                } else {
-                    va / vb
-                };
+                let result = if vb.abs() < 0.000001 { 0.0 } else { va / vb };
                 tracing::trace!(a = va, b = vb, result = result, "Call::Div result");
                 Ok(result)
             }
@@ -276,11 +269,7 @@ impl Eval<f64> for FloatCall {
                 tracing::trace!("Call::Mul");
                 let (va, vb) = pair.eval(ctx)?;
                 let d = va * va + vb * vb;
-                let result = if d < 0.0001 {
-                    0.0
-                } else {
-                    va / d.sqrt()
-                };
+                let result = if d < 0.0001 { 0.0 } else { va / d.sqrt() };
                 tracing::trace!(a = va, b = vb, result = result, "Call::Norm result");
                 Ok(result)
             }
@@ -292,8 +281,7 @@ impl Eval<f64> for FloatCall {
                 );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
-                let (px, _py) =
-                    node_transform(params.source, params.target, xv, yv, ctx)?;
+                let (px, _py) = node_transform(params.source, params.target, xv, yv, ctx)?;
                 Ok(px)
             }
             FloatCall::NodeTransformY(params) => {
@@ -304,8 +292,7 @@ impl Eval<f64> for FloatCall {
                 );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
-                let (_px, py) =
-                    node_transform(params.source, params.target, xv, yv, ctx)?;
+                let (_px, py) = node_transform(params.source, params.target, xv, yv, ctx)?;
                 Ok(py)
             }
             FloatCall::DefaultWidth { node } => {
@@ -332,9 +319,7 @@ impl Eval<f64> for FloatCall {
                 let t = p.t.eval(ctx)?;
                 Ok(point_in_path(ctx, p.node, t)?.1)
             }
-            FloatCall::PathLength { node } => {
-                path_length(ctx, *node)
-            }
+            FloatCall::PathLength { node } => path_length(ctx, *node),
         }
     }
 }
@@ -373,8 +358,16 @@ impl Style {
 impl TextStyle {
     pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextStyle> {
         Ok(renderer_core::TextStyle {
-            fill_color: self.style.fill_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
-            stroke_color: self.style.stroke_color.eval_as_inheritable(ctx)?.map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+            fill_color: self
+                .style
+                .fill_color
+                .eval_as_inheritable(ctx)?
+                .map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+            stroke_color: self
+                .style
+                .stroke_color
+                .eval_as_inheritable(ctx)?
+                .map(|v| v.as_ref().map(|v| v.clone().into_inner())),
             stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?,
             alpha: self.style.alpha.eval_as_inheritable(ctx)?,
             font_family: self.font.eval_as_inheritable(ctx)?,
@@ -400,7 +393,11 @@ impl Node {
                 pivot_y,
                 scale_x,
                 scale_y,
-                clip_x, clip_y, clip_w, clip_h, layout,
+                clip_x,
+                clip_y,
+                clip_w,
+                clip_h,
+                layout: _,
                 children,
                 z_level,
             } => renderer_core::NodeKind::Group {
@@ -557,18 +554,18 @@ impl Node {
                 c2_x: c2_x.eval(ctx)?,
                 c2_y: c2_y.eval(ctx)?,
             }),
-            NodeKind::Close => {
-                Ok(renderer_core::PathCommand::Close { id: self.id.as_u64() })
-            },
+            NodeKind::Close => Ok(renderer_core::PathCommand::Close {
+                id: self.id.as_u64(),
+            }),
             _ => anyhow::bail!("expected path command node, got {:?}", self.id),
         }
     }
 
     pub fn eval_as_text_child(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextChild> {
         match &self.kind {
-            NodeKind::TextGroup { .. } => {
-                Ok(renderer_core::TextChild::Group(self.eval_as_text_group(ctx)?))
-            }
+            NodeKind::TextGroup { .. } => Ok(renderer_core::TextChild::Group(
+                self.eval_as_text_group(ctx)?,
+            )),
             NodeKind::TextSpan { .. } => {
                 Ok(renderer_core::TextChild::Span(self.eval_as_text_span(ctx)?))
             }
@@ -578,7 +575,10 @@ impl Node {
 
     pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextGroup> {
         match &self.kind {
-            NodeKind::TextGroup { text_style, children } => Ok(renderer_core::TextGroup {
+            NodeKind::TextGroup {
+                text_style,
+                children,
+            } => Ok(renderer_core::TextGroup {
                 id: self.id.as_u64(),
                 text_style: text_style.eval_as_inheritable(ctx)?,
                 children: children
@@ -628,7 +628,11 @@ impl Node {
 impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
-        let fill_color = self.fill_color.eval(ctx)?.map(|x| x.into_inner()).unwrap_or_default();
+        let fill_color = self
+            .fill_color
+            .eval(ctx)?
+            .map(|x| x.into_inner())
+            .unwrap_or_default();
         let mut children = Vec::with_capacity(self.children.len());
         for &id in &self.children {
             let node = ctx.node(id)?;

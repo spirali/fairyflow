@@ -1,18 +1,17 @@
-use std::collections::HashSet;
-use crate::basictypes::{AvId, FrameId, NodeId};
+use crate::basictypes::{FrameId, NodeId};
 use crate::eval::EvalCtx;
-use renderer_core::Color as RendererColor;
-use serde::{Deserialize, Deserializer, de};
-use std::sync::Arc;
-use serde::de::DeserializeOwned;
 use crate::values::{Color, Expr, Value};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use std::collections::HashSet;
+use std::sync::Arc;
 // ──────────────────────────── Transition ───────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub enum Transition {
-    #[serde(rename="S")]
+    #[serde(rename = "S")]
     Step,
-    #[serde(rename="L")]
+    #[serde(rename = "L")]
     Linear,
 }
 
@@ -267,11 +266,9 @@ impl Node {
         }
     }
 
-    pub fn collect_images(&self, image_paths: &mut HashSet<Arc<String>>) {
+    pub fn collect_images(&self, _image_paths: &mut HashSet<Arc<String>>) {
         match &self.kind {
-            NodeKind::Image {
-                path, ..
-            } => {
+            NodeKind::Image { path: _, .. } => {
                 todo!()
             }
             _ => {}
@@ -282,7 +279,6 @@ impl Node {
 /// Root of the scene definition. Mirrors `Scene(SizeMixin)` in Python.
 #[derive(Debug, Deserialize)]
 pub(crate) struct SceneDef {
-    pub id: NodeId,
     #[serde(default)]
     pub name: Option<String>,
     #[serde(flatten)]

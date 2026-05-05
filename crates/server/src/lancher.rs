@@ -24,9 +24,7 @@ pub(crate) fn build_python_cmd(
     if let Some(p) = prologue {
         cmd.arg("--prologue").arg(p);
     }
-    cmd.arg(source_path)
-        .arg(output_path)
-        .arg(fps.to_string());
+    cmd.arg(source_path).arg(output_path).arg(fps.to_string());
     cmd
 }
 
@@ -154,7 +152,11 @@ pub async fn run_python(
         match tokio::fs::read_to_string(&tree_path).await {
             Ok(json_str) => match AnimationDef::from_str(&json_str) {
                 Ok(anim) => {
-                    let key_frames: Vec<_> = anim.key_frames(SceneSelection::All).iter().map(|f| f.as_u32()).collect();
+                    let key_frames: Vec<_> = anim
+                        .key_frames(SceneSelection::All)
+                        .iter()
+                        .map(|f| f.as_u32())
+                        .collect();
                     let frame_count = anim.frame_count(SceneSelection::All);
                     let scene_infos = anim.scene_infos();
                     // Compute combined cue frames across all scenes (with offsets).
@@ -170,14 +172,22 @@ pub async fn run_python(
                         cue_frames.sort_unstable();
                         cue_frames.dedup();
                     }
-                    let scenes: Vec<SceneInfoMsg> = scene_infos.into_iter().map(|si| SceneInfoMsg {
-                        name: si.name,
-                        key_frames: si.key_frames,
-                        cue_frames: si.cue_frames,
-                        frame_count: si.frame_count,
-                        info: si.info,
-                    }).collect();
-                    info!(run_id = id, frame_count, scenes = scenes.len(), "animation cached");
+                    let scenes: Vec<SceneInfoMsg> = scene_infos
+                        .into_iter()
+                        .map(|si| SceneInfoMsg {
+                            name: si.name,
+                            key_frames: si.key_frames,
+                            cue_frames: si.cue_frames,
+                            frame_count: si.frame_count,
+                            info: si.info,
+                        })
+                        .collect();
+                    info!(
+                        run_id = id,
+                        frame_count,
+                        scenes = scenes.len(),
+                        "animation cached"
+                    );
                     *animation_cache.lock().unwrap() = Some(Arc::new(anim));
                     tx.send(BuildProcessMsg::Tree {
                         key_frames,

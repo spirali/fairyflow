@@ -1,10 +1,10 @@
 use crate::glyph_cache::{self, CachedLine, PathVerb, VectorPath};
 use crate::resources::Resources;
+use crate::{TextChild, TextSpan};
 use parley::{
     Alignment, AlignmentOptions, FontContext, FontStack, FontWeight, LayoutContext,
     PositionedLayoutItem, StyleProperty,
 };
-use crate::{TextChild, TextSpan};
 use skrifa::{
     GlyphId, MetadataProvider,
     instance::{LocationRef, NormalizedCoord, Size as SkrifaSize},
@@ -65,11 +65,15 @@ impl TextLayoutEngine {
                 range.clone(),
             );
             builder.push(
-                StyleProperty::FontStack(FontStack::Source((span.text_style.font_family.value().as_str()).into())),
+                StyleProperty::FontStack(FontStack::Source(
+                    (span.text_style.font_family.value().as_str()).into(),
+                )),
                 range.clone(),
             );
             builder.push(
-                StyleProperty::FontWeight(FontWeight::new(*span.text_style.font_weight.value() as f32)),
+                StyleProperty::FontWeight(FontWeight::new(
+                    *span.text_style.font_weight.value() as f32
+                )),
                 range.clone(),
             );
             if *span.text_style.italic.value() {
@@ -172,7 +176,11 @@ impl TextLayoutEngine {
 
     /// Find the top-left position of the first glyph belonging to `target_id`
     /// within the text block described by `lines`.
-    pub fn find_text_node_pos(&mut self, lines: &[TextChild], target_id: u64) -> Option<(f32, f32)> {
+    pub fn find_text_node_pos(
+        &mut self,
+        lines: &[TextChild],
+        target_id: u64,
+    ) -> Option<(f32, f32)> {
         let mut y_offset = 0.0f32;
         for line in lines {
             let mut tagged: Vec<(bool, &TextSpan)> = Vec::new();

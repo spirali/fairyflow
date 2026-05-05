@@ -1,14 +1,11 @@
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::sync::Arc;
-use serde::de::DeserializeOwned;
-use serde::{de, Deserialize, Deserializer, Serialize};
 use crate::avalue::AnimatedValue;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
-use crate::FrameId;
 use renderer_core::Color as RendererColor;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, de};
+use std::fmt::Debug;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Color(RendererColor);
@@ -56,25 +53,6 @@ pub enum Expr<T: Value + DeserializeOwned> {
     Inherited { expr: Box<Expr<T>> },
 }
 
-impl<T: Clone + Hash + Eq + PartialEq + DeserializeOwned + Value> Expr<T> {
-    pub fn collect_all_values(&self, values: &mut HashSet<T>) {
-        match self {
-            Expr::Const(v) => {
-                values.insert(v.clone());
-            }
-            Expr::Call(_) => {
-                todo!()
-            }
-            Expr::AnimValue(av) => {
-                todo!()
-            }
-            Expr::Inherited { expr } => {
-                expr.collect_all_values(values);
-            }
-        }
-    }
-}
-
 impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
     fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<T> {
         match self {
@@ -85,7 +63,6 @@ impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
         }
     }
 }
-
 
 impl Value for f64 {
     type Call = FloatCall;
@@ -100,18 +77,14 @@ impl Value for f64 {
 impl Expr<f64> {
     pub fn is_default_width_of(&self, node: NodeId) -> bool {
         match self {
-            Expr::Call(FloatCall::DefaultWidth { node: n }) => {
-                node == *n
-            }
-            _ => false
+            Expr::Call(FloatCall::DefaultWidth { node: n }) => node == *n,
+            _ => false,
         }
     }
     pub fn is_default_height_of(&self, node: NodeId) -> bool {
         match self {
-            Expr::Call(FloatCall::DefaultHeight { node: n }) => {
-                node == *n
-            }
-            _ => false
+            Expr::Call(FloatCall::DefaultHeight { node: n }) => node == *n,
+            _ => false,
         }
     }
 }
@@ -173,19 +146,19 @@ pub enum FloatCall {
 pub enum NoCall {}
 
 impl Eval<Option<Color>> for NoCall {
-    fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Option<Color>> {
+    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<Option<Color>> {
         unreachable!()
     }
 }
 
 impl Eval<Arc<String>> for NoCall {
-    fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<Arc<String>> {
+    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<Arc<String>> {
         unreachable!()
     }
 }
 
 impl Eval<bool> for NoCall {
-    fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<bool> {
+    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<bool> {
         unreachable!()
     }
 }
@@ -203,12 +176,12 @@ impl Value for Option<Color> {
                 let mut lc = rc.clone();
                 lc.set_alpha(0.0);
                 Some(Color::interpolate(&lc, &rc, t))
-            },
+            }
             (Some(lc), None) => {
                 let mut rc = lc.clone();
                 rc.set_alpha(0.0);
                 Some(Color::interpolate(&lc, &rc, t))
-            },
+            }
         }
     }
 }
@@ -219,7 +192,7 @@ impl Value for Arc<String> {
         Arc::new(String::new())
     }
 
-    fn interpolate(&self, other: &Self, t: f64) -> Self {
+    fn interpolate(&self, _other: &Self, _t: f64) -> Self {
         self.clone()
     }
 }
@@ -230,7 +203,7 @@ impl Value for bool {
         false
     }
 
-    fn interpolate(&self, other: &Self, t: f64) -> Self {
+    fn interpolate(&self, _other: &Self, _t: f64) -> Self {
         *self
     }
 }

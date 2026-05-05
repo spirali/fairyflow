@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct PackageConfig {

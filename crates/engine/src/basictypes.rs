@@ -31,6 +31,7 @@ pub(crate) struct NodeId(u32);
 
 impl NodeId {
     #[inline]
+    #[cfg(test)]
     pub fn new(id: u32) -> Self {
         NodeId(id)
     }
@@ -42,22 +43,6 @@ impl NodeId {
 }
 
 impl Display for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Hash)]
-pub(crate) struct AvId(u64);
-
-impl AvId {
-    #[inline]
-    pub fn new(id: u64) -> Self {
-        AvId(id)
-    }
-}
-
-impl Display for AvId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

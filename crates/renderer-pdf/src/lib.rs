@@ -1,9 +1,9 @@
 use krilla::document::Document;
 use krilla::geom::{Path, PathBuilder, Rect as KRect, Size as KSize, Transform as KTransform};
 use krilla::image::Image;
-use krilla::paint::{Fill, FillRule, Stroke};
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
+use krilla::paint::{Fill, FillRule, Stroke};
 use krilla_svg::{SurfaceExt, SvgSettings};
 use renderer_core::glyph_cache::PathVerb;
 use renderer_core::highlight;
@@ -11,7 +11,7 @@ use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
-use renderer_core::transform::{node_z_level, positional_transform, AffineTransform};
+use renderer_core::transform::{AffineTransform, node_z_level, positional_transform};
 use renderer_core::{Color, ImageLayer, Node, NodeKind, Scene, Style, TextChild, TextSpan};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -71,7 +71,12 @@ impl PdfRenderer {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         for i in order {
-            self.render_node(&mut surface, &scene.children[i], AffineTransform::identity(), 1.0);
+            self.render_node(
+                &mut surface,
+                &scene.children[i],
+                AffineTransform::identity(),
+                1.0,
+            );
         }
 
         surface.finish();
@@ -146,7 +151,12 @@ impl PdfRenderer {
                         .unwrap_or(std::cmp::Ordering::Equal)
                 });
                 for i in order {
-                    self.render_node(surface, &children[i], AffineTransform::identity(), effective_alpha);
+                    self.render_node(
+                        surface,
+                        &children[i],
+                        AffineTransform::identity(),
+                        effective_alpha,
+                    );
                 }
 
                 for _ in 0..extra_pops {
@@ -161,15 +171,8 @@ impl PdfRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform = positional_transform(
-                    position,
-                    1.0,
-                    1.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    parent_transform,
-                );
+                let transform =
+                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
                 if let Some(rect) =
                     KRect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -189,15 +192,8 @@ impl PdfRenderer {
                 style,
                 z_level: _,
             } => {
-                let transform = positional_transform(
-                    position,
-                    1.0,
-                    1.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    parent_transform,
-                );
+                let transform =
+                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
                 if let Some(path) = build_ellipse_path(size.width as f32, size.height as f32) {
                     fill_and_stroke(surface, &path, style, parent_alpha);
@@ -228,17 +224,16 @@ impl PdfRenderer {
                 lines,
                 z_level: _,
             } => {
-                let transform = positional_transform(
-                    position,
-                    1.0,
-                    1.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    parent_transform,
-                );
+                let transform =
+                    positional_transform(position, 1.0, 1.0, 0.0, 0.0, 0.0, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
-                render_text_lines(surface, lines, parent_alpha, sh_language.as_ref().map(|s| s.as_str()), sh_theme.as_ref().map(|s| s.as_str()));
+                render_text_lines(
+                    surface,
+                    lines,
+                    parent_alpha,
+                    sh_language.as_ref().map(|s| s.as_str()),
+                    sh_theme.as_ref().map(|s| s.as_str()),
+                );
                 surface.pop();
             }
 
@@ -296,19 +291,9 @@ impl PdfRenderer {
             let s = (dest_w / cached.width).min(dest_h / cached.height);
             let actual_w = cached.width * s;
             let actual_h = cached.height * s;
-            (
-                s,
-                s,
-                (dest_w - actual_w) / 2.0,
-                (dest_h - actual_h) / 2.0,
-            )
+            (s, s, (dest_w - actual_w) / 2.0, (dest_h - actual_h) / 2.0)
         } else {
-            (
-                dest_w / cached.width,
-                dest_h / cached.height,
-                0.0,
-                0.0,
-            )
+            (dest_w / cached.width, dest_h / cached.height, 0.0, 0.0)
         };
 
         match &cached.kind {
@@ -346,8 +331,9 @@ impl PdfRenderer {
                             if hidden_layers.iter().any(|h| **h == *label) {
                                 continue;
                             }
-                            let override_ =
-                                layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
+                            let override_ = layers
+                                .iter()
+                                .find(|l| l.layer_name.as_str() == label.as_str());
                             let layer_alpha = override_
                                 .map(|ov| effective_alpha * ov.alpha as f32)
                                 .unwrap_or(effective_alpha);
@@ -357,8 +343,7 @@ impl PdfRenderer {
                             let (lx, ly) = override_
                                 .map(|ov| (ov.position.x as f32, ov.position.y as f32))
                                 .unwrap_or((0.0, 0.0));
-                            let Some(layer_cached) =
-                                image_cache::load_svg_layer(path, label)
+                            let Some(layer_cached) = image_cache::load_svg_layer(path, label)
                             else {
                                 continue;
                             };
@@ -367,8 +352,8 @@ impl PdfRenderer {
                                 _ => continue,
                             };
                             // Per-layer offset added on top of the main offset.
-                            let layer_transform = AffineTransform::from_translate(lx, ly)
-                                .concat(base_transform);
+                            let layer_transform =
+                                AffineTransform::from_translate(lx, ly).concat(base_transform);
                             self.draw_svg_bytes(
                                 surface,
                                 layer_raw,
@@ -388,7 +373,14 @@ impl PdfRenderer {
 
             CachedImageKind::Raster { pixmap } => {
                 self.draw_raster(
-                    surface, path, pixmap, sx, sy, offset_x, offset_y, base_transform,
+                    surface,
+                    path,
+                    pixmap,
+                    sx,
+                    sy,
+                    offset_x,
+                    offset_y,
+                    base_transform,
                     effective_alpha,
                 );
             }
@@ -417,13 +409,13 @@ impl PdfRenderer {
                         if hidden_layers.iter().any(|h| **h == *label) {
                             continue;
                         }
-                        let Some(layer_data) =
-                            ora_layers.iter().find(|l| l.name == label.as_str())
+                        let Some(layer_data) = ora_layers.iter().find(|l| l.name == label.as_str())
                         else {
                             continue;
                         };
-                        let override_ =
-                            layers.iter().find(|l| l.layer_name.as_str() == label.as_str());
+                        let override_ = layers
+                            .iter()
+                            .find(|l| l.layer_name.as_str() == label.as_str());
                         let layer_alpha = override_
                             .map(|ov| effective_alpha * ov.alpha as f32)
                             .unwrap_or(effective_alpha);
@@ -467,10 +459,13 @@ impl PdfRenderer {
         src_h: f32,
     ) {
         // Re-parse raw SVG bytes with the shared font database.
-        let tree = match usvg::Tree::from_data(raw_data, &usvg::Options {
-            fontdb: Resources::get().fontdb(),
-            ..Default::default()
-        }) {
+        let tree = match usvg::Tree::from_data(
+            raw_data,
+            &usvg::Options {
+                fontdb: Resources::get().fontdb(),
+                ..Default::default()
+            },
+        ) {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!("SVG re-parse for PDF failed: {e}");
@@ -490,8 +485,7 @@ impl PdfRenderer {
 
         if (effective_alpha - 1.0).abs() > 1e-4 {
             surface.push_opacity(
-                NormalizedF32::new(effective_alpha.clamp(0.0, 1.0))
-                    .unwrap_or(NormalizedF32::ONE),
+                NormalizedF32::new(effective_alpha.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE),
             );
         }
 
@@ -562,8 +556,7 @@ impl PdfRenderer {
 
         if (effective_alpha - 1.0).abs() > 1e-4 {
             surface.push_opacity(
-                NormalizedF32::new(effective_alpha.clamp(0.0, 1.0))
-                    .unwrap_or(NormalizedF32::ONE),
+                NormalizedF32::new(effective_alpha.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE),
             );
         }
 
@@ -586,40 +579,39 @@ fn render_text_lines(
     sh_theme: Option<&str>,
 ) {
     // Build syntax-highlight context if requested.
-    let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> =
-        sh_language.map(|lang| {
-            let theme = sh_theme.unwrap_or("InspiredGitHub");
-            let mut full_text = String::new();
-            let span_starts: Vec<Vec<usize>> = lines
-                .iter()
-                .enumerate()
-                .map(|(i, line)| {
-                    if i > 0 {
-                        full_text.push('\n');
-                    }
-                    let mut spans: Vec<&TextSpan> = Vec::new();
-                    collect_spans(line, &mut spans);
-                    spans
-                        .iter()
-                        .map(|s| {
-                            let start = full_text.len();
-                            full_text.push_str(s.text.as_str());
-                            start
-                        })
-                        .collect()
-                })
-                .collect();
+    let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh_language.map(|lang| {
+        let theme = sh_theme.unwrap_or("InspiredGitHub");
+        let mut full_text = String::new();
+        let span_starts: Vec<Vec<usize>> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                if i > 0 {
+                    full_text.push('\n');
+                }
+                let mut spans: Vec<&TextSpan> = Vec::new();
+                collect_spans(line, &mut spans);
+                spans
+                    .iter()
+                    .map(|s| {
+                        let start = full_text.len();
+                        full_text.push_str(s.text.as_str());
+                        start
+                    })
+                    .collect()
+            })
+            .collect();
 
-            let resources = Resources::get();
-            let colors = highlight::highlight_text(
-                &full_text,
-                lang,
-                theme,
-                &resources.syntax_set,
-                &resources.theme_set,
-            );
-            (span_starts, colors)
-        });
+        let resources = Resources::get();
+        let colors = highlight::highlight_text(
+            &full_text,
+            lang,
+            theme,
+            &resources.syntax_set,
+            &resources.theme_set,
+        );
+        (span_starts, colors)
+    });
 
     let mut y_cursor = 0.0f32;
     for (line_idx, line) in lines.iter().enumerate() {
@@ -643,30 +635,29 @@ fn render_text_lines(
             let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
 
             // Resolve fill color (with optional SH override).
-            let fill_color: Option<Color> =
-                if let Some((ref span_starts, ref sh_colors)) = sh_ctx {
-                    if span.text_style.fill_color.is_inherited() {
-                        let zwnj_start = zwnj_ranges
-                            .get(glyph.span_idx)
-                            .map(|(r, _)| r.start)
-                            .unwrap_or(0);
-                        let offset_in_span = (glyph.cluster as usize)
-                            .saturating_sub(zwnj_start)
-                            .min(span.text.len());
-                        let span_start_in_full = span_starts[line_idx]
-                            .get(glyph.span_idx)
-                            .copied()
-                            .unwrap_or(0);
-                        let byte_in_full = span_start_in_full + offset_in_span;
-                        sh_colors
-                            .color_at(byte_in_full)
-                            .or_else(|| span.text_style.fill_color.value().clone())
-                    } else {
-                        span.text_style.fill_color.value().clone()
-                    }
+            let fill_color: Option<Color> = if let Some((ref span_starts, ref sh_colors)) = sh_ctx {
+                if span.text_style.fill_color.is_inherited() {
+                    let zwnj_start = zwnj_ranges
+                        .get(glyph.span_idx)
+                        .map(|(r, _)| r.start)
+                        .unwrap_or(0);
+                    let offset_in_span = (glyph.cluster as usize)
+                        .saturating_sub(zwnj_start)
+                        .min(span.text.len());
+                    let span_start_in_full = span_starts[line_idx]
+                        .get(glyph.span_idx)
+                        .copied()
+                        .unwrap_or(0);
+                    let byte_in_full = span_start_in_full + offset_in_span;
+                    sh_colors
+                        .color_at(byte_in_full)
+                        .or_else(|| span.text_style.fill_color.value().clone())
                 } else {
                     span.text_style.fill_color.value().clone()
-                };
+                }
+            } else {
+                span.text_style.fill_color.value().clone()
+            };
 
             // Build glyph path shifted by y_cursor.
             let verbs: Vec<PathVerb> = glyph
@@ -786,12 +777,7 @@ fn color_stroke(c: &Color, width: f32, alpha: f32) -> Stroke {
     }
 }
 
-fn fill_and_stroke(
-    surface: &mut krilla::surface::Surface,
-    path: &Path,
-    style: &Style,
-    alpha: f32,
-) {
+fn fill_and_stroke(surface: &mut krilla::surface::Surface, path: &Path, style: &Style, alpha: f32) {
     let effective_alpha = alpha * style.alpha as f32;
     if let Some(ref fc) = style.fill_color {
         surface.set_fill(Some(color_fill(fc, effective_alpha)));
@@ -800,7 +786,11 @@ fn fill_and_stroke(
     }
     if let Some(ref sc) = style.stroke_color {
         surface.set_fill(None);
-        surface.set_stroke(Some(color_stroke(sc, style.stroke_width as f32, effective_alpha)));
+        surface.set_stroke(Some(color_stroke(
+            sc,
+            style.stroke_width as f32,
+            effective_alpha,
+        )));
         surface.draw_path(path);
     }
 }

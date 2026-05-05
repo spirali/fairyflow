@@ -26,7 +26,14 @@ pub struct ExportPlayerResult {
 }
 
 fn err(status: StatusCode, msg: impl Into<String>) -> axum::response::Response {
-    (status, Json(ExportPlayerResult { success: false, path: None, error: Some(msg.into()) }))
+    (
+        status,
+        Json(ExportPlayerResult {
+            success: false,
+            path: None,
+            error: Some(msg.into()),
+        }),
+    )
         .into_response()
 }
 
@@ -35,22 +42,43 @@ pub async fn export_player_handler(
     Json(params): Json<ExportPlayerParams>,
 ) -> impl IntoResponse {
     let filename = params.filename.trim().to_string();
-    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
         return err(StatusCode::BAD_REQUEST, "Invalid filename");
     }
-    let filename = if filename.ends_with(".ffpkg") { filename } else { format!("{filename}.ffpkg") };
+    let filename = if filename.ends_with(".ffpkg") {
+        filename
+    } else {
+        format!("{filename}.ffpkg")
+    };
 
     // Read and parse the .ffsq sequence file
     let seq_content = match tokio::fs::read_to_string(&params.seq_path).await {
         Ok(c) => c,
-        Err(e) => return err(StatusCode::BAD_REQUEST, format!("Failed to read sequence: {e}")),
+        Err(e) => {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to read sequence: {e}"),
+            );
+        }
     };
     let seq_data: serde_json::Value = match serde_json::from_str(&seq_content) {
         Ok(v) => v,
-        Err(e) => return err(StatusCode::BAD_REQUEST, format!("Failed to parse sequence: {e}")),
+        Err(e) => {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to parse sequence: {e}"),
+            );
+        }
     };
     let scene_files: Vec<String> = match seq_data.get("scene_files").and_then(|v| v.as_array()) {
-        Some(arr) => arr.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
+        Some(arr) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
         None => return err(StatusCode::BAD_REQUEST, "Sequence has no scene_files"),
     };
     if scene_files.is_empty() {
@@ -60,7 +88,8 @@ pub async fn export_player_handler(
     let fps = params.fps.max(1);
     let prologue = {
         let cfg = state.config.lock().unwrap();
-        cfg.prologue.as_deref()
+        cfg.prologue
+            .as_deref()
             .and_then(|p| std::env::current_dir().ok().map(|d| d.join(p)))
     };
 
@@ -71,7 +100,10 @@ pub async fn export_player_handler(
         .unwrap_or(0);
     let temp_dir = std::env::temp_dir().join(format!("fairyflow-pkg-{ts}"));
     if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create temp dir: {e}"));
+        return err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create temp dir: {e}"),
+        );
     }
 
     // Run each .ffpy scene and collect the resulting JSON paths
@@ -91,7 +123,10 @@ pub async fn export_player_handler(
     // Ensure the exports directory exists
     if let Err(e) = tokio::fs::create_dir_all("exports").await {
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-        return err(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create exports dir: {e}"));
+        return err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create exports dir: {e}"),
+        );
     }
 
     // Call create_package in a blocking task (it does zip I/O)
@@ -106,9 +141,20 @@ pub async fn export_player_handler(
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
     match result {
-        Ok(Ok(path)) => Json(ExportPlayerResult { success: true, path: Some(path), error: None }).into_response(),
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create package: {e}")),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("Package task panicked: {e}")),
+        Ok(Ok(path)) => Json(ExportPlayerResult {
+            success: true,
+            path: Some(path),
+            error: None,
+        })
+        .into_response(),
+        Ok(Err(e)) => err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create package: {e}"),
+        ),
+        Err(e) => err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Package task panicked: {e}"),
+        ),
     }
 }
 
@@ -119,7 +165,11 @@ pub(crate) async fn run_python_to_json(
     output_path: &Path,
 ) -> anyhow::Result<()> {
     let id = crate::lancher::RUN_ID.fetch_add(1, Ordering::Relaxed);
-    info!(run_id = id, path = source_path, "run_python_to_json for player package");
+    info!(
+        run_id = id,
+        path = source_path,
+        "run_python_to_json for player package"
+    );
 
     let output = crate::lancher::build_python_cmd(source_path, prologue, fps, output_path)
         .stdout(std::process::Stdio::null())

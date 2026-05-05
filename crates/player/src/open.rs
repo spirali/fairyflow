@@ -1,14 +1,14 @@
 use crate::config::PackageConfig;
 use engine::{AnimationDef, FrameId, SceneSelection};
+use softbuffer::{Context, Surface};
 use std::collections::HashSet;
 use std::io::Read;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -169,7 +169,9 @@ impl PlayerApp {
     /// last frame if none exists. Pauses and sets direction to forward.
     fn jump_to_next_cue(&mut self) {
         let last = self.total_frames().saturating_sub(1);
-        let target = self.cue_frames.iter()
+        let target = self
+            .cue_frames
+            .iter()
             .filter(|&&cf| cf > self.current_frame)
             .min()
             .copied()
@@ -182,7 +184,9 @@ impl PlayerApp {
     /// Jump to the nearest cue frame strictly before `current_frame`, or to
     /// frame 0 if none exists. Pauses and sets direction to backward.
     fn jump_to_prev_cue(&mut self) {
-        let target = self.cue_frames.iter()
+        let target = self
+            .cue_frames
+            .iter()
             .filter(|&&cf| cf < self.current_frame)
             .max()
             .copied()
@@ -197,9 +201,7 @@ impl PlayerApp {
             return;
         };
         let size = window.inner_size();
-        let (Some(w), Some(h)) =
-            (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
-        else {
+        let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
             return;
         };
         if surface.resize(w, h).is_err() {
@@ -387,7 +389,13 @@ pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
     let start_paused = true;
 
     // Destructure package so animations and temp_dir can be owned separately
-    let LoadedPackage { animations, fps, scene_width, scene_height, _temp_dir } = package;
+    let LoadedPackage {
+        animations,
+        fps,
+        scene_width,
+        scene_height,
+        _temp_dir,
+    } = package;
 
     let mut app = PlayerApp {
         frame_map,

@@ -36,7 +36,11 @@ pub struct ExportPdfResult {
 fn err(status: StatusCode, msg: impl Into<String>) -> axum::response::Response {
     (
         status,
-        Json(ExportPdfResult { success: false, path: None, error: Some(msg.into()) }),
+        Json(ExportPdfResult {
+            success: false,
+            path: None,
+            error: Some(msg.into()),
+        }),
     )
         .into_response()
 }
@@ -62,21 +66,29 @@ pub async fn export_pdf_handler(
     // Read and parse the .ffsq sequence file.
     let seq_content = match tokio::fs::read_to_string(&params.seq_path).await {
         Ok(c) => c,
-        Err(e) => return err(StatusCode::BAD_REQUEST, format!("Failed to read sequence: {e}")),
+        Err(e) => {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to read sequence: {e}"),
+            );
+        }
     };
     let seq_data: serde_json::Value = match serde_json::from_str(&seq_content) {
         Ok(v) => v,
         Err(e) => {
-            return err(StatusCode::BAD_REQUEST, format!("Failed to parse sequence: {e}"))
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to parse sequence: {e}"),
+            );
         }
     };
-    let scene_files: Vec<String> =
-        match seq_data.get("scene_files").and_then(|v| v.as_array()) {
-            Some(arr) => {
-                arr.iter().filter_map(|v| v.as_str().map(String::from)).collect()
-            }
-            None => return err(StatusCode::BAD_REQUEST, "Sequence has no scene_files"),
-        };
+    let scene_files: Vec<String> = match seq_data.get("scene_files").and_then(|v| v.as_array()) {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        None => return err(StatusCode::BAD_REQUEST, "Sequence has no scene_files"),
+    };
     if scene_files.is_empty() {
         return err(StatusCode::BAD_REQUEST, "Sequence has no scene files");
     }
@@ -163,9 +175,7 @@ pub async fn export_pdf_handler(
                     }
                     set.into_iter().collect()
                 }
-                FrameSelection::AllFrames => {
-                    (0..anim.frame_count(SceneSelection::All)).collect()
-                }
+                FrameSelection::AllFrames => (0..anim.frame_count(SceneSelection::All)).collect(),
             };
 
             renderer_core::clear_image_cache();
@@ -186,9 +196,12 @@ pub async fn export_pdf_handler(
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
     match result {
-        Ok(Ok(path)) => {
-            Json(ExportPdfResult { success: true, path: Some(path), error: None }).into_response()
-        }
+        Ok(Ok(path)) => Json(ExportPdfResult {
+            success: true,
+            path: Some(path),
+            error: None,
+        })
+        .into_response(),
         Ok(Err(e)) => err(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to create PDF: {e}"),

@@ -12,7 +12,6 @@ use engine::{AnimationDef, FrameId, SceneSelection};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use tower_http::services::ServeDir;
@@ -53,11 +52,11 @@ enum ClientMsg {
 
 fn print_banner(port: u16, token: &str) {
     // ANSI escape codes
-    let r    = "\x1b[0m";    // reset
-    let b    = "\x1b[1m";    // bold
-    let pink = "\x1b[95m";   // bright magenta / pink
-    let blue = "\x1b[94m";   // bright blue
-    let gray = "\x1b[90m";   // dark gray (dim)
+    let r = "\x1b[0m"; // reset
+    let b = "\x1b[1m"; // bold
+    let pink = "\x1b[95m"; // bright magenta / pink
+    let blue = "\x1b[94m"; // bright blue
+    let gray = "\x1b[90m"; // dark gray (dim)
 
     // FAIRY — pink → magenta → cyan
     println!();
@@ -68,7 +67,12 @@ fn print_banner(port: u16, token: &str) {
     println!();
 }
 
-pub async fn start_service(directory: &std::path::Path, port: u16, config: ProjectConfig, token: String) {
+pub async fn start_service(
+    directory: &std::path::Path,
+    port: u16,
+    config: ProjectConfig,
+    token: String,
+) {
     info!(directory = %directory.display(), "serving project");
 
     let web_dist = match std::fs::canonicalize("../web/dist") {
@@ -99,8 +103,14 @@ pub async fn start_service(directory: &std::path::Path, port: u16, config: Proje
         .route("/trees", get(trees_handler))
         .route("/node-bounds", get(node_bounds_handler))
         .route("/export-video", post(crate::export::export_handler))
-        .route("/export-seq-video", post(crate::export::export_seq_video_handler))
-        .route("/export-player", post(crate::package::export_player_handler))
+        .route(
+            "/export-seq-video",
+            post(crate::export::export_seq_video_handler),
+        )
+        .route(
+            "/export-player",
+            post(crate::package::export_player_handler),
+        )
         .route("/export-pdf", post(crate::pdf_export::export_pdf_handler))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_layer))
         .fallback_service(ServeDir::new(web_dist))

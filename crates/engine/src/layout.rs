@@ -1,6 +1,5 @@
-use crate::basictypes::NodeId;
-use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::eval::EvalCtx;
+use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::values::Eval;
 
 impl Node {
@@ -15,8 +14,10 @@ impl Node {
             | NodeKind::Image { position, .. }
             | NodeKind::Layer { position, .. }
             | NodeKind::Cubic { position, .. } => Some(&position),
-            NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } | NodeKind::Path { .. } | NodeKind::Close => None,
-
+            NodeKind::TextGroup { .. }
+            | NodeKind::TextSpan { .. }
+            | NodeKind::Path { .. }
+            | NodeKind::Close => None,
         }
     }
 
@@ -71,7 +72,15 @@ impl Node {
     /// For non-group nodes (no rotation/scale) this is always (0, 0).
     pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64)> {
         match &self.kind {
-            NodeKind::Group { size, scale_x, scale_y, rotation, pivot_x, pivot_y, .. } => {
+            NodeKind::Group {
+                size,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
+                ..
+            } => {
                 let w = size.width.eval(ctx)?;
                 let h = size.height.eval(ctx)?;
                 let sx = scale_x.eval(ctx)?;
@@ -104,7 +113,12 @@ impl Node {
     pub fn get_outer_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let width = self.get_width(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group { scale_x, scale_y, rotation, .. } => {
+            NodeKind::Group {
+                scale_x,
+                scale_y,
+                rotation,
+                ..
+            } => {
                 let sx = scale_x.eval(ctx)?;
                 let sy = scale_y.eval(ctx)?;
                 let r = rotation.eval(ctx)?.to_radians();
@@ -118,7 +132,12 @@ impl Node {
     pub fn get_outer_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let height = self.get_height(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group { scale_x, scale_y, rotation, .. } => {
+            NodeKind::Group {
+                scale_x,
+                scale_y,
+                rotation,
+                ..
+            } => {
                 let sx = scale_x.eval(ctx)?;
                 let sy = scale_y.eval(ctx)?;
                 let r = rotation.eval(ctx)?.to_radians();
@@ -151,10 +170,8 @@ impl Node {
         if let Some(parent) = self.parent {
             let node = ctx.node(parent)?;
             match &node.kind {
-                NodeKind::Group { layout, .. } => {
-                    Ok(layout)
-                }
-                _ => unreachable!()
+                NodeKind::Group { layout, .. } => Ok(layout),
+                _ => unreachable!(),
             }
         } else {
             Ok(&Layout::Center)
@@ -267,42 +284,46 @@ impl Node {
         Ok(match &self.kind {
             NodeKind::Layer { .. } => {
                 // Return the natural SVG width from the parent Image.
-                let Some(parent_id) = self.parent else { return Ok(0.0) };
+                let Some(parent_id) = self.parent else {
+                    return Ok(0.0);
+                };
                 let parent = ctx.node(parent_id)?;
-                let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
+                let NodeKind::Image { path, .. } = &parent.kind else {
+                    return Ok(0.0);
+                };
                 let path_val = path.eval(ctx)?;
                 let Some((nw, _nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nw as f64
             }
-            NodeKind::Group { children, layout, .. } => {
-                match layout {
-                    Layout::Center | Layout::Column { .. } => {
-                        let mut w = 0.0f64;
-                        for child in children {
-                            let node = ctx.node(*child)?;
-                            w = w.max(node.get_width(ctx)?);
-                        }
-                        w
+            NodeKind::Group {
+                children, layout, ..
+            } => match layout {
+                Layout::Center | Layout::Column { .. } => {
+                    let mut w = 0.0f64;
+                    for child in children {
+                        let node = ctx.node(*child)?;
+                        w = w.max(node.get_width(ctx)?);
                     }
-                    Layout::Row { gap, .. } => {
-                        let mut w = 0.0f64;
-                        let mut count: u32 = 0;
-                        for child in children {
-                            let node = ctx.node(*child)?;
-                            if node.is_active(ctx.frame()) {
-                                w += node.get_width(ctx)?;
-                                count += 1;
-                            }
-                        }
-                        if count > 0 {
-                            w += (count - 1) as f64 * gap.eval(ctx)?;
-                        }
-                        w
-                    }
+                    w
                 }
-            }
+                Layout::Row { gap, .. } => {
+                    let mut w = 0.0f64;
+                    let mut count: u32 = 0;
+                    for child in children {
+                        let node = ctx.node(*child)?;
+                        if node.is_active(ctx.frame()) {
+                            w += node.get_width(ctx)?;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        w += (count - 1) as f64 * gap.eval(ctx)?;
+                    }
+                    w
+                }
+            },
             NodeKind::Text { children, .. } => {
                 let lines = children
                     .iter()
@@ -325,7 +346,11 @@ impl Node {
                 } else {
                     // Height is explicit → scale width to preserve aspect ratio.
                     let h = size.height.eval(ctx)?;
-                    if nh == 0.0 { 0.0 } else { h * nw as f64 / nh as f64 }
+                    if nh == 0.0 {
+                        0.0
+                    } else {
+                        h * nw as f64 / nh as f64
+                    }
                 }
             }
             _ => 0.0,
@@ -336,42 +361,46 @@ impl Node {
         Ok(match &self.kind {
             NodeKind::Layer { .. } => {
                 // Return the natural SVG height from the parent Image.
-                let Some(parent_id) = self.parent else { return Ok(0.0) };
+                let Some(parent_id) = self.parent else {
+                    return Ok(0.0);
+                };
                 let parent = ctx.node(parent_id)?;
-                let NodeKind::Image { path, .. } = &parent.kind else { return Ok(0.0) };
+                let NodeKind::Image { path, .. } = &parent.kind else {
+                    return Ok(0.0);
+                };
                 let path_val = path.eval(ctx)?;
                 let Some((_nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
                 nh as f64
             }
-            NodeKind::Group { children, layout, .. } => {
-                match layout {
-                    Layout::Center | Layout::Row { .. } => {
-                        let mut h = 0.0f64;
-                        for child in children {
-                            let node = ctx.node(*child)?;
-                            h = h.max(node.get_height(ctx)?);
-                        }
-                        h
+            NodeKind::Group {
+                children, layout, ..
+            } => match layout {
+                Layout::Center | Layout::Row { .. } => {
+                    let mut h = 0.0f64;
+                    for child in children {
+                        let node = ctx.node(*child)?;
+                        h = h.max(node.get_height(ctx)?);
                     }
-                    Layout::Column { gap, .. } => {
-                        let mut h = 0.0f64;
-                        let mut count: u32 = 0;
-                        for child in children {
-                            let node = ctx.node(*child)?;
-                            if node.is_active(ctx.frame()) {
-                                h += node.get_height(ctx)?;
-                                count += 1;
-                            }
-                        }
-                        if count > 0 {
-                            h += (count - 1) as f64 * gap.eval(ctx)?;
-                        }
-                        h
-                    }
+                    h
                 }
-            }
+                Layout::Column { gap, .. } => {
+                    let mut h = 0.0f64;
+                    let mut count: u32 = 0;
+                    for child in children {
+                        let node = ctx.node(*child)?;
+                        if node.is_active(ctx.frame()) {
+                            h += node.get_height(ctx)?;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        h += (count - 1) as f64 * gap.eval(ctx)?;
+                    }
+                    h
+                }
+            },
             NodeKind::Text { children, .. } => {
                 let lines = children
                     .iter()
@@ -394,14 +423,17 @@ impl Node {
                 } else {
                     // Width is explicit → scale height to preserve aspect ratio.
                     let w = size.width.eval(ctx)?;
-                    if nw == 0.0 { 0.0 } else { w * nh as f64 / nw as f64 }
+                    if nw == 0.0 {
+                        0.0
+                    } else {
+                        w * nh as f64 / nw as f64
+                    }
                 }
             }
             _ => 0.0,
         })
     }
 }
-
 
 fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     let NodeKind::Text { children, .. } = &node.text_ancestor(ctx)?.kind else {

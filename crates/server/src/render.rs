@@ -131,29 +131,49 @@ pub(crate) async fn run_ffmpeg(
 ) -> Result<(), String> {
     let (codec_lib, mut extra): (&str, Vec<String>) = match codec {
         "h265" => ("libx265", vec!["-pix_fmt".into(), "yuv420p".into()]),
-        "vp9"  => ("libvpx-vp9", vec!["-b:v".into(), "0".into()]),
-        _      => ("libx264", vec!["-pix_fmt".into(), "yuv420p".into()]),
+        "vp9" => ("libvpx-vp9", vec!["-b:v".into(), "0".into()]),
+        _ => ("libx264", vec!["-pix_fmt".into(), "yuv420p".into()]),
     };
     extra.push("-crf".into());
     extra.push(crf.to_string());
 
-    let input_pattern = frames_dir.join("frame%d.png").to_string_lossy().into_owned();
+    let input_pattern = frames_dir
+        .join("frame%d.png")
+        .to_string_lossy()
+        .into_owned();
     let fps_str = fps.to_string();
     let output_str = output_path.to_string_lossy().into_owned();
 
     let mut cmd = tokio::process::Command::new("ffmpeg");
-    cmd.args(["-y", "-framerate", &fps_str, "-i", &input_pattern, "-c:v", codec_lib]);
-    for arg in &extra { cmd.arg(arg); }
+    cmd.args([
+        "-y",
+        "-framerate",
+        &fps_str,
+        "-i",
+        &input_pattern,
+        "-c:v",
+        codec_lib,
+    ]);
+    for arg in &extra {
+        cmd.arg(arg);
+    }
     cmd.arg(&output_str)
-       .stdout(std::process::Stdio::null())
-       .stderr(std::process::Stdio::piped());
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
 
     match cmd.output().await {
         Ok(out) if out.status.success() => Ok(()),
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            let snippet: String = stderr.lines().rev().take(4).collect::<Vec<_>>()
-                .into_iter().rev().collect::<Vec<_>>().join(" | ");
+            let snippet: String = stderr
+                .lines()
+                .rev()
+                .take(4)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<_>>()
+                .join(" | ");
             Err(format!("ffmpeg failed: {snippet}"))
         }
         Err(e) => Err(format!("failed to run ffmpeg: {e}")),
@@ -195,9 +215,9 @@ pub async fn render_anim_to_video(
         anim,
         temp_dir.clone(),
         threads,
-        None,   // render all frames
+        None, // render all frames
         target_resolution,
-        false,  // write_tree = false
+        false, // write_tree = false
     )
     .await;
 

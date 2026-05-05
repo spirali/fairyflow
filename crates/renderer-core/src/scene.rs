@@ -31,10 +31,7 @@ impl<T: Debug + Clone> Inheritable<T> {
         }
     }
 
-    pub fn map<S: Debug + Clone>(
-        &self,
-        f: impl FnOnce(&T) -> S,
-    ) -> Inheritable<S> {
+    pub fn map<S: Debug + Clone>(&self, f: impl FnOnce(&T) -> S) -> Inheritable<S> {
         match self {
             Inheritable::Own(v) => Inheritable::Own(f(v)),
             Inheritable::Inherited(v) => Inheritable::Inherited(f(v)),

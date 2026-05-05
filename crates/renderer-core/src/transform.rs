@@ -17,20 +17,48 @@ pub struct AffineTransform {
 
 impl AffineTransform {
     pub fn identity() -> Self {
-        Self { a: 1., b: 0., c: 0., d: 1., e: 0., f: 0. }
+        Self {
+            a: 1.,
+            b: 0.,
+            c: 0.,
+            d: 1.,
+            e: 0.,
+            f: 0.,
+        }
     }
 
     pub fn from_translate(tx: f32, ty: f32) -> Self {
-        Self { a: 1., b: 0., c: 0., d: 1., e: tx, f: ty }
+        Self {
+            a: 1.,
+            b: 0.,
+            c: 0.,
+            d: 1.,
+            e: tx,
+            f: ty,
+        }
     }
 
     pub fn from_scale(sx: f32, sy: f32) -> Self {
-        Self { a: sx, b: 0., c: 0., d: sy, e: 0., f: 0. }
+        Self {
+            a: sx,
+            b: 0.,
+            c: 0.,
+            d: sy,
+            e: 0.,
+            f: 0.,
+        }
     }
 
     pub fn from_rotate_degrees(deg: f32) -> Self {
         let (s, c) = deg.to_radians().sin_cos();
-        Self { a: c, b: s, c: -s, d: c, e: 0., f: 0. }
+        Self {
+            a: c,
+            b: s,
+            c: -s,
+            d: c,
+            e: 0.,
+            f: 0.,
+        }
     }
 
     /// Compose transforms: apply `self` first, then `other`.

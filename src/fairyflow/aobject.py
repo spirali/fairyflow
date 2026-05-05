@@ -46,7 +46,5 @@ class AnimatedObject:
         adv_time(time)
         self._set_attr(name, value, "L")        
 
-    def _move_attr(self, name, delta, transition=None):
-        if transition is None:
-            transition = get_transition()
-        self._attrs[name].move(delta, transition)
+    def _move_attr(self, name, delta, tr=None):
+        self._attrs[name].move(delta, tr=tr)

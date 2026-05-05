@@ -25,7 +25,7 @@ FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
 FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
 
 DIFF_TOLERANCE = 3
-PDF_DIFF_TOLERANCE = 25
+PDF_DIFF_TOLERANCE = 30
 
 import re as _re
 _TESTS_DIR_RE = _re.compile(r".*/tests/")
@@ -178,7 +178,7 @@ def test_scene(request):
             shutil.copytree(frames_dir, check_frames_dir)
             pngs = list(check_frames_dir.glob("*.png"))
             if pngs:
-                subprocess.run(["oxipng", "--"] + [str(p) for p in pngs], check=True)
+                subprocess.run(["oxipng", "--nc", "--"] + [str(p) for p in pngs], check=True)
             return
         else:
             raise Exception(

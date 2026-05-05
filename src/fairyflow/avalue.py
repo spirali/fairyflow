@@ -45,6 +45,11 @@ class AnimatedValue(Generic[T], Expr):
             self.values[frame] = HOLD
 
     def move(self, delta, *, time: SupportsFloat | None = None, frame: int | None = None, tr: Transition | None = None):
+        if frame is None:
+            if time is None:
+                frame = get_frame()
+            else:
+                frame = time_to_frames(time)
         f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
         self.set(Call.add(self.values[f], delta), time=time, frame=frame, tr=tr)
 

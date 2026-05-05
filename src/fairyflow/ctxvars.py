@@ -28,7 +28,7 @@ class BuildState:
         self._time = (frames_to_time(frame))
 
     def adv_frames(self, frames: int):    
-        new_frames = self.frames + frames
+        new_frames = self._frame + frames
         self._set_frame(new_frames)
         self._time = frames_to_time(new_frames)
 

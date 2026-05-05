@@ -40,7 +40,7 @@ class Node(AnimatedObject):
         if put_in_context:
             parent = get_current_node()
             if parent is None:
-                raise Exception("Element created out of context of a parent ndoe")
+                raise Exception("Element created out of context of a parent node")
             parent._children.append(self)
             self._parent = parent
         else:

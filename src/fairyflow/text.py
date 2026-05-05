@@ -100,7 +100,7 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
 
     def sh(self, language, *, theme=None):
         """
-        Enable Syntax highligting
+        Enable Syntax highlighting
         """
         self.sh_language = language
         self.sh_theme = theme

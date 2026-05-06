@@ -13,7 +13,8 @@ dependencies = [
 ]
 
 [project.scripts]
-fairyflow = "fairyflow:main"
+fairyflow = "fairyflow._server:main"
+fairyflow-compile = "fairyflow.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.11.1,<0.12.0"]

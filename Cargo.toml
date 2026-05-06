@@ -14,7 +14,7 @@ lto = true
 panic = "abort"
 
 [workspace.dependencies]
-csscolorparser = "0.7"
+csscolorparser = "0.8"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 tracing = "0.1"

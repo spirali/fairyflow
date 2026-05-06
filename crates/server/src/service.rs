@@ -75,10 +75,13 @@ pub async fn start_service(
 ) {
     info!(directory = %directory.display(), "serving project");
 
-    let web_dist = match std::fs::canonicalize("../web/dist") {
+    let web_dist_raw = std::env::var("FAIRYFLOW_WEB_DIST")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("../web/dist"));
+    let web_dist = match std::fs::canonicalize(&web_dist_raw) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("error: could not resolve web/dist: {e}");
+            eprintln!("error: could not resolve web/dist ({}): {e}", web_dist_raw.display());
             std::process::exit(1);
         }
     };

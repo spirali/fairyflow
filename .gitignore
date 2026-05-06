@@ -4,3 +4,5 @@ target
 .*
 tsbuildinfo
 docs/assets
+src/fairyflow/_bin/
+src/fairyflow/_web/

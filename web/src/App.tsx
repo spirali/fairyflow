@@ -568,7 +568,7 @@ export default function App() {
       .catch(() => {});
 
     return () => ctrl.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame, runId, frames]);
 
   // ── per-frame image caching ────────────────────────────────────────────────
@@ -591,7 +591,7 @@ export default function App() {
       })
       .catch(() => {});
     return () => ctrl.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame, runId, canvasLayout, hasScene]);
 
   // ── cleanup interval on unmount ────────────────────────────────────────────
@@ -990,7 +990,9 @@ export default function App() {
           for (const url of sc.frames) {
             try {
               URL.revokeObjectURL(url);
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
       }
       const next = new Map(prev);

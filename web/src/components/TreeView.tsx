@@ -317,11 +317,7 @@ export default function TreeView({ scene, prevScene, selectedNid, onSelect }: Tr
   );
 }
 
-function addIds(
-  nodes: RawNode[] | undefined,
-  prefix = "",
-  _counter = { n: -1 },
-): TreeNodeData[] {
+function addIds(nodes: RawNode[] | undefined, prefix = "", _counter = { n: -1 }): TreeNodeData[] {
   return (nodes ?? []).map((n, i) => {
     const {
       id: nid,

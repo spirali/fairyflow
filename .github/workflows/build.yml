@@ -1,0 +1,209 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# ─── check ────────────────────────────────────────────────────────────────────
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libfontconfig1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install npm dependencies
+        run: npm install
+        working-directory: web
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Run checks (ruff + cargo fmt/clippy + ts)
+        run: bash scripts/check.sh
+
+      - name: Cargo tests
+        run: cargo test
+
+      - name: Cargo build
+        run: cargo build
+
+      - name: Python tests
+        run: |
+          mkdir -p web/dist
+          uv run pytest tests/ -v
+        env:
+          FAIRYFLOW_WEB_DIST: ${{ github.workspace }}/web/dist
+
+      - name: Upload test failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures
+          path: |
+            tests/current
+            tests/current_pdf
+          if-no-files-found: ignore
+
+# ─── build ────────────────────────────────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.artifact-name }})
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-name: fairyflow-linux-x86_64
+            wheel-tag: manylinux_2_17_x86_64
+          - os: windows-latest
+            artifact-name: fairyflow-windows-x86_64
+            wheel-tag: win_amd64
+          - os: macos-latest
+            artifact-name: fairyflow-macos-aarch64
+            wheel-tag: macosx_11_0_arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libfontconfig1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install npm dependencies
+        run: npm install
+        working-directory: web
+
+      - name: Build package
+        shell: bash
+        run: bash scripts/build_package.sh
+
+      - name: Rename wheel with platform tag
+        shell: bash
+        run: |
+          for w in dist/*.whl; do
+            mv "$w" "${w/py3-none-any/py3-none-${{ matrix.wheel-tag }}}"
+          done
+
+      - name: Smoke test — install and run fairyflow init
+        shell: bash
+        run: |
+          pip install dist/*.whl
+          fairyflow init smoketest_dir
+          echo "Smoke test passed"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: dist/*.whl
+
+# ─── docs ─────────────────────────────────────────────────────────────────────
+  docs:
+    name: Docs
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Download Linux wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: fairyflow-linux-x86_64
+          path: dist/
+
+      - name: Install package and doc tools
+        run: |
+          pip install dist/*.whl
+          pip install zensical pdoc fairyflow-zensical/
+
+      - name: Build zensical docs
+        run: zensical build --clean
+        env:
+          FAIRYFLOW_DOCS_BASE_URL: /${{ github.event.repository.name }}
+
+      - name: Build API docs with pdoc
+        run: python -m pdoc fairyflow -o site/api
+
+      - name: Configure GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+# ─── publish ──────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish to PyPI
+    needs: docs
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fairyflow-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

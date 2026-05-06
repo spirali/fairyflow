@@ -81,7 +81,10 @@ pub async fn start_service(
     let web_dist = match std::fs::canonicalize(&web_dist_raw) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("error: could not resolve web/dist ({}): {e}", web_dist_raw.display());
+            eprintln!(
+                "error: could not resolve web/dist ({}): {e}",
+                web_dist_raw.display()
+            );
             std::process::exit(1);
         }
     };

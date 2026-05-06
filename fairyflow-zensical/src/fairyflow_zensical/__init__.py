@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,18 @@ def _project_root() -> Path:
 
 
 def _server_binary() -> Path | None:
+    # Check the binary bundled inside the installed fairyflow package first.
+    try:
+        import fairyflow
+
+        pkg_bin = Path(fairyflow.__file__).parent / "_bin"
+        for name in ("server", "server.exe"):
+            candidate = pkg_bin / name
+            if candidate.exists():
+                return candidate
+    except ImportError:
+        pass
+    # Fall back to local Cargo build artifacts.
     root = _project_root()
     for candidate in [
         root / "target" / "release" / "server",
@@ -255,20 +268,27 @@ def _do_frame(
 
 def _do_video(source: str, highlighted: str, position: str = "bottom") -> str:
     key = _content_hash(source)
-    output_mp4 = _video_asset_dir() / f"{key}.mp4"
-    if not output_mp4.exists():
+    cached_mp4 = _video_asset_dir() / f"{key}.mp4"
+    if not cached_mp4.exists():
         try:
             with tempfile.TemporaryDirectory(prefix="ffpy-video-") as tmp:
                 json_file = _run_fairyflow(source, Path(tmp))
-                _render_mp4(json_file, output_mp4)
+                _render_mp4(json_file, cached_mp4)
         except Exception as exc:
             return _error_html(highlighted, str(exc))
 
-    # Root-relative URL: docs/assets/ffpy/hash.mp4 → /assets/ffpy/hash.mp4.
-    # A plain relative path would break on pages served under a subdirectory
-    # (use_directory_urls=True), so we always use an absolute site-root path.
-    rel = output_mp4.relative_to(_project_root() / "docs")
-    url = "/" + rel.as_posix()
+    # Zensical copies docs/ → site/ before processing markdown, so MP4s
+    # rendered here must be pushed into site/ explicitly.
+    site_dir = _project_root() / "site" / "assets" / "ffpy"
+    site_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cached_mp4, site_dir / f"{key}.mp4")
+
+    # Build the asset URL. FAIRYFLOW_DOCS_BASE_URL lets CI set the path prefix
+    # for deployments served under a subdirectory (e.g. /fairyflow on GitHub
+    # Pages). Defaults to empty string for local / root-hosted builds.
+    base = os.environ.get("FAIRYFLOW_DOCS_BASE_URL", "").rstrip("/")
+    rel = cached_mp4.relative_to(_project_root() / "docs")
+    url = base + "/" + rel.as_posix()
     label = (
         '<p style="margin:.5em 0 .2em;font-style:italic;color:#666">Output video</p>'
     )

@@ -26,7 +26,12 @@ command -v uv    >/dev/null 2>&1 || { echo "error: uv not found";    exit 1; }
 echo "==> Building Rust backend (release)..."
 cargo build --release -p server
 
-RUST_BINARY="target/release/server"
+# Cargo produces server.exe on Windows, server elsewhere
+if [[ -f "target/release/server.exe" ]]; then
+    RUST_BINARY="target/release/server.exe"
+else
+    RUST_BINARY="target/release/server"
+fi
 if [[ ! -f "$RUST_BINARY" ]]; then
     echo "error: expected binary not found: $RUST_BINARY"
     exit 1
@@ -62,8 +67,8 @@ rm -rf "$BIN_DEST" "$WEB_DEST"
 mkdir -p "$BIN_DEST"
 mkdir -p "$WEB_DEST"
 
-cp "$RUST_BINARY" "$BIN_DEST/server"
-chmod +x "$BIN_DEST/server"
+cp "$RUST_BINARY" "$BIN_DEST/$(basename "$RUST_BINARY")"
+chmod +x "$BIN_DEST/$(basename "$RUST_BINARY")"
 
 cp -r "$WEB_DIST/." "$WEB_DEST/"
 

@@ -1,11 +1,15 @@
 import os
+import platform
+import subprocess
 import sys
 from pathlib import Path
 
 
 def main():
     package_dir = Path(__file__).parent
-    binary = package_dir / "_bin" / "server"
+    is_windows = platform.system() == "Windows"
+    binary_name = "server.exe" if is_windows else "server"
+    binary = package_dir / "_bin" / binary_name
 
     if not binary.exists():
         print(
@@ -15,9 +19,11 @@ def main():
         )
         sys.exit(1)
 
-    binary.chmod(0o755)
-
     env = os.environ.copy()
     env["FAIRYFLOW_WEB_DIST"] = str(package_dir / "_web")
 
-    os.execve(str(binary), [str(binary)] + sys.argv[1:], env)
+    if is_windows:
+        sys.exit(subprocess.run([str(binary)] + sys.argv[1:], env=env).returncode)
+    else:
+        binary.chmod(0o755)
+        os.execve(str(binary), [str(binary)] + sys.argv[1:], env)

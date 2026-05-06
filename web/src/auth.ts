@@ -1,4 +1,4 @@
-const TOKEN_KEY = 'fairyflow_token';
+const TOKEN_KEY = "fairyflow_token";
 let _token: string | null = null;
 
 export function setToken(token: string): void {
@@ -15,6 +15,6 @@ export function loadToken(): string | null {
 
 export function withToken(url: string): string {
   if (!_token) return url;
-  const sep = url.includes('?') ? '&' : '?';
+  const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}token=${encodeURIComponent(_token)}`;
 }

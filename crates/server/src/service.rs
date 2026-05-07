@@ -77,7 +77,9 @@ pub async fn start_service(
 
     let web_dist_raw = std::env::var("FAIRYFLOW_WEB_DIST")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("../web/dist"));
+        .unwrap_or_else(|_| {
+            std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/dist"))
+        });
     let web_dist = match std::fs::canonicalize(&web_dist_raw) {
         Ok(p) => p,
         Err(e) => {

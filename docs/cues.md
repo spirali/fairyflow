@@ -50,43 +50,15 @@ with Scene(cue_at_start=False):
 ## Player behavior
 
 In the interactive editor (opened with `fairyflow open`) the canvas auto-plays between cue
-points. At each cue it pauses and shows a **play button**. Click it (or press ++space++) to
-advance to the next cue.
+points.
 
-When you export to a **stand-alone player** (`fairyflow export-player`), the same behavior is
+When you export to a **stand-alone player** (see [Exports](exports.md)), the same behavior is
 preserved — the exported bundle plays and pauses at every cue point, making it suitable for
 use as a self-contained presentation.
 
 ---
 
 ## Design patterns
-
-### Reveal by cue
-
-A common pattern is to show content incrementally, with each cue revealing the next item:
-
-```python
-with Scene():
-    items = [
-        ("Step 1", "Set up the project"),
-        ("Step 2", "Write the animation"),
-        ("Step 3", "Export and share"),
-    ]
-
-    y = 30
-    for label, detail in items:
-        t = Text()
-        t.span(label).bold().font_size(20).color("steelblue")
-        t.span(detail).font_size(16).color("gray")
-        t.xy(40, y).alpha(0)
-        y += 55
-        cue()
-
-    # reveal each item one at a time
-    set_frame(0)
-    for i, _ in enumerate(items):
-        ...  # see Animations page for fade_in usage
-```
 
 ### Cue + transition
 

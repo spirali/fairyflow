@@ -22,9 +22,11 @@
 
 - **Python-first authoring** — animations are plain `.py` scripts; no DSL to learn
 - **Live interactive environment** — edit code, press Ctrl+Enter, see the result instantly
+- **Easy scene exploration** — code editor connects code, the scene tree, and elements in rendered image
 - **Vector scene graph** — scenes are stored as vector graphics and rasterized at the last moment, so any output resolution is lossless
 - **Presentation cues** — `cue()` pauses the player for click-to-advance presentations
 - **Multiple export formats** — standalone `.ffpkg` player package, MP4 video, and multi-page PDF
+- **Performant backend** — Backend is implemented in Rust
 
 ## Documentation
 
@@ -57,20 +59,6 @@ my_project/
 │   └── scene1.ffpy      ← animation code
 └── sequences/
     └── sequence1.ffsq   ← ordered playlist of scenes for export
-```
-
-## Export formats
-
-| Format | Command / UI |
-|---|---|
-| Player package (`.ffpkg`) | Export → Player package in the studio |
-| Video (`.mp4`) | Export → Video (requires ffmpeg) |
-| PDF | Export → PDF |
-
-Play a package with:
-
-```bash
-fairyflow play mypackage.ffpkg
 ```
 
 ## License

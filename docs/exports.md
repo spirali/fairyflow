@@ -4,7 +4,9 @@ icon: lucide/download
 
 # Exports
 
-FairyFlow can export your sequences in three formats. All export options are available in the sequence editor.
+FairyFlow can export your sequences in three formats. All export options are available in the sequence editor. Sequence editor is opened when `.ffsq` file is opened. 
+
+![Export options in the sequence editor](export.png)
 
 | Format | Use case |
 |---|---|

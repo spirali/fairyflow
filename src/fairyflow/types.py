@@ -5,5 +5,5 @@ from .exprs import Expr
 
 type FloatLike = SupportsFloat | AnimatedValue["FloatLike"] | Expr
 type StringLike = str | AnimatedValue["StringLike"] | Expr
-type ColorLike = str | Color | AnimatedValue["ColorLike"] | Expr
+type ColorLike = None | str | Color | AnimatedValue["ColorLike"] | Expr
 type BoolLike = bool | AnimatedValue[bool] | Expr

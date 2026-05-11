@@ -82,16 +82,63 @@ t.span("Custom text").font("MyFont").font_size(24)
 ## stext
 
 `stext` is a helper that builds a `Text` node from a string with optional inline markup.
-Tag names become named spans or groups you can look up later to restyle.
+Tags can carry style attributes that are applied immediately, and the tag name is also
+preserved as a `.name()` on the span or group so you can look it up later.
 
 ```python
 # Plain text — equivalent to Text().span("Hello")
 t = stext("Hello, world!")
+```
 
-# Named spans — use .find_node(name="title") to restyle later
+### Inline color and style
+
+Use a `color` attribute on any named tag to set the text color:
+
+```ffpy frame="0"
+with Scene():
+    stext('<info color="green">INFO</info> server started').font_size(22).font("monospace")
+```
+
+```ffpy frame="0"
+with Scene():
+    stext('<span color="#e06c75" bold>ERROR</span> something went wrong').font_size(22).font("monospace")
+```
+
+### Supported attributes
+
+| Attribute | Effect |
+|---|---|
+| `color='...'` | Text fill color (any CSS color) |
+| `font-size='N'` | Font size in pixels (also accepted: `text-size`) |
+| `font='...'` | Font family |
+| `font-weight='N'` | Numeric weight (100–900) |
+| `bold` | Shorthand for `font-weight='800'` |
+| `italic` | Enable italic |
+
+Multiple attributes on one tag are all applied:
+
+```python
+stext("<span color='orange' font-size='20' bold>warning</span> check the logs")
+```
+
+### Named spans
+
+The tag name is still recorded via `.name()`, so you can look the span up and restyle it later:
+
+```python
 t = stext("<title>FairyFlow\n<subtitle>Animation for Python")
 t.find_node(name="title").font_size(32).bold().color("steelblue")
 t.find_node(name="subtitle").font_size(18).color("gray")
+```
+
+### Literal `<` characters
+
+A `<` that has no matching `>` is treated as literal text, so you can safely pass
+arbitrary content (terminal output, ASCII art, file paths) without escaping:
+
+```python
+stext("a < b")           # → "a < b"
+stext("path/to/<file>")  # → tag named "file" — wrap in a real tag name only when intended
 ```
 
 By default `stext` uses `<tag>...</tag>` syntax. Pass `delimiters="[]"` to use `[tag]...[/tag]` instead.

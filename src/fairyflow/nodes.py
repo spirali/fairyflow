@@ -910,6 +910,66 @@ class Group(
         self._anim_attr("clip_x", 0, time, start=1)
         return self
 
+    def hide_down(self, time: SupportsFloat = 1) -> Self:
+        """Animate hiding the group with a wipe-down effect.
+
+        Animates ``clip_y`` from its current value to ``1.0``, causing the
+        content to disappear by sweeping toward the bottom.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_y", 1, time)
+        return self
+
+    def hide_up(self, time: SupportsFloat = 1) -> Self:
+        """Animate hiding the group with a wipe-up effect.
+
+        Animates ``clip_h`` from its current value to ``0.0``, causing the
+        content to disappear by shrinking toward the top.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_h", 0, time)
+        return self
+
+    def reveal_down(self, time: SupportsFloat = 1) -> Self:
+        """Animate revealing the group with a wipe-down effect.
+
+        Sets ``clip_h`` to ``0.0`` at the current frame and animates it to
+        ``1.0``, causing the content to appear by expanding toward the bottom.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_h", 1, time, start=0)
+        return self
+
+    def reveal_up(self, time: SupportsFloat = 1) -> Self:
+        """Animate revealing the group with a wipe-up effect.
+
+        Sets ``clip_y`` to ``1.0`` at the current frame and animates it to
+        ``0.0``, causing the content to appear by sweeping toward the top.
+
+        Args:
+            time: Duration of the animation in seconds.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._anim_attr("clip_y", 0, time, start=1)
+        return self
+
 
 @beartype
 class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):

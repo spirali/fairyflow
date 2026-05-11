@@ -133,3 +133,103 @@ def test_unclosed_tag_raises(sc):
 def test_unexpected_closing_tag_raises(sc):
     with pytest.raises(ValueError):
         stext("<a>text</b>")
+
+
+# ── Tag attribute tests ───────────────────────────────────────────────────────
+
+
+def _attr_value(node, attr):
+    av = node._attrs[attr]
+    return av.values[av.init_frame]
+
+
+def test_tag_name_is_not_color(sc):
+    # tag name alone does NOT set a color — use color='...' for that
+    t = stext("<green>INFO</green>")
+    span = t._children[0]
+    assert isinstance(span, TextSpan)
+    assert _span_text(span) == "INFO"
+    assert span._name == "green"
+    # fill_color should be inherited (not explicitly set on the span)
+    from fairyflow.exprs import Inherited
+    assert isinstance(_attr_value(span, "fill_color"), Inherited)
+
+
+def test_attr_color_quoted(sc):
+    t = stext("<span color='#ff0000'>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "fill_color").value == "#ff0000"
+
+
+def test_attr_color_double_quoted(sc):
+    t = stext('<span color="#abc">text</span>')
+    span = t._children[0]
+    assert _attr_value(span, "fill_color").value == "#abc"
+
+
+def test_attr_font_size(sc):
+    t = stext("<span font-size='24'>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "font_size") == 24.0
+
+
+def test_attr_text_size_alias(sc):
+    t = stext("<span text-size='18'>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "font_size") == 18.0
+
+
+def test_attr_bold(sc):
+    t = stext("<span bold>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "font_weight") == 800
+
+
+def test_attr_italic(sc):
+    t = stext("<span italic>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "italic") is True
+
+
+def test_attr_font_name(sc):
+    t = stext("<span font='monospace'>text</span>")
+    span = t._children[0]
+    assert _attr_value(span, "font") == "monospace"
+
+
+def test_attr_multiple_on_same_tag(sc):
+    t = stext("<span color='red' font-size='20' bold>hi</span>")
+    span = t._children[0]
+    assert _attr_value(span, "fill_color").value == "red"
+    assert _attr_value(span, "font_size") == 20.0
+    assert _attr_value(span, "font_weight") == 800
+
+
+def test_attr_on_group(sc):
+    # nested children force a TextGroup; attrs must be applied to the group
+    t = stext("<outer color='blue'>a<inner>b</inner></outer>")
+    g = t._children[0]
+    assert isinstance(g, TextGroup)
+    assert g._name == "outer"
+    assert _attr_value(g, "fill_color").value == "blue"
+
+
+def test_attr_tag_name_preserved(sc):
+    t = stext("<warn color='orange'>!</warn>")
+    span = t._children[0]
+    assert span._name == "warn"
+    assert _attr_value(span, "fill_color").value == "orange"
+
+
+def test_literal_lt_no_closing_gt(sc):
+    # '<' with no '>' must be treated as literal text, not raise
+    t = stext("a < b")
+    assert len(t._children) == 1
+    assert _span_text(t._children[0]) == "a < b"
+
+
+def test_literal_lt_slash_no_closing_gt(sc):
+    # '</' with no '>' (e.g. ASCII art) must be treated as literal text
+    t = stext("| |  < / foo |")
+    assert len(t._children) == 1
+    assert _span_text(t._children[0]) == "| |  < / foo |"

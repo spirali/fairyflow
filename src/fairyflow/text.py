@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from beartype import beartype
 from typing import Union
@@ -128,7 +129,28 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
 @dataclass
 class _TagNode:
     name: str
+    attrs: dict
     children: list[Union[str, "_TagNode"]] = field(default_factory=list)
+
+
+_ATTR_RE = re.compile(r"([\w-]+)(?:\s*=\s*(?:'([^']*)'|\"([^\"]*)\"))?")
+
+
+def _parse_tag_content(tag_content):
+    """Parse 'name key=val bool-key ...' into (name, {key: value_or_True})."""
+    parts = tag_content.strip().split(None, 1)
+    name = parts[0] if parts else ""
+    attrs = {}
+    if len(parts) > 1:
+        for m in _ATTR_RE.finditer(parts[1]):
+            key = m.group(1)
+            if m.group(2) is not None:
+                attrs[key] = m.group(2)
+            elif m.group(3) is not None:
+                attrs[key] = m.group(3)
+            else:
+                attrs[key] = True
+    return name, attrs
 
 
 def _parse_content(src, pos, open_d, close_d, stop_tag=None):
@@ -150,8 +172,11 @@ def _parse_content(src, pos, open_d, close_d, stop_tag=None):
         if after_open < n and src[after_open] == "/":
             close_idx = src.find(close_d, after_open)
             if close_idx == -1:
-                raise ValueError(f"Unclosed closing tag at position {idx}")
-            tag_name = src[after_open + 1 : close_idx]
+                # No closing delimiter — treat '<' as literal text
+                buf.append(src[idx : idx + len(open_d)])
+                pos = idx + len(open_d)
+                continue
+            tag_name = src[after_open + 1 : close_idx].strip()
             if stop_tag is not None and tag_name == stop_tag:
                 if buf:
                     nodes.append("".join(buf))
@@ -160,14 +185,18 @@ def _parse_content(src, pos, open_d, close_d, stop_tag=None):
         else:
             close_idx = src.find(close_d, after_open)
             if close_idx == -1:
-                raise ValueError(f"Unclosed tag at position {idx}")
-            tag_name = src[after_open:close_idx]
+                # No closing delimiter — treat '<' as literal text
+                buf.append(src[idx : idx + len(open_d)])
+                pos = idx + len(open_d)
+                continue
+            tag_content = src[after_open:close_idx]
+            tag_name, tag_attrs = _parse_tag_content(tag_content)
             if buf:
                 nodes.append("".join(buf))
                 buf = []
             pos = close_idx + len(close_d)
             children, pos = _parse_content(src, pos, open_d, close_d, stop_tag=tag_name)
-            nodes.append(_TagNode(tag_name, children))
+            nodes.append(_TagNode(tag_name, tag_attrs, children))
 
     if buf:
         nodes.append("".join(buf))
@@ -184,12 +213,30 @@ def _plain_text(nodes):
     return "".join(nodes)
 
 
-def _add_lines(parent, text_str, name=None):
+def _apply_style(obj, attrs):
+    for key, val in attrs.items():
+        if key == "color":
+            obj.color(val)
+        elif key in ("text-size", "font-size"):
+            obj.font_size(float(val))
+        elif key == "bold":
+            obj.bold()
+        elif key == "italic":
+            obj.italic(True)
+        elif key == "font":
+            obj.font(val)
+        elif key == "font-weight":
+            obj.font_weight(float(val))
+
+
+def _add_lines(parent, text_str, name=None, attrs=None):
     for line in text_str.split("\n"):
         if line or name is None:
             s = parent.span(line)
             if name is not None:
                 s.name(name)
+            if attrs:
+                _apply_style(s, attrs)
 
 
 def _add_node_to(parent, node):
@@ -202,9 +249,10 @@ def _add_node_to(parent, node):
 def _add_tag_to(parent, node):
     plain = _plain_text(node.children)
     if plain is not None:
-        _add_lines(parent, plain, name=node.name)
+        _add_lines(parent, plain, name=node.name, attrs=node.attrs)
     else:
         g = parent.group().name(node.name)
+        _apply_style(g, node.attrs)
         for child in node.children:
             _add_node_to(g, child)
 
@@ -217,6 +265,20 @@ def stext(input_text: str, *, strip: bool = True, delimiters: str = "<>"):
     Plain text is split on newlines into spans. Named tags become spans (leaf)
     or groups (nested), with the tag name assigned via .name(). Multiple
     top-level items are wrapped in an anonymous group.
+
+    Tag attributes are applied as styles:
+      color='...'            → .color(...)
+      font-size='...'        → .font_size(...)  (also: text-size)
+      font='...'             → .font(...)
+      font-weight='...'      → .font_weight(...)
+      bold                   → .bold()
+      italic                 → .italic(True)
+
+    Examples::
+
+        stext("<green>INFO</green> message")
+        stext("<span color='#f00' bold>warning</span>")
+        stext("<abc font-size='12' color='blue'>text</abc>")
     """
     if strip:
         input_text = input_text.strip()

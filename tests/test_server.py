@@ -287,3 +287,63 @@ def test_frames_range_returns_json_array(
     assert status == 200
     data = json.loads(body)
     assert isinstance(data, list)
+
+
+# ── file monitoring (inotify) ─────────────────────────────────────────────────
+
+FILE_CHANGED_TIMEOUT = 5  # seconds
+
+
+async def test_external_write_triggers_file_changed(server_uri, server_project_dir):
+    """Externally writing a file delivers a file_changed WebSocket message with its relative path."""
+    watch_file = server_project_dir / "scenes" / "_watch_test.ffpy"
+    watch_file.write_text("from fairyflow import *\nwith Scene(): pass\n")
+    try:
+        async with websockets.connect(server_uri) as ws:
+            await ws.recv()  # consume config
+            # Simulate an external editor saving the file
+            watch_file.write_text("from fairyflow import *\nwith Scene(): pass\n# v2\n")
+            async with asyncio.timeout(FILE_CHANGED_TIMEOUT):
+                async for raw in ws:
+                    msg = json.loads(raw)
+                    if msg["type"] == "file_changed" and msg["path"] == "scenes/_watch_test.ffpy":
+                        break
+                else:
+                    pytest.fail("WebSocket closed before file_changed arrived")
+    finally:
+        watch_file.unlink(missing_ok=True)
+
+
+async def test_put_file_save_does_not_echo_file_changed(
+    server_uri, server_base_url, server_token, server_project_dir
+):
+    """Saving a file via PUT /file must not echo back as a file_changed event."""
+    suppress_file = server_project_dir / "scenes" / "_suppress_test.ffpy"
+    suppress_file.write_text("from fairyflow import *\nwith Scene(): pass\n")
+    try:
+        async with websockets.connect(server_uri) as ws:
+            await ws.recv()  # consume config
+            http_put(
+                server_base_url,
+                "/file",
+                server_token,
+                "from fairyflow import *\nwith Scene(): pass\n# via PUT\n",
+                path="scenes/_suppress_test.ffpy",
+            )
+            received_echo = False
+            try:
+                # Wait within the 2-second suppression window; no echo should arrive
+                async with asyncio.timeout(1.5):
+                    async for raw in ws:
+                        msg = json.loads(raw)
+                        if (
+                            msg["type"] == "file_changed"
+                            and msg["path"] == "scenes/_suppress_test.ffpy"
+                        ):
+                            received_echo = True
+                            break
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        suppress_file.unlink(missing_ok=True)
+    assert not received_echo, "PUT /file must not send a file_changed echo"

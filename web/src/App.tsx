@@ -225,6 +225,9 @@ export default function App() {
   };
   const currentFile = tabs[activeTab]?.path ?? null;
 
+  // ── externally changed files ──────────────────────────────────────────────
+  const [externallyChangedPaths, setExternallyChangedPaths] = useState<Set<string>>(new Set());
+
   // ── file tree panel ───────────────────────────────────────────────────────
   const fileTreePanelRef = usePanelRef();
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
@@ -327,6 +330,11 @@ export default function App() {
       modelsRef.current.delete(tab.path);
     }
     viewStatesRef.current.delete(tab.path);
+    setExternallyChangedPaths((prev) => {
+      const next = new Set(prev);
+      next.delete(tab.path);
+      return next;
+    });
     const newTabs = tabsRef.current.filter((_, i) => i !== idx);
     tabsRef.current = newTabs;
     setTabsState(newTabs);
@@ -358,6 +366,28 @@ export default function App() {
     setTabs(tabsRef.current.map((t, i) => (i === idx ? { ...t, isDirty: false } : t)));
   };
 
+  const handleReloadFile = (path: string) => {
+    fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
+      .then((r) => (r.ok ? r.text() : null))
+      .then((content) => {
+        if (content === null) return;
+        const model = modelsRef.current.get(path);
+        if (model) model.setValue(content);
+        setExternallyChangedPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+        setTabs(tabsRef.current.map((t) => (t.path === path ? { ...t, isDirty: false } : t)));
+      })
+      .catch(() => {});
+  };
+
+  const handleReloadCurrentFile = () => {
+    if (!currentFile || currentFile.endsWith(".ffsq")) return;
+    handleReloadFile(currentFile);
+  };
+
   useEffect(() => {
     if (!sidebarMenuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -376,6 +406,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const runFileRef = useRef<((debug: boolean) => void) | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const reconnectCount = useRef(0);
@@ -461,6 +492,22 @@ export default function App() {
                 ? `Process exited with code ${msg.exit_code}`
                 : "Process terminated";
           setLines((prev) => [...prev, { kind: "sys", text: label }]);
+        } else if (msg.type === "file_changed") {
+          const { path } = msg;
+          const openTab = tabsRef.current.find((t) => t.path === path && !t.isFfsq);
+          if (openTab?.isDirty) {
+            // Monaco has unsaved edits — show conflict banner instead of overwriting
+            setExternallyChangedPaths((prev) => new Set([...prev, path]));
+          } else if (openTab) {
+            // Clean tab — silently reload editor content
+            handleReloadFile(path);
+          }
+          // Auto-run the active .ffpy file when it changes externally (and Monaco isn't dirty)
+          if (path.endsWith(".ffpy") && currentFileRef.current === path && wsRef.current && !openTab?.isDirty) {
+            setLines([]);
+            setRunning(true);
+            wsRef.current.send(JSON.stringify({ type: "run", path, debug: false }));
+          }
         }
       };
 
@@ -678,20 +725,7 @@ export default function App() {
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      const path = currentFileRef.current;
-      if (!path?.endsWith(".ffpy")) return;
-      const code = editorRef.current?.getValue();
-      if (!code || !wsRef.current) return;
-      fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
-        method: "PUT",
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-        body: code,
-      })
-        .then(() => markActiveTabClean())
-        .catch(() => {});
-      setLines([]);
-      setRunning(true);
-      wsRef.current.send(JSON.stringify({ type: "run", path }));
+      runFileRef.current?.(false);
     });
 
     if (defaultFileRef.current && tabsRef.current.length === 0) {
@@ -710,6 +744,13 @@ export default function App() {
         .then(async (r) => {
           if (r.ok) {
             markActiveTabClean();
+            if (path) {
+              setExternallyChangedPaths((prev) => {
+                const next = new Set(prev);
+                next.delete(path);
+                return next;
+              });
+            }
           } else {
             const msg = await r.text();
             setLines((prev) => [...prev, { kind: "err", text: `Config error: ${msg}` }]);
@@ -982,6 +1023,23 @@ export default function App() {
   const isFfsqActive = currentFile?.endsWith(".ffsq") ?? false;
   const currentSeqResult = isFfsqActive ? (seqRenderResults.get(currentFile!) ?? null) : null;
 
+  runFileRef.current = (debug: boolean) => {
+    const path = currentFileRef.current;
+    if (!path?.endsWith(".ffpy")) return;
+    const code = editorRef.current?.getValue();
+    if (!code || !wsRef.current) return;
+    fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      body: code,
+    })
+      .then(() => markActiveTabClean())
+      .catch(() => {});
+    setLines([]);
+    setRunning(true);
+    wsRef.current.send(JSON.stringify({ type: "run", path, debug }));
+  };
+
   const handleSeqRenderResult = (path: string, res: SequenceRenderResult) => {
     setSeqRenderResults((prev) => {
       const old = prev.get(path);
@@ -1198,6 +1256,7 @@ export default function App() {
                 initialExpandedDirs={
                   defaultFileRef.current ? [defaultFileRef.current.split("/")[0]] : undefined
                 }
+                onReloadFile={handleReloadCurrentFile}
               />
             </Panel>
 
@@ -1233,6 +1292,35 @@ export default function App() {
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+                    {currentFile && externallyChangedPaths.has(currentFile) && !isFfsqActive && (
+                      <div className="file-changed-banner">
+                        <span>File modified externally.</span>
+                        <button
+                          className="file-changed-reload-btn"
+                          onClick={() => handleReloadFile(currentFile)}
+                        >
+                          Reload
+                        </button>
+                      </div>
+                    )}
+                    {currentFile?.endsWith(".ffpy") && !isFfsqActive && (
+                      <div className="editor-toolbar">
+                        <button
+                          className="editor-toolbar-btn editor-toolbar-run"
+                          onClick={() => runFileRef.current?.(false)}
+                          title="Run (Ctrl+Enter)"
+                        >
+                          ▶ Run
+                        </button>
+                        <button
+                          className="editor-toolbar-btn editor-toolbar-debug"
+                          onClick={() => runFileRef.current?.(true)}
+                          title="Run with debug info"
+                        >
+                          ▷ Debug
+                        </button>
                       </div>
                     )}
                     <div className="panel-fill" style={{ position: "relative" }}>

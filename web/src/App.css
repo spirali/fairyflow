@@ -907,6 +907,53 @@
   color: #ffd97a;
 }
 
+/* ── File externally changed banner ───────────────────────────────────────── */
+.file-changed-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px;
+  background: #4a3800;
+  border-bottom: 1px solid #7a5c00;
+  color: #ffd97a;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.file-changed-reload-btn {
+  padding: 2px 10px;
+  background: #7a5c00;
+  color: #ffd97a;
+  border: 1px solid #a07a00;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.file-changed-reload-btn:hover {
+  background: #9a7800;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.editor-toolbar-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--fg-primary);
+  cursor: pointer;
+}
+.editor-toolbar-btn:hover { background: var(--bg-hover); }
+.editor-toolbar-run { border-color: #1177bb; color: #4ec9b0; }
+.editor-toolbar-debug { border-color: #555; color: #ce9178; }
+
 .ws-overlay {
   position: fixed;
   inset: 0;

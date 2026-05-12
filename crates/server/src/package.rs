@@ -171,7 +171,7 @@ pub(crate) async fn run_python_to_json(
         "run_python_to_json for player package"
     );
 
-    let output = crate::lancher::build_python_cmd(source_path, prologue, fps, output_path)
+    let output = crate::lancher::build_python_cmd(source_path, prologue, fps, false, output_path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .output()

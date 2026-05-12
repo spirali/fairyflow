@@ -135,7 +135,8 @@ export type ServerMsg =
       frame_count: number;
       scenes: SceneInfo[];
     }
-  | { type: "done"; exit_code: number | null };
+  | { type: "done"; exit_code: number | null }
+  | { type: "file_changed"; path: string };
 
 // ── Sequence types ────────────────────────────────────────────────────────────
 

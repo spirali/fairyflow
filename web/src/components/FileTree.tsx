@@ -222,6 +222,7 @@ interface Props {
   onFileClick: (path: string) => void;
   refreshTrigger?: number;
   initialExpandedDirs?: string[];
+  onReloadFile?: () => void;
 }
 
 export default function FileTree({
@@ -229,6 +230,7 @@ export default function FileTree({
   onFileClick,
   refreshTrigger,
   initialExpandedDirs,
+  onReloadFile,
 }: Props) {
   const [tree, setTree] = useState<FsEntry[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(
@@ -383,6 +385,25 @@ export default function FileTree({
               />
               <line x1="8" y1="10" x2="8" y2="14" stroke="white" strokeWidth="1.4" />
               <line x1="6" y1="12" x2="10" y2="12" stroke="white" strokeWidth="1.4" />
+            </svg>
+          </button>
+          <button
+            className="filetree-action-btn"
+            title="Reload File from Disk"
+            onClick={() => onReloadFile?.()}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M13.5 8A5.5 5.5 0 1 1 2.5 5.5" />
+              <polyline points="2.5,2 2.5,5.5 6,5.5" />
             </svg>
           </button>
         </div>

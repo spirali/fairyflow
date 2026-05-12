@@ -1,6 +1,13 @@
 import inspect
 import os
 
+_debug_mode = False
+
+
+def set_debug_mode(debug: bool):
+    global _debug_mode
+    _debug_mode = debug
+
 
 def get_current_stack():
     stack = inspect.stack()
@@ -12,4 +19,7 @@ def get_current_stack():
 
 
 def get_info(node_id):
-    return {"id": node_id, "stack": get_current_stack()}
+    info: dict = {"id": node_id}
+    if _debug_mode:
+        info["stack"] = get_current_stack()
+    return info

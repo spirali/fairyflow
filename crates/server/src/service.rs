@@ -10,6 +10,8 @@ use axum::routing::{get, post};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use engine::{AnimationDef, FrameId, SceneSelection};
 use serde::{Deserialize, Serialize};
+use notify::Watcher;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -22,6 +24,8 @@ pub(crate) struct AppState {
     pub(crate) animation: Arc<Mutex<Option<Arc<AnimationDef>>>>,
     pub(crate) config: Arc<Mutex<ProjectConfig>>,
     config_tx: broadcast::Sender<ProjectConfig>,
+    file_changed_tx: broadcast::Sender<String>,
+    recently_saved: Arc<Mutex<HashMap<PathBuf, std::time::Instant>>>,
     token: Arc<String>,
 }
 
@@ -46,7 +50,11 @@ async fn auth_layer(
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum ClientMsg {
-    Run { path: String },
+    Run {
+        path: String,
+        #[serde(default)]
+        debug: bool,
+    },
     Terminate,
 }
 
@@ -92,10 +100,74 @@ pub async fn start_service(
     };
 
     let (config_tx, _) = broadcast::channel::<ProjectConfig>(4);
+    let (file_changed_tx, _) = broadcast::channel::<String>(16);
+    let recently_saved: Arc<Mutex<HashMap<PathBuf, std::time::Instant>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    // Set up inotify watcher; bridge its sync callback into a tokio channel.
+    let (notify_tx, mut notify_rx) =
+        mpsc::channel::<notify::Result<notify::Event>>(128);
+    let mut watcher = notify::RecommendedWatcher::new(
+        move |res| {
+            let _ = notify_tx.blocking_send(res);
+        },
+        notify::Config::default(),
+    )
+    .expect("failed to create file watcher");
+    watcher
+        .watch(std::path::Path::new("."), notify::RecursiveMode::Recursive)
+        .expect("failed to watch project directory");
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let file_changed_tx2 = file_changed_tx.clone();
+    let recently_saved2 = recently_saved.clone();
+    tokio::spawn(async move {
+        let _watcher = watcher; // keep alive for the duration of the server
+        while let Some(res) = notify_rx.recv().await {
+            if let Ok(event) = res {
+                use notify::EventKind;
+                let is_write = matches!(
+                    event.kind,
+                    EventKind::Modify(_) | EventKind::Create(_)
+                );
+                if !is_write {
+                    continue;
+                }
+                for abs_path in event.paths {
+                    if abs_path.is_dir() {
+                        continue;
+                    }
+                    let canonical = match std::fs::canonicalize(&abs_path) {
+                        Ok(p) => p,
+                        Err(_) => abs_path.clone(),
+                    };
+                    {
+                        let mut saved = recently_saved2.lock().unwrap();
+                        let now = std::time::Instant::now();
+                        saved.retain(|_, t| {
+                            now.duration_since(*t) < std::time::Duration::from_secs(2)
+                        });
+                        if saved.contains_key(&canonical) {
+                            continue;
+                        }
+                    }
+                    let rel = canonical
+                        .strip_prefix(&cwd)
+                        .unwrap_or(&canonical)
+                        .to_string_lossy()
+                        .into_owned();
+                    let _ = file_changed_tx2.send(rel);
+                }
+            }
+        }
+    });
+
     let state = AppState {
         animation: Arc::new(Mutex::new(None)),
         config: Arc::new(Mutex::new(config)),
         config_tx,
+        file_changed_tx,
+        recently_saved,
         token: Arc::new(token.clone()),
     };
 
@@ -183,6 +255,26 @@ async fn file_save_handler(
     State(state): State<AppState>,
     body: String,
 ) -> impl IntoResponse {
+    // Record the canonical path BEFORE writing so the inotify event (which fires
+    // during/after the write) is already suppressed when the watcher processes it.
+    // Canonicalize the parent directory (which must exist) plus the filename so
+    // this works even when creating a new file.
+    let save_path = std::path::Path::new(&params.path);
+    let parent = save_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    if let Some(canonical) = std::fs::canonicalize(parent)
+        .ok()
+        .and_then(|c| save_path.file_name().map(|n| c.join(n)))
+    {
+        state
+            .recently_saved
+            .lock()
+            .unwrap()
+            .insert(canonical, std::time::Instant::now());
+    }
+
     if let Err(e) = tokio::fs::write(&params.path, &body).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
     }
@@ -500,6 +592,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let (out_tx, mut out_rx) = mpsc::channel::<BuildProcessMsg>(64);
     let (kill_tx, _) = broadcast::channel::<()>(4);
     let mut config_rx = state.config_tx.subscribe();
+    let mut file_changed_rx = state.file_changed_tx.subscribe();
 
     // Send current config immediately on connect.
     let initial_fps = state.config.lock().unwrap().fps;
@@ -514,8 +607,8 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMsg>(&text) {
-                            Ok(ClientMsg::Run { path }) => {
-                                info!(path, "received Run request");
+                            Ok(ClientMsg::Run { path, debug: is_debug }) => {
+                                info!(path, is_debug, "received Run request");
                                 let n = kill_tx.send(()).unwrap_or(0);
                                 debug!(killed_receivers = n, "sent kill signal");
                                 let tx = out_tx.clone();
@@ -526,7 +619,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                                 let fps = cfg.fps;
                                 drop(cfg);
                                 debug!("subscribed new kill_rx, spawning run_python");
-                                tokio::spawn(run_python(path, prologue, fps, tx, kill_rx, state.animation.clone()));
+                                tokio::spawn(run_python(path, prologue, fps, is_debug, tx, kill_rx, state.animation.clone()));
                             }
                             Ok(ClientMsg::Terminate) => {
                                 info!("received Terminate request");
@@ -544,11 +637,12 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             }
             Some(msg) = out_rx.recv() => {
                 let kind = match &msg {
-                    BuildProcessMsg::Config { .. } => "config",
-                    BuildProcessMsg::Output { .. } => "output",
-                    BuildProcessMsg::Error  { .. } => "error",
-                    BuildProcessMsg::Tree   { .. } => "tree",
-                    BuildProcessMsg::Done   { .. } => "done",
+                    BuildProcessMsg::Config      { .. } => "config",
+                    BuildProcessMsg::Output      { .. } => "output",
+                    BuildProcessMsg::Error       { .. } => "error",
+                    BuildProcessMsg::Tree        { .. } => "tree",
+                    BuildProcessMsg::Done        { .. } => "done",
+                    BuildProcessMsg::FileChanged { .. } => "file_changed",
                 };
                 debug!(kind, "forwarding message to WebSocket");
                 let text = serde_json::to_string(&msg).unwrap();
@@ -560,6 +654,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             Ok(cfg) = config_rx.recv() => {
                 let text = serde_json::to_string(&BuildProcessMsg::Config { fps: cfg.fps }).unwrap();
                 if socket.send(Message::Text(text.into())).await.is_err() {
+                    warn!("WebSocket send failed - exiting handle_socket");
+                    break;
+                }
+            }
+            Ok(path) = file_changed_rx.recv() => {
+                let msg = serde_json::to_string(&BuildProcessMsg::FileChanged { path }).unwrap();
+                if socket.send(Message::Text(msg.into())).await.is_err() {
                     warn!("WebSocket send failed - exiting handle_socket");
                     break;
                 }

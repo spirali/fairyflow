@@ -17,12 +17,16 @@ pub(crate) fn build_python_cmd(
     source_path: &str,
     prologue: &Option<std::path::PathBuf>,
     fps: u32,
+    debug: bool,
     output_path: &std::path::Path,
 ) -> Command {
     let mut cmd = Command::new("python3");
     cmd.args(["-m", "fairyflow"]);
     if let Some(p) = prologue {
         cmd.arg("--prologue").arg(p);
+    }
+    if debug {
+        cmd.arg("--debug");
     }
     cmd.arg(source_path).arg(output_path).arg(fps.to_string());
     cmd
@@ -38,7 +42,7 @@ pub struct SceneInfoMsg {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum BuildProcessMsg {
     Config {
         fps: u32,
@@ -51,6 +55,9 @@ pub enum BuildProcessMsg {
     },
     Done {
         exit_code: Option<i32>,
+    },
+    FileChanged {
+        path: String,
     },
     Tree {
         /// Combined key frames and frame count for "All scenes" mode.
@@ -67,6 +74,7 @@ pub async fn run_python(
     source_path: String,
     prologue: Option<std::path::PathBuf>,
     fps: u32,
+    debug: bool,
     tx: mpsc::Sender<BuildProcessMsg>,
     mut kill_rx: broadcast::Receiver<()>,
     animation_cache: Arc<Mutex<Option<Arc<AnimationDef>>>>,
@@ -75,7 +83,7 @@ pub async fn run_python(
     info!(run_id = id, path = source_path, "run_python started");
     let tree_path = std::env::temp_dir().join(format!("fairyflow_{id}_tree.json"));
 
-    let mut child = match build_python_cmd(&source_path, &prologue, fps, &tree_path)
+    let mut child = match build_python_cmd(&source_path, &prologue, fps, debug, &tree_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

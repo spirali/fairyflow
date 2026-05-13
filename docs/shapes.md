@@ -26,6 +26,25 @@ with Scene():
     r.color("lightyellow").stroke_color("navy").stroke_width(4)
 ```
 
+### Relative sizing
+
+`.rwidth(f)`, `.rheight(f)`, and `.rsize(fw, fh)` size a node as a fraction of its parent's
+dimensions. `1.0` equals the full parent extent on that axis.
+
+```ffpy frame="0"
+with Scene(width=300, height=180):
+    with Group().size(300, 180):
+        Rect().rsize(1, 1).color("whitesmoke")   # full background
+        Rect().rsize(0.5, 0.5).color("steelblue")  # top-left quadrant
+```
+
+```ffpy frame="0"
+with Scene(width=300, height=180):
+    with Group().size(300, 180):
+        Rect().rsize(1, 1).color("whitesmoke")
+        Rect().rwidth(1).rheight(0.25).color("coral")   # full-width banner
+```
+
 ### Positioning
 
 See [Positioning](positioning.md) for `.xy()`, `.align_x()`, `.align_y()`, and `.move()`.

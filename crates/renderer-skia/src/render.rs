@@ -126,17 +126,32 @@ impl RasterRenderer {
                         *clip_w as f32 * lw,
                         *clip_h as f32 * lh,
                     ) {
-                        let clip_path = PathBuilder::from_rect(clip_rect);
-                        if let Some(mut mask) = Mask::new(w, h) {
-                            mask.fill_path(&clip_path, FillRule::Winding, true, transform);
-                            pixmap.draw_pixmap(
-                                0,
-                                0,
-                                offscreen.as_ref(),
-                                &PixmapPaint::default(),
-                                Transform::identity(),
-                                Some(&mask),
-                            );
+                        // Pre-transform to screen space so mask.fill_path is called
+                        // with identity — avoids tiny-skia's degenerate-path warning
+                        // when the transform squashes one axis to nearly zero.
+                        if let Some(screen_clip) =
+                            PathBuilder::from_rect(clip_rect).transform(transform)
+                        {
+                            let b = screen_clip.bounds();
+                            // SCALAR_NEARLY_ZERO = 1/4096; mirror tiny-skia's own check
+                            if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
+                                if let Some(mut mask) = Mask::new(w, h) {
+                                    mask.fill_path(
+                                        &screen_clip,
+                                        FillRule::Winding,
+                                        true,
+                                        Transform::identity(),
+                                    );
+                                    pixmap.draw_pixmap(
+                                        0,
+                                        0,
+                                        offscreen.as_ref(),
+                                        &PixmapPaint::default(),
+                                        Transform::identity(),
+                                        Some(&mask),
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -368,11 +383,14 @@ impl RasterRenderer {
                 };
 
                 if let Some(mut color) = fill_color {
-                    color.set_alpha(color.alpha() * alpha);
-                    let mut paint = Paint::default();
-                    paint.set_color(color);
-                    paint.anti_alias = true;
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
+                    let b = path.bounds();
+                    if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
+                        color.set_alpha(color.alpha() * alpha);
+                        let mut paint = Paint::default();
+                        paint.set_color(color);
+                        paint.anti_alias = true;
+                        pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
+                    }
                 }
                 if let Some(sc) = span.text_style.stroke_color.value() {
                     let mut color = color_to_skia(sc);
@@ -477,12 +495,15 @@ fn fill_and_stroke(
 ) {
     let alpha = parent_alpha * style.alpha as f32;
     if let Some(ref fc) = style.fill_color {
-        let mut color = color_to_skia(fc);
-        color.set_alpha(color.alpha() * alpha);
-        let mut paint = Paint::default();
-        paint.set_color(color);
-        paint.anti_alias = true;
-        pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
+        let b = path.bounds();
+        if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
+            let mut color = color_to_skia(fc);
+            color.set_alpha(color.alpha() * alpha);
+            let mut paint = Paint::default();
+            paint.set_color(color);
+            paint.anti_alias = true;
+            pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
+        }
     }
     if let Some(ref sc) = style.stroke_color {
         let mut color = color_to_skia(sc);

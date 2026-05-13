@@ -12,6 +12,7 @@ use skrifa::{
     raw::FontRef as ReadFontsRef,
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const DEFAULT_FONT_SIZE: f32 = 16.0;
@@ -92,12 +93,20 @@ impl TextLayoutEngine {
         let mut glyphs = Vec::new();
 
         for layout_line in layout.lines() {
+            // Per underlying Run: how many glyphs have already been consumed by
+            // earlier GlyphRuns that share the same font run.  Parley can split
+            // one font run into multiple GlyphRuns at style-brush boundaries, so
+            // run.visual_clusters() returns ALL clusters for that font run.  We
+            // must only process the slice belonging to the current GlyphRun.
+            let mut run_glyph_offset: HashMap<usize, usize> = HashMap::new();
+
             for item in layout_line.items() {
                 let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
                     continue;
                 };
 
                 let run = glyph_run.run();
+                let run_idx = run.index();
                 let font = run.font();
                 let font_size = run.font_size();
                 let normalized_coords: Vec<NormalizedCoord> = run
@@ -109,42 +118,60 @@ impl TextLayoutEngine {
                 let font_ref = ReadFontsRef::from_index(font.data.as_ref(), font.index).unwrap();
                 let outlines = font_ref.outline_glyphs();
 
+                // Build a flat table: for each glyph index in this font run,
+                // what is the cluster's byte offset in full_text?
+                let cluster_bytes: Vec<u32> = run
+                    .visual_clusters()
+                    .flat_map(|cluster| {
+                        let byte = cluster.text_range().start as u32;
+                        let count = cluster.glyphs().count();
+                        std::iter::repeat(byte).take(count)
+                    })
+                    .collect();
+
+                let glyph_start = *run_glyph_offset.entry(run_idx).or_insert(0);
                 let mut run_x = glyph_run.offset();
                 let baseline = glyph_run.baseline();
+                let mut local_glyph_count = 0usize;
 
-                for cluster in run.visual_clusters() {
-                    let cluster_byte = cluster.text_range().start as u32;
-                    for glyph in cluster.glyphs() {
-                        let span_idx = layout
-                            .styles()
-                            .get(glyph.style_index())
-                            .map(|s| s.brush)
-                            .unwrap_or(0)
-                            .min(spans.len().saturating_sub(1));
+                for glyph in glyph_run.glyphs() {
+                    let cluster_byte = cluster_bytes
+                        .get(glyph_start + local_glyph_count)
+                        .copied()
+                        .unwrap_or(0);
+                    local_glyph_count += 1;
 
-                        let gx = run_x + glyph.x;
-                        let gy = baseline - glyph.y;
-                        run_x += glyph.advance;
+                    let span_idx = layout
+                        .styles()
+                        .get(glyph.style_index())
+                        .map(|s| s.brush)
+                        .unwrap_or(0)
+                        .min(spans.len().saturating_sub(1));
 
-                        let glyph_id = GlyphId::from(glyph.id as u16);
-                        let Some(outline) = outlines.get(glyph_id) else {
-                            continue;
-                        };
+                    let gx = run_x + glyph.x;
+                    let gy = baseline - glyph.y;
+                    run_x += glyph.advance;
 
-                        let settings = DrawSettings::unhinted(
-                            SkrifaSize::new(font_size),
-                            LocationRef::new(&normalized_coords),
-                        );
-                        let mut pen = GlyphPen::new(gx, gy);
-                        let _ = outline.draw(settings, &mut pen);
-                        glyphs.push(glyph_cache::CachedGlyph {
-                            span_idx,
-                            x: gx,
-                            path: VectorPath { verbs: pen.verbs },
-                            cluster: cluster_byte,
-                        });
-                    }
+                    let glyph_id = GlyphId::from(glyph.id as u16);
+                    let Some(outline) = outlines.get(glyph_id) else {
+                        continue;
+                    };
+
+                    let settings = DrawSettings::unhinted(
+                        SkrifaSize::new(font_size),
+                        LocationRef::new(&normalized_coords),
+                    );
+                    let mut pen = GlyphPen::new(gx, gy);
+                    let _ = outline.draw(settings, &mut pen);
+                    glyphs.push(glyph_cache::CachedGlyph {
+                        span_idx,
+                        x: gx,
+                        path: VectorPath { verbs: pen.verbs },
+                        cluster: cluster_byte,
+                    });
                 }
+
+                *run_glyph_offset.get_mut(&run_idx).unwrap() += local_glyph_count;
             }
         }
 
@@ -228,7 +255,13 @@ pub fn measure_text_node_pos(lines: &[TextChild], target_id: u64) -> Option<(f32
     LAYOUT_ENGINE.with(|e| e.borrow_mut().find_text_node_pos(lines, target_id))
 }
 
-/// Concatenates span texts separated by U+200C (ZERO WIDTH NON-JOINER).
+/// Concatenates span texts into a single string, returning byte ranges per span.
+///
+/// A ZWNJ (U+200C) is inserted between adjacent spans to prevent the OpenType
+/// shaper from forming ligatures across span boundaries (e.g. an "fi" ligature
+/// spanning two differently-coloured spans).  The ZWNJ bytes are included in
+/// the preceding span's byte range so that syntax-highlight offset arithmetic
+/// in the renderer stays consistent.
 pub fn build_span_text(spans: &[&TextSpan]) -> (String, Vec<(std::ops::Range<usize>, usize)>) {
     let mut full_text = String::new();
     let mut ranges = Vec::new();

@@ -266,9 +266,9 @@ impl Node {
         }
     }
 
-    pub fn collect_images(&self, _image_paths: &mut HashSet<Arc<String>>) {
-        if let NodeKind::Image { path: _, .. } = &self.kind {
-            todo!()
+    pub fn collect_images(&self, image_paths: &mut HashSet<Arc<String>>) {
+        if let NodeKind::Image { path, .. } = &self.kind {
+            path.get_expr().collect_strings(image_paths);
         }
     }
 }

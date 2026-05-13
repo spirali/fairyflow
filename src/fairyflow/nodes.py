@@ -307,6 +307,50 @@ class SizeMixin:
         self._set_attr("height", height, tr)
         return self
 
+    def rwidth(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Set the width relative to the parent's width (1.0 = full parent width).
+
+        Args:
+            value: Width as a fraction of the parent's width.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
+        parent = self.parent_group()
+        self._set_attr("width", Call.mul(parent._get_attr("width"), value), tr)
+        return self
+
+    def rheight(self, value: FloatLike, tr: OpTr = None) -> Self:
+        """Set the height relative to the parent's height (1.0 = full parent height).
+
+        Args:
+            value: Height as a fraction of the parent's height.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
+        parent = self.parent_group()
+        self._set_attr("height", Call.mul(parent._get_attr("height"), value), tr)
+        return self
+
+    def rsize(self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: OpTr = None) -> Self:
+        """Set width and height relative to the parent's dimensions (1.0 = full extent).
+
+        Args:
+            width: Width as a fraction of the parent's width.
+            height: Height as a fraction of the parent's height.
+            tr: Optional transition for animation.
+
+        Returns:
+            self, for method chaining.
+        """
+        parent = self.parent_group()
+        self._set_attr("width", Call.mul(parent._get_attr("width"), width), tr)
+        self._set_attr("height", Call.mul(parent._get_attr("height"), height), tr)
+        return self
+
 
 @beartype
 class PositionMixin:
@@ -488,7 +532,7 @@ class PositionMixin:
             if align_x != 0:
                 x = x + self._get_attr("width") * align_x
             if align_y != 0:
-                y = y + self._get_attr("width") * align_x
+                y = y + self._get_attr("height") * align_y
         return Position(self._parent, x, y)
 
     def follow_path(self, path: "Path", *, time: SupportsFloat = 1) -> Self:

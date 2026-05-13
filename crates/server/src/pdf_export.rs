@@ -11,9 +11,9 @@ use std::path::PathBuf;
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum FrameSelection {
-    Cue,
-    CuePlusKey,
-    All,
+    CueFrames,
+    CuePlusKeyFrames,
+    AllFrames,
 }
 
 #[derive(Deserialize)]
@@ -152,7 +152,7 @@ pub async fn export_pdf_handler(
 
             // Collect frame indices based on selection.
             let frames: Vec<u32> = match frame_selection {
-                FrameSelection::Cue => {
+                FrameSelection::CueFrames => {
                     let infos = anim.scene_infos();
                     let mut set = BTreeSet::new();
                     for si in &infos {
@@ -162,7 +162,7 @@ pub async fn export_pdf_handler(
                     }
                     set.into_iter().collect()
                 }
-                FrameSelection::CuePlusKey => {
+                FrameSelection::CuePlusKeyFrames => {
                     let infos = anim.scene_infos();
                     let mut set = BTreeSet::new();
                     for si in &infos {
@@ -175,7 +175,7 @@ pub async fn export_pdf_handler(
                     }
                     set.into_iter().collect()
                 }
-                FrameSelection::All => (0..anim.frame_count(SceneSelection::All)).collect(),
+                FrameSelection::AllFrames => (0..anim.frame_count(SceneSelection::All)).collect(),
             };
 
             renderer_core::clear_image_cache();

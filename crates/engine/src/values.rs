@@ -4,6 +4,7 @@ use crate::eval::EvalCtx;
 use renderer_core::Color as RendererColor;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, de};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -71,6 +72,19 @@ impl Value for f64 {
     }
     fn interpolate(&self, other: &Self, t: f64) -> Self {
         self + t * (*other - *self)
+    }
+}
+
+impl Expr<Arc<String>> {
+    pub fn collect_strings(&self, out: &mut HashSet<Arc<String>>) {
+        match self {
+            Expr::Const(s) => {
+                out.insert(s.clone());
+            }
+            Expr::Call(c) => match *c {},
+            Expr::AnimValue(av) => av.collect_strings(out),
+            Expr::Inherited { expr } => expr.collect_strings(out),
+        }
     }
 }
 

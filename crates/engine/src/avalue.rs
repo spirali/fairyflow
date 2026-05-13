@@ -4,7 +4,8 @@ use crate::nodes::Transition;
 use crate::values::{Eval, Expr, Value};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 #[serde(bound(deserialize = "T: DeserializeOwned"))]
@@ -64,6 +65,16 @@ where
             Ok((kf.frame, fv))
         })
         .collect::<Result<BTreeMap<_, _>, D::Error>>()
+}
+
+impl AnimatedValue<Arc<String>> {
+    pub fn collect_strings(&self, out: &mut HashSet<Arc<String>>) {
+        for fv in self.values.values() {
+            if let FrameValue::KeyFrame(kf) = fv {
+                kf.value.collect_strings(out);
+            }
+        }
+    }
 }
 
 impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {

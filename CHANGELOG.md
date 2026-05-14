@@ -4,6 +4,7 @@
 
 ### New
 
+  * `[font-aliases]` table in `fairyflow.toml` — map CSS generic family names (`sans-serif`, `monospace`, …) to specific fonts for reproducible cross-machine rendering
   * `reveal_down`, `reveal_up`, `hide_down`, `hide_up` added to `Group`
   * `stext` tag attributes: `color`, `font-size` / `text-size`, `font`, `font-weight`, `bold`, `italic` are now parsed and applied directly from markup (e.g. `<green>INFO</green>`, `<span color='red' bold>ERROR</span>`)
   * Player prerenders frames in paralel

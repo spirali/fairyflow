@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProjectConfig {
@@ -7,6 +8,8 @@ pub struct ProjectConfig {
     pub prologue: Option<String>,
     #[serde(default)]
     pub font_directories: Vec<String>,
+    #[serde(default, rename = "font-aliases")]
+    pub font_aliases: HashMap<String, String>,
 }
 
 impl ProjectConfig {

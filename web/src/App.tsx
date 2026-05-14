@@ -366,7 +366,7 @@ export default function App() {
     setTabs(tabsRef.current.map((t, i) => (i === idx ? { ...t, isDirty: false } : t)));
   };
 
-  const handleReloadFile = (path: string) => {
+  const handleReloadFile = useCallback((path: string) => {
     fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
       .then((r) => (r.ok ? r.text() : null))
       .then((content) => {
@@ -381,7 +381,7 @@ export default function App() {
         setTabs(tabsRef.current.map((t) => (t.path === path ? { ...t, isDirty: false } : t)));
       })
       .catch(() => {});
-  };
+  }, []);
 
   const handleReloadCurrentFile = () => {
     if (!currentFile || currentFile.endsWith(".ffsq")) return;
@@ -536,7 +536,7 @@ export default function App() {
       if (retryTimer !== null) clearTimeout(retryTimer);
       wsRef.current?.close();
     };
-  }, [authStatus]);
+  }, [authStatus, handleReloadFile]);
 
   // ── auto-scroll console ────────────────────────────────────────────────────
   useEffect(() => {

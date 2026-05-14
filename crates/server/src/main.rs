@@ -233,6 +233,7 @@ async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
         }
     };
     renderer_skia::Resources::get().load_font_directories(&config.font_directories);
+    renderer_skia::Resources::get().set_font_aliases(&config.font_aliases);
 
     if let Err(e) = std::env::set_current_dir(&directory) {
         eprintln!(

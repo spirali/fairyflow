@@ -1,11 +1,12 @@
 use crate::config::PackageConfig;
 use engine::{AnimationDef, FrameId, SceneSelection};
+use rayon::prelude::*;
 use softbuffer::{Context, Surface};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock, mpsc};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -21,6 +22,109 @@ struct TempDirGuard(PathBuf);
 impl Drop for TempDirGuard {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.0).ok();
+    }
+}
+
+// ── Frame cache ────────────────────────────────────────────────────────────
+
+struct FrameCache {
+    frames: HashMap<u32, Vec<u32>>,
+    width: u32,
+    height: u32,
+}
+
+impl FrameCache {
+    fn new() -> Self {
+        Self { frames: HashMap::new(), width: 0, height: 0 }
+    }
+}
+
+// ── Background cache thread ────────────────────────────────────────────────
+
+struct CacheRequest {
+    current_frame: u32,
+    going_forward: bool,
+    window_w: u32,
+    window_h: u32,
+}
+
+fn run_cache_thread(
+    rx: mpsc::Receiver<CacheRequest>,
+    cache: Arc<RwLock<FrameCache>>,
+    animations: Arc<Vec<AnimationDef>>,
+    frame_map: Arc<Vec<(usize, u32)>>,
+    lookahead: u32,
+    lookback: u32,
+) {
+    loop {
+        let mut req = match rx.recv() {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        // Drain stale requests, keep only the latest.
+        while let Ok(newer) = rx.try_recv() {
+            req = newer;
+        }
+
+        let CacheRequest { current_frame, going_forward, window_w, window_h } = req;
+        let total = frame_map.len() as u32;
+        if total == 0 || window_w == 0 || window_h == 0 {
+            continue;
+        }
+
+        let ahead_end = (current_frame + lookahead).min(total.saturating_sub(1));
+        let back_start = current_frame.saturating_sub(lookback);
+
+        // Invalidate cache when the window size has changed.
+        {
+            let mut c = cache.write().unwrap();
+            if c.width != window_w || c.height != window_h {
+                c.frames.clear();
+                c.width = window_w;
+                c.height = window_h;
+            }
+        }
+
+        // Collect frames that still need rendering, prioritizing the play direction.
+        let to_render: Vec<u32> = {
+            let c = cache.read().unwrap();
+            let ahead = (current_frame + 1..=ahead_end).filter(|f| !c.frames.contains_key(f));
+            let behind = (back_start..current_frame).filter(|f| !c.frames.contains_key(f));
+            if going_forward {
+                ahead.chain(behind).collect()
+            } else {
+                behind.rev().chain(ahead.rev()).collect()
+            }
+        };
+
+        if to_render.is_empty() {
+            continue;
+        }
+
+        // Render missing frames in parallel.
+        let rendered: Vec<(u32, Vec<u32>)> = to_render
+            .par_iter()
+            .filter_map(|&n| {
+                let (ai, lf) = frame_map[n as usize];
+                let scene = animations[ai]
+                    .build_scene(FrameId::new(lf), SceneSelection::All)
+                    .ok()?;
+                let mut pixels = vec![0u32; (window_w * window_h) as usize];
+                renderer_skia::render_scene_to_buffer(&scene, window_w, window_h, &mut pixels);
+                Some((n, pixels))
+            })
+            .collect();
+
+        // Store results and evict frames now outside the window.
+        {
+            let mut c = cache.write().unwrap();
+            for (n, px) in rendered {
+                c.frames.insert(n, px);
+            }
+            c.frames.retain(|&k, _| k >= back_start && k <= ahead_end);
+        }
+
+        renderer_skia::prune_text_cache();
     }
 }
 
@@ -118,9 +222,9 @@ fn load_package(path: &Path) -> anyhow::Result<LoadedPackage> {
 // ── Winit application ──────────────────────────────────────────────────────
 
 struct PlayerApp {
-    // Loaded animation data (owns temp dir via _package)
-    frame_map: Vec<(usize, u32)>,
-    animations: Vec<AnimationDef>,
+    // Loaded animation data (owns temp dir via _temp_dir)
+    frame_map: Arc<Vec<(usize, u32)>>,
+    animations: Arc<Vec<AnimationDef>>,
     cue_frames: HashSet<u32>,
     fps: u32,
     scene_width: u32,
@@ -133,6 +237,9 @@ struct PlayerApp {
     // Window/surface (created in `resumed`)
     window: Option<Arc<Window>>,
     surface: Option<Surface<Arc<Window>, Arc<Window>>>,
+    // Pre-render cache
+    frame_cache: Arc<RwLock<FrameCache>>,
+    cache_tx: mpsc::Sender<CacheRequest>,
     // Keeps temp dir alive for the session
     _temp_dir: TempDirGuard,
 }
@@ -207,17 +314,45 @@ impl PlayerApp {
         if surface.resize(w, h).is_err() {
             return;
         }
-        let (anim_idx, local_frame) = self.frame_map[self.current_frame as usize];
-        let Ok(scene) =
-            self.animations[anim_idx].build_scene(FrameId::new(local_frame), SceneSelection::All)
-        else {
-            return;
+
+        let (win_w, win_h) = (size.width, size.height);
+
+        // Try to serve from the pre-render cache.
+        let cached: Option<Vec<u32>> = {
+            let c = self.frame_cache.read().unwrap();
+            if c.width == win_w && c.height == win_h {
+                c.frames.get(&self.current_frame).cloned()
+            } else {
+                None
+            }
         };
+
         let Ok(mut buffer) = surface.buffer_mut() else {
             return;
         };
-        renderer_skia::render_scene_to_buffer(&scene, size.width, size.height, &mut buffer);
+
+        if let Some(pixels) = cached {
+            buffer.copy_from_slice(&pixels);
+        } else {
+            // Fallback: render synchronously on this frame.
+            let (anim_idx, local_frame) = self.frame_map[self.current_frame as usize];
+            let Ok(scene) = self.animations[anim_idx]
+                .build_scene(FrameId::new(local_frame), SceneSelection::All)
+            else {
+                return;
+            };
+            renderer_skia::render_scene_to_buffer(&scene, win_w, win_h, &mut buffer);
+        }
+
         let _ = buffer.present();
+
+        // Ask the background thread to pre-render surrounding frames.
+        let _ = self.cache_tx.send(CacheRequest {
+            current_frame: self.current_frame,
+            going_forward: !self.backward,
+            window_w: win_w,
+            window_h: win_h,
+        });
     }
 }
 
@@ -358,7 +493,7 @@ impl ApplicationHandler for PlayerApp {
 
 // ── Public entry point ─────────────────────────────────────────────────────
 
-pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
+pub fn open_player(package_path: &Path, lookahead: u32, lookback: u32) -> anyhow::Result<()> {
     renderer_skia::Resources::init();
 
     let package = load_package(package_path)?;
@@ -386,16 +521,23 @@ pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("package has no frames to play"));
     }
 
-    let start_paused = true;
+    let LoadedPackage { animations, fps, scene_width, scene_height, _temp_dir } = package;
 
-    // Destructure package so animations and temp_dir can be owned separately
-    let LoadedPackage {
-        animations,
-        fps,
-        scene_width,
-        scene_height,
-        _temp_dir,
-    } = package;
+    let animations = Arc::new(animations);
+    let frame_map = Arc::new(frame_map);
+
+    let frame_cache = Arc::new(RwLock::new(FrameCache::new()));
+    let (cache_tx, cache_rx) = mpsc::channel::<CacheRequest>();
+
+    // Spawn background pre-rendering thread.
+    {
+        let cache = Arc::clone(&frame_cache);
+        let anims = Arc::clone(&animations);
+        let fmap = Arc::clone(&frame_map);
+        std::thread::spawn(move || {
+            run_cache_thread(cache_rx, cache, anims, fmap, lookahead, lookback);
+        });
+    }
 
     let mut app = PlayerApp {
         frame_map,
@@ -405,11 +547,13 @@ pub fn open_player(package_path: &Path) -> anyhow::Result<()> {
         scene_width,
         scene_height,
         current_frame: 0,
-        paused: start_paused,
+        paused: true,
         backward: false,
         last_frame_time: Instant::now(),
         window: None,
         surface: None,
+        frame_cache,
+        cache_tx,
         _temp_dir,
     };
 

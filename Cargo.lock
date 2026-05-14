@@ -2291,6 +2291,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "engine",
+ "rayon",
  "renderer-skia",
  "serde",
  "serde_json",

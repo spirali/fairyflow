@@ -503,7 +503,12 @@ export default function App() {
             handleReloadFile(path);
           }
           // Auto-run the active .ffpy file when it changes externally (and Monaco isn't dirty)
-          if (path.endsWith(".ffpy") && currentFileRef.current === path && wsRef.current && !openTab?.isDirty) {
+          if (
+            path.endsWith(".ffpy") &&
+            currentFileRef.current === path &&
+            wsRef.current &&
+            !openTab?.isDirty
+          ) {
             setLines([]);
             setRunning(true);
             wsRef.current.send(JSON.stringify({ type: "run", path, debug: false }));

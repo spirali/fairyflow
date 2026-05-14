@@ -34,3 +34,18 @@ def test_row_layout(test_scene):
                 Rect().size(15, 10).color("blue")
                 Rect().size(10, 15).color("orange")
             Ellipse().size(10, 5).color("green")
+
+
+def test_rsize_fills_half_parent(test_scene):
+    """A rect with rsize(0.5, 0.5) fills the top-left quadrant of its parent group."""
+    with test_scene.size(120, 80):
+        with Group().size(120, 80):
+            Rect().rsize(1, 1).color("whitesmoke")
+            Rect().rsize(0.5, 0.5).color("steelblue")
+
+
+def test_rsize_full_fill(test_scene):
+    """rsize(1, 1) covers the entire parent group."""
+    with test_scene.size(120, 80):
+        with Group().size(120, 80):
+            Rect().rsize(1, 1).color("coral")

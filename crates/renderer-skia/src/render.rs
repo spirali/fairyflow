@@ -134,23 +134,24 @@ impl RasterRenderer {
                         {
                             let b = screen_clip.bounds();
                             // SCALAR_NEARLY_ZERO = 1/4096; mirror tiny-skia's own check
-                            if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
-                                if let Some(mut mask) = Mask::new(w, h) {
-                                    mask.fill_path(
-                                        &screen_clip,
-                                        FillRule::Winding,
-                                        true,
-                                        Transform::identity(),
-                                    );
-                                    pixmap.draw_pixmap(
-                                        0,
-                                        0,
-                                        offscreen.as_ref(),
-                                        &PixmapPaint::default(),
-                                        Transform::identity(),
-                                        Some(&mask),
-                                    );
-                                }
+                            if b.width() > (1.0 / 4096.0)
+                                && b.height() > (1.0 / 4096.0)
+                                && let Some(mut mask) = Mask::new(w, h)
+                            {
+                                mask.fill_path(
+                                    &screen_clip,
+                                    FillRule::Winding,
+                                    true,
+                                    Transform::identity(),
+                                );
+                                pixmap.draw_pixmap(
+                                    0,
+                                    0,
+                                    offscreen.as_ref(),
+                                    &PixmapPaint::default(),
+                                    Transform::identity(),
+                                    Some(&mask),
+                                );
                             }
                         }
                     }

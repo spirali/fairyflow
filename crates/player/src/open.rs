@@ -35,7 +35,11 @@ struct FrameCache {
 
 impl FrameCache {
     fn new() -> Self {
-        Self { frames: HashMap::new(), width: 0, height: 0 }
+        Self {
+            frames: HashMap::new(),
+            width: 0,
+            height: 0,
+        }
     }
 }
 
@@ -66,7 +70,12 @@ fn run_cache_thread(
             req = newer;
         }
 
-        let CacheRequest { current_frame, going_forward, window_w, window_h } = req;
+        let CacheRequest {
+            current_frame,
+            going_forward,
+            window_w,
+            window_h,
+        } = req;
         let total = frame_map.len() as u32;
         if total == 0 || window_w == 0 || window_h == 0 {
             continue;
@@ -535,7 +544,13 @@ pub fn open_player(package_path: &Path, lookahead: u32, lookback: u32) -> anyhow
         return Err(anyhow::anyhow!("package has no frames to play"));
     }
 
-    let LoadedPackage { animations, fps, scene_width, scene_height, _temp_dir } = package;
+    let LoadedPackage {
+        animations,
+        fps,
+        scene_width,
+        scene_height,
+        _temp_dir,
+    } = package;
 
     let animations = Arc::new(animations);
     let frame_map = Arc::new(frame_map);

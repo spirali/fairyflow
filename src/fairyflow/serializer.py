@@ -23,7 +23,7 @@ class Serializer:
 
     def add_node(self, node):
         self.nodes.append(node.serialize(self))
-        if len(node.info) > 1:            
+        if len(node.info) > 1:
             self.info.append(node.info)
         return node._id
 

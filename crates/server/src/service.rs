@@ -9,8 +9,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use engine::{AnimationDef, FrameId, SceneSelection};
-use serde::{Deserialize, Serialize};
 use notify::Watcher;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -105,8 +105,7 @@ pub async fn start_service(
         Arc::new(Mutex::new(HashMap::new()));
 
     // Set up inotify watcher; bridge its sync callback into a tokio channel.
-    let (notify_tx, mut notify_rx) =
-        mpsc::channel::<notify::Result<notify::Event>>(128);
+    let (notify_tx, mut notify_rx) = mpsc::channel::<notify::Result<notify::Event>>(128);
     let mut watcher = notify::RecommendedWatcher::new(
         move |res| {
             let _ = notify_tx.blocking_send(res);
@@ -126,10 +125,7 @@ pub async fn start_service(
         while let Some(res) = notify_rx.recv().await {
             if let Ok(event) = res {
                 use notify::EventKind;
-                let is_write = matches!(
-                    event.kind,
-                    EventKind::Modify(_) | EventKind::Create(_)
-                );
+                let is_write = matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_));
                 if !is_write {
                     continue;
                 }

@@ -306,7 +306,10 @@ async def test_external_write_triggers_file_changed(server_uri, server_project_d
             async with asyncio.timeout(FILE_CHANGED_TIMEOUT):
                 async for raw in ws:
                     msg = json.loads(raw)
-                    if msg["type"] == "file_changed" and msg["path"] == "scenes/_watch_test.ffpy":
+                    if (
+                        msg["type"] == "file_changed"
+                        and msg["path"] == "scenes/_watch_test.ffpy"
+                    ):
                         break
                 else:
                     pytest.fail("WebSocket closed before file_changed arrived")

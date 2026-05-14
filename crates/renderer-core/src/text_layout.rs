@@ -125,7 +125,7 @@ impl TextLayoutEngine {
                     .flat_map(|cluster| {
                         let byte = cluster.text_range().start as u32;
                         let count = cluster.glyphs().count();
-                        std::iter::repeat(byte).take(count)
+                        std::iter::repeat_n(byte, count)
                     })
                     .collect();
 

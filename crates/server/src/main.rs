@@ -2,6 +2,7 @@ use crate::render::render_anim_to_dir;
 use crate::service::start_service;
 use clap::{Parser, Subcommand};
 use engine::AnimationDef;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::info;
 
@@ -53,6 +54,10 @@ enum Cmd {
         #[arg(long = "font-dir")]
         font_dirs: Vec<PathBuf>,
 
+        /// Map a CSS generic family to a specific font (e.g. sans-serif=DejaVu Sans)
+        #[arg(long = "font-alias", value_parser = parse_font_alias)]
+        font_aliases: Vec<(String, String)>,
+
         /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
         #[arg(long = "target-resolution", value_parser = parse_resolution)]
         target_resolution: Option<(u32, u32)>,
@@ -77,6 +82,10 @@ enum Cmd {
         /// Directories to load additional fonts from before rendering
         #[arg(long = "font-dir")]
         font_dirs: Vec<PathBuf>,
+
+        /// Map a CSS generic family to a specific font (e.g. sans-serif=DejaVu Sans)
+        #[arg(long = "font-alias", value_parser = parse_font_alias)]
+        font_aliases: Vec<(String, String)>,
 
         /// Fit frames into this resolution, letterboxing with black (e.g. 1920x1080)
         #[arg(long = "target-resolution", value_parser = parse_resolution)]
@@ -110,6 +119,10 @@ enum Cmd {
         /// Directories to load additional fonts from before rendering
         #[arg(long = "font-dir")]
         font_dirs: Vec<PathBuf>,
+
+        /// Map a CSS generic family to a specific font (e.g. sans-serif=DejaVu Sans)
+        #[arg(long = "font-alias", value_parser = parse_font_alias)]
+        font_aliases: Vec<(String, String)>,
     },
     /// Initialize a new project directory
     Init {
@@ -156,6 +169,7 @@ async fn main() {
             threads,
             frames,
             font_dirs,
+            font_aliases,
             target_resolution,
             write_tree,
         } => {
@@ -165,6 +179,7 @@ async fn main() {
                 threads,
                 frames,
                 font_dirs,
+                font_aliases,
                 target_resolution,
                 write_tree,
             )
@@ -175,6 +190,7 @@ async fn main() {
             output_file,
             threads,
             font_dirs,
+            font_aliases,
             target_resolution,
             fps,
             codec,
@@ -185,6 +201,7 @@ async fn main() {
                 output_file,
                 threads,
                 font_dirs,
+                font_aliases,
                 VideoOptions {
                     target_resolution,
                     fps,
@@ -199,7 +216,8 @@ async fn main() {
             output_file,
             frames,
             font_dirs,
-        } => run_render_pdf(json_path, output_file, frames, font_dirs).await,
+            font_aliases,
+        } => run_render_pdf(json_path, output_file, frames, font_dirs, font_aliases).await,
         Cmd::Init { directory } => run_init(directory).await,
         Cmd::Play {
             package,
@@ -257,6 +275,12 @@ async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
     start_service(&directory, port, config, token).await;
 }
 
+fn parse_font_alias(s: &str) -> Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| format!("expected GENERIC=FONTNAME, got '{s}'"))
+}
+
 fn parse_resolution(s: &str) -> Result<(u32, u32), String> {
     let (w, h) = s
         .split_once('x')
@@ -279,12 +303,17 @@ async fn run_render_png(
     threads: Option<usize>,
     frames: Option<Vec<u32>>,
     font_dirs: Vec<PathBuf>,
+    font_aliases: Vec<(String, String)>,
     target_resolution: Option<(u32, u32)>,
     write_tree: bool,
 ) {
     let anim = load_anim(&json_path).await;
     if !font_dirs.is_empty() {
         renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    if !font_aliases.is_empty() {
+        renderer_skia::Resources::get()
+            .set_font_aliases(&font_aliases.into_iter().collect::<HashMap<_, _>>());
     }
     render_anim_to_dir(
         anim,
@@ -309,11 +338,16 @@ async fn run_render_video(
     output_file: PathBuf,
     threads: Option<usize>,
     font_dirs: Vec<PathBuf>,
+    font_aliases: Vec<(String, String)>,
     opts: VideoOptions,
 ) {
     let anim = load_anim(&json_path).await;
     if !font_dirs.is_empty() {
         renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    if !font_aliases.is_empty() {
+        renderer_skia::Resources::get()
+            .set_font_aliases(&font_aliases.into_iter().collect::<HashMap<_, _>>());
     }
     crate::render::render_anim_to_video(
         anim,
@@ -332,10 +366,15 @@ async fn run_render_pdf(
     output_file: PathBuf,
     frames: Option<Vec<u32>>,
     font_dirs: Vec<PathBuf>,
+    font_aliases: Vec<(String, String)>,
 ) {
     let anim = load_anim(&json_path).await;
     if !font_dirs.is_empty() {
         renderer_skia::Resources::get().load_font_directories(&font_dirs);
+    }
+    if !font_aliases.is_empty() {
+        renderer_skia::Resources::get()
+            .set_font_aliases(&font_aliases.into_iter().collect::<HashMap<_, _>>());
     }
     crate::render::render_anim_to_pdf(anim, frames, output_file).await;
 }

@@ -462,6 +462,20 @@ impl ApplicationHandler for PlayerApp {
                         w.request_redraw();
                     }
                 }
+                KeyCode::Home => {
+                    self.current_frame = 0;
+                    self.paused = true;
+                    if let Some(w) = &self.window {
+                        w.request_redraw();
+                    }
+                }
+                KeyCode::End => {
+                    self.current_frame = self.total_frames().saturating_sub(1);
+                    self.paused = true;
+                    if let Some(w) = &self.window {
+                        w.request_redraw();
+                    }
+                }
                 _ => {}
             },
             WindowEvent::RedrawRequested => {

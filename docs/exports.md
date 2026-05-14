@@ -32,6 +32,8 @@ fairyflow play <mypackage.ffpkg>
 |---|---|
 | ++right++ | Continue to next cue / advance animation |
 | ++left++ | Step back |
+| ++home++ | Jump to first frame |
+| ++end++ | Jump to last frame |
 | ++f5++ | Toggle fullscreen |
 
 The player automatically pauses at every [cue](cues.md).

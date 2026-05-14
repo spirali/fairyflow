@@ -12,3 +12,4 @@ anyhow = { workspace = true }
 zip = "8"
 winit = "0.30"
 softbuffer = "0.4"
+rayon = "1"

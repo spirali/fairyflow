@@ -120,6 +120,14 @@ enum Cmd {
     Play {
         /// Path to the .ffpkg package file
         package: PathBuf,
+
+        /// Frames to pre-render ahead of the current playback position
+        #[arg(long, default_value_t = 30)]
+        lookahead: u32,
+
+        /// Frames to keep rendered behind the current playback position (for fast reverse)
+        #[arg(long, default_value_t = 30)]
+        lookback: u32,
     },
 }
 
@@ -193,8 +201,8 @@ async fn main() {
             font_dirs,
         } => run_render_pdf(json_path, output_file, frames, font_dirs).await,
         Cmd::Init { directory } => run_init(directory).await,
-        Cmd::Play { package } => {
-            if let Err(e) = player::open_player(&package) {
+        Cmd::Play { package, lookahead, lookback } => {
+            if let Err(e) = player::open_player(&package, lookahead, lookback) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

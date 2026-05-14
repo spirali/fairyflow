@@ -109,9 +109,12 @@ def _server(tmp_path_factory):
         capture_output=True,
     )
 
-    # Load DejaVu fonts so server tests are independent of system fonts.
+    # Load DejaVu fonts and set aliases so server tests are independent of system fonts.
     with (proj / "fairyflow.toml").open("a") as f:
         f.write(f'\nfont_directories = ["{FONTS_DIR}"]\n')
+        f.write("\n[font-aliases]\n")
+        f.write('"sans-serif" = "DejaVu Sans"\n')
+        f.write('"monospace" = "DejaVu Sans Mono"\n')
 
     # Extra scene files used by test_server.py
     (proj / "scenes" / "slow.ffpy").write_text("import time; time.sleep(30)\n")
@@ -211,6 +214,10 @@ def test_scene(request):
         "--write-tree",
         "--font-dir",
         str(FONTS_DIR),
+        "--font-alias",
+        "sans-serif=DejaVu Sans",
+        "--font-alias",
+        "monospace=DejaVu Sans Mono",
     ]
     if s.select_frames is not None:
         png_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
@@ -226,6 +233,10 @@ def test_scene(request):
         str(pdf_path),
         "--font-dir",
         str(FONTS_DIR),
+        "--font-alias",
+        "sans-serif=DejaVu Sans",
+        "--font-alias",
+        "monospace=DejaVu Sans Mono",
     ]
     if s.select_frames is not None:
         pdf_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))

@@ -201,7 +201,11 @@ async fn main() {
             font_dirs,
         } => run_render_pdf(json_path, output_file, frames, font_dirs).await,
         Cmd::Init { directory } => run_init(directory).await,
-        Cmd::Play { package, lookahead, lookback } => {
+        Cmd::Play {
+            package,
+            lookahead,
+            lookback,
+        } => {
             if let Err(e) = player::open_player(&package, lookahead, lookback) {
                 eprintln!("error: {e}");
                 std::process::exit(1);

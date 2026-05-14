@@ -335,7 +335,9 @@ class SizeMixin:
         self._set_attr("height", Call.mul(parent._get_attr("height"), value), tr)
         return self
 
-    def rsize(self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: OpTr = None) -> Self:
+    def rsize(
+        self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: OpTr = None
+    ) -> Self:
         """Set width and height relative to the parent's dimensions (1.0 = full extent).
 
         Args:

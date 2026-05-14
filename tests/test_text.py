@@ -152,6 +152,7 @@ def test_tag_name_is_not_color(sc):
     assert span._name == "green"
     # fill_color should be inherited (not explicitly set on the span)
     from fairyflow.exprs import Inherited
+
     assert isinstance(_attr_value(span, "fill_color"), Inherited)
 
 

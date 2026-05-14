@@ -283,6 +283,7 @@ async fn file_save_handler(
         match ProjectConfig::load(std::path::Path::new("fairyflow.toml")) {
             Ok(new_cfg) => {
                 renderer_skia::Resources::get().load_font_directories(&new_cfg.font_directories);
+                renderer_skia::Resources::get().set_font_aliases(&new_cfg.font_aliases);
                 *state.config.lock().unwrap() = new_cfg.clone();
                 state.config_tx.send(new_cfg).ok();
             }

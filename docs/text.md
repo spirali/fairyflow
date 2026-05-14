@@ -73,6 +73,21 @@ After adding fonts, refer to them by family name in `.font()`:
 t.span("Custom text").font("MyFont").font_size(24)
 ```
 
+### Font aliases
+
+The `[font-aliases]` table in `fairyflow.toml` maps CSS generic family names to specific fonts. This lets you pin which font backs `"sans-serif"`, `"monospace"`, etc., so renders are consistent across machines regardless of system fonts.
+
+```toml
+[font-aliases]
+sans-serif = "DejaVu Sans"
+monospace  = "DejaVu Sans Mono"
+serif      = "DejaVu Serif"
+```
+
+Any CSS generic family name is accepted as a key: `serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, `system-ui`, `ui-serif`, `ui-sans-serif`, `ui-monospace`, `ui-rounded`, `emoji`, `math`, `fangsong`. Generic families not listed here keep their system defaults.
+
+The target font must be loaded — either from `font_directories` or from system fonts — before the alias takes effect.
+
 ---
 
 ## Positioning

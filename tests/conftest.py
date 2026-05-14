@@ -20,6 +20,7 @@ SERVER_STARTUP_TIMEOUT = 10  # seconds
 CURRENT_DIR = ROOT / "tests" / "current"
 CURRENT_PDF_DIR = ROOT / "tests" / "current_pdf"
 CHECK_DIR = ROOT / "tests" / "check"
+FONTS_DIR = ROOT / "tests" / "assets" / "fonts"
 
 FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
 FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
@@ -107,6 +108,10 @@ def _server(tmp_path_factory):
         check=True,
         capture_output=True,
     )
+
+    # Load DejaVu fonts so server tests are independent of system fonts.
+    with (proj / "fairyflow.toml").open("a") as f:
+        f.write(f'\nfont_directories = ["{FONTS_DIR}"]\n')
 
     # Extra scene files used by test_server.py
     (proj / "scenes" / "slow.ffpy").write_text("import time; time.sleep(30)\n")
@@ -204,6 +209,8 @@ def test_scene(request):
         str(def_path),
         str(frames_dir),
         "--write-tree",
+        "--font-dir",
+        str(FONTS_DIR),
     ]
     if s.select_frames is not None:
         png_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))
@@ -217,6 +224,8 @@ def test_scene(request):
         "render-pdf",
         str(def_path),
         str(pdf_path),
+        "--font-dir",
+        str(FONTS_DIR),
     ]
     if s.select_frames is not None:
         pdf_cmd.append("--frames=" + ",".join(str(f) for f in s.select_frames))

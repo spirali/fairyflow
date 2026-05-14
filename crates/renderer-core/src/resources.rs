@@ -1,6 +1,9 @@
 use fontdb::Database;
 use parley::FontContext;
-use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache, SourceCacheOptions};
+use parley::fontique::{
+    Blob, Collection, CollectionOptions, GenericFamily, SourceCache, SourceCacheOptions,
+};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use syntect::highlighting::ThemeSet;
@@ -70,6 +73,27 @@ impl Resources {
     /// Cheap to call — just clones an `Arc`.
     pub fn fontdb(&self) -> Arc<Database> {
         Arc::clone(&self.fontdb.lock().unwrap().db)
+    }
+
+    /// Map CSS generic family names to specific fonts via fontique's shared collection.
+    /// Only entries present in `aliases` are overridden; unmentioned generic families
+    /// continue to use fontique's system defaults.
+    pub fn set_font_aliases(&self, aliases: &HashMap<String, String>) {
+        let mut font_cx = self.font_cx.lock().unwrap();
+        for (css_name, font_name) in aliases {
+            let Some(generic) = GenericFamily::parse(css_name) else {
+                tracing::warn!("font-aliases: unknown generic family '{css_name}'");
+                continue;
+            };
+            match font_cx.collection.family_by_name(font_name) {
+                Some(family) => {
+                    font_cx
+                        .collection
+                        .set_generic_families(generic, std::iter::once(family.id()));
+                }
+                None => tracing::warn!("font-aliases: font not found '{font_name}'"),
+            }
+        }
     }
 
     /// Load all font files found (recursively) in the given directories into

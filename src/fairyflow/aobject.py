@@ -1,6 +1,6 @@
 from .avalue import AnimatedValue
 from .exprs import Inherited
-from .ctxvars import adv_time, get_frame
+from .ctxvars import get_frame
 
 
 class AnimatedObject:
@@ -30,21 +30,21 @@ class AnimatedObject:
     def remove(self):
         self._end = get_frame()
 
-    def hold(self):
-        for v in self._attrs.values():
-            v.hold()
-        if hasattr(self, "_children"):
-            for child in self._children:
-                child.hold()
-        return self
+    # def hold(self):
+    #     for v in self._attrs.values():
+    #         v.hold()
+    #     if hasattr(self, "_children"):
+    #         for child in self._children:
+    #             child.hold()
+    #     return self
 
-    def _anim_attr(self, name, value, time, start=None):
-        if start is None:
-            self._get_attr(name).hold()
-        else:
-            self._set_attr(name, start, "S")
-        adv_time(time)
-        self._set_attr(name, value, "L")
+    # def _anim_attr(self, name, value, time, start=None):
+    #     if start is None:
+    #         self._get_attr(name).hold()
+    #     else:
+    #         self._set_attr(name, start, "S")
+    #     adv_time(time)
+    #     self._set_attr(name, value, "L")
 
     def _move_attr(self, name, delta, tr=None):
         self._attrs[name].move(delta, tr=tr)

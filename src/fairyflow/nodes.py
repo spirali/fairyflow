@@ -14,16 +14,16 @@ from .exprs import (
     to_expr,
 )
 from .ctxvars import (
+    Par,
+    Seq,
     Transition,
-    adv_time,
+    end_frame,
     get_current_node,
     ROOT_OBJECTS,
     set_current_node,
-    set_frame,
+    reset_ctx,
 )
 from .config import DEFAULT_SCENE_CONFIG
-
-type OpTr = Transition | None
 
 
 @beartype
@@ -186,7 +186,7 @@ class AlphaMixin:
     def _init_alpha_from_parent(self):
         self._add_from_parent("alpha")
 
-    def alpha(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def alpha(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the opacity of this node and all its children.
 
         Args:
@@ -200,7 +200,7 @@ class AlphaMixin:
         self._set_attr("alpha", value, tr)
         return self
 
-    def fade_in(self, time: float = 1) -> Self:
+    def fade_in(self, tr: Transition) -> Self:
         """Animate a fade-in effect by transitioning alpha from 0 to 1.
 
         Sets the node alpha to ``0`` at the current frame and animates it to
@@ -212,13 +212,15 @@ class AlphaMixin:
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("alpha", 1, time, start=0)
+        with Seq():
+            self.alpha(0)
+            self.alpha(1, tr)
         return self
 
-    def fade_out(self, time: float = 1) -> Self:
+    def fade_out(self, tr: Transition = 1) -> Self:
         """Animate a fade-out effect by transitioning alpha to 0.
 
-        Animates the node alpha from its current value down to ``0`` over the
+        Animates the node alpha from ``1`` down to ``0`` over the
         given duration.
 
         Args:
@@ -227,7 +229,9 @@ class AlphaMixin:
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("alpha", 0, time)
+        with Seq():
+            self.alpha(1)
+            self.alpha(0, tr)
         return self
 
 
@@ -238,7 +242,7 @@ class ZLevelMixin:
     def _init_z(self):
         self._add_from_parent("z_level", 0)
 
-    def z_level(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def z_level(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the z-level (rendering order) of the node.
 
         Nodes with higher z-levels are drawn on top of nodes with lower values.
@@ -266,7 +270,7 @@ class SizeMixin:
         self._add_attr("width", width)
         self._add_attr("height", height)
 
-    def width(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def width(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the width of the node in pixels.
 
         Args:
@@ -279,7 +283,7 @@ class SizeMixin:
         self._set_attr("width", value, tr)
         return self
 
-    def height(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def height(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the height of the node in pixels.
 
         Args:
@@ -292,7 +296,7 @@ class SizeMixin:
         self._set_attr("height", value, tr)
         return self
 
-    def size(self, width, height: FloatLike, tr: OpTr = None) -> Self:
+    def size(self, width, height: FloatLike, tr: Transition = None) -> Self:
         """Set the width and height of the node in pixels.
 
         Args:
@@ -303,11 +307,12 @@ class SizeMixin:
         Returns:
             self, for method chaining.
         """
-        self._set_attr("width", width, tr)
-        self._set_attr("height", height, tr)
+        with Par():
+            self._set_attr("width", width, tr)
+            self._set_attr("height", height, tr)
         return self
 
-    def rwidth(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def rwidth(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the width relative to the parent's width (1.0 = full parent width).
 
         Args:
@@ -321,7 +326,7 @@ class SizeMixin:
         self._set_attr("width", Call.mul(parent._get_attr("width"), value), tr)
         return self
 
-    def rheight(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def rheight(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the height relative to the parent's height (1.0 = full parent height).
 
         Args:
@@ -336,7 +341,7 @@ class SizeMixin:
         return self
 
     def rsize(
-        self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: OpTr = None
+        self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: Transition = None
     ) -> Self:
         """Set width and height relative to the parent's dimensions (1.0 = full extent).
 
@@ -349,8 +354,9 @@ class SizeMixin:
             self, for method chaining.
         """
         parent = self.parent_group()
-        self._set_attr("width", Call.mul(parent._get_attr("width"), width), tr)
-        self._set_attr("height", Call.mul(parent._get_attr("height"), height), tr)
+        with Par():
+            self._set_attr("width", Call.mul(parent._get_attr("width"), width), tr)
+            self._set_attr("height", Call.mul(parent._get_attr("height"), height), tr)
         return self
 
 
@@ -366,7 +372,7 @@ class PositionMixin:
         self._add_attr("x", x)
         self._add_attr("y", y)
 
-    def x(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of the node.
 
         Args:
@@ -379,7 +385,7 @@ class PositionMixin:
         self._set_attr("x", px, tr)
         return self
 
-    def y(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def y(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the y coordinate of the node.
 
         Args:
@@ -392,7 +398,7 @@ class PositionMixin:
         self._set_attr("y", px, tr)
         return self
 
-    def x_reset(self, tr: OpTr = None) -> Self:
+    def x_reset(self, tr: Transition = None) -> Self:
         """Reset the x coordinate to the layout default.
 
         Args:
@@ -404,7 +410,7 @@ class PositionMixin:
         self._set_attr("x", Call.default_x(self), tr)
         return self
 
-    def y_reset(self, tr: OpTr = None) -> Self:
+    def y_reset(self, tr: Transition = None) -> Self:
         """Reset the y coordinate to the layout default.
 
         Args:
@@ -416,7 +422,7 @@ class PositionMixin:
         self._set_attr("y", Call.default_y(self), tr)
         return self
 
-    def xy_reset(self, tr: OpTr = None) -> Self:
+    def xy_reset(self, tr: Transition = None) -> Self:
         """Reset both x and y coordinates to the layout default.
 
         Args:
@@ -425,11 +431,12 @@ class PositionMixin:
         Returns:
             self, for method chaining.
         """
-        self.x_reset(tr)
-        self.y_reset(tr)
+        with Par():
+            self.x_reset(tr)
+            self.y_reset(tr)
         return self
 
-    def xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
+    def xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
         """Set both x and y coordinates of the node.
 
         Args:
@@ -440,11 +447,12 @@ class PositionMixin:
         Returns:
             self, for method chaining.
         """
-        self._set_attr("x", x, tr)
-        self._set_attr("y", y, tr)
+        with Par():
+            self._set_attr("x", x, tr)
+            self._set_attr("y", y, tr)
         return self
 
-    def align_x(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def align_x(self, value: FloatLike, tr: Transition = None) -> Self:
         """Horizontally align the node within its parent.
 
         Args:
@@ -465,7 +473,7 @@ class PositionMixin:
         self._set_attr("x", new_value, tr)
         return self
 
-    def align_y(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def align_y(self, value: FloatLike, tr: Transition = None) -> Self:
         """Vertically align the node within its parent.
 
         Args:
@@ -486,7 +494,7 @@ class PositionMixin:
         self._set_attr("y", new_value, tr)
         return self
 
-    def pos(self, position: Position, tr: OpTr = None) -> Self:
+    def pos(self, position: Position, tr: Transition = None) -> Self:
         """Set the position of the node using a `Position` object.
 
         Args:
@@ -496,12 +504,13 @@ class PositionMixin:
         Returns:
             self, for method chaining.
         """
-        position = position.into_node(self._parent)
-        self._set_attr("x", position.x, tr)
-        self._set_attr("y", position.y, tr)
+        with Par():
+            position = position.into_node(self._parent)
+            self._set_attr("x", position.x, tr)
+            self._set_attr("y", position.y, tr)
         return self
 
-    def move(self, dx: FloatLike, dy: FloatLike, tr: OpTr = None) -> Self:
+    def move(self, dx: FloatLike, dy: FloatLike, tr: Transition = None) -> Self:
         """Shift the node's position by a relative offset.
 
         Args:
@@ -512,8 +521,9 @@ class PositionMixin:
         Returns:
             self, for method chaining.
         """
-        self._move_attr("x", dx, tr)
-        self._move_attr("y", dy, tr)
+        with Par():
+            self._move_attr("x", dx, tr)
+            self._move_attr("y", dy, tr)
         return self
 
     def get_pos(self, align_x=0, align_y=0) -> Position:
@@ -537,7 +547,7 @@ class PositionMixin:
                 y = y + self._get_attr("height") * align_y
         return Position(self._parent, x, y)
 
-    def follow_path(self, path: "Path", *, time: SupportsFloat = 1) -> Self:
+    def follow_path(self, path: "Path", *, tr: Transition = 1) -> Self:
         assert isinstance(path, Path)
         av = AnimatedValue(0)
         x = Call.path_x(path, av)
@@ -545,10 +555,8 @@ class PositionMixin:
         if self._has_attr("width"):
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
-        self.xy(x, y)
-        adv_time(time)
-        self.hold()
-        av.set(1, tr="L")
+            self.xy(x, y)
+        av.set(1, tr=tr)
         return self
 
 
@@ -568,7 +576,7 @@ class StyleMixin(AlphaMixin):
         self._add_from_parent("stroke_width")
         self._init_alpha_from_parent()
 
-    def color(self, value: ColorLike, tr: OpTr = None) -> Self:
+    def color(self, value: ColorLike, tr: Transition = None) -> Self:
         """Set the fill color of the node.
 
         Args:
@@ -582,7 +590,7 @@ class StyleMixin(AlphaMixin):
         self._set_attr("fill_color", Color.parse(value), tr)
         return self
 
-    def stroke_color(self, value: ColorLike, tr: OpTr = None) -> Self:
+    def stroke_color(self, value: ColorLike, tr: Transition = None) -> Self:
         """Set the stroke (outline) color of the node.
 
         Args:
@@ -596,7 +604,7 @@ class StyleMixin(AlphaMixin):
         self._set_attr("stroke_color", Color.parse(value), tr)
         return self
 
-    def stroke_width(self, value: FloatLike, tr: OpTr = None):
+    def stroke_width(self, value: FloatLike, tr: Transition = None):
         """Set the stroke width of the node in pixels.
 
         Args:
@@ -699,7 +707,7 @@ class RotAndScaleMixin:
         self._add_attr("scale_x", 1)
         self._add_attr("scale_y", 1)
 
-    def scale_x(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def scale_x(self, value: FloatLike, tr: Transition = None) -> Self:
         """Scale the node along the x axis.
 
         Args:
@@ -713,7 +721,7 @@ class RotAndScaleMixin:
         self._set_attr("scale_x", value, tr)
         return self
 
-    def scale_y(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def scale_y(self, value: FloatLike, tr: Transition = None) -> Self:
         """Scale the node along the y axis.
 
         Args:
@@ -727,7 +735,7 @@ class RotAndScaleMixin:
         self._set_attr("scale_y", value, tr)
         return self
 
-    def scale(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def scale(self, value: FloatLike, tr: Transition = None) -> Self:
         """Scale the node uniformly along both axes.
 
         Args:
@@ -742,7 +750,7 @@ class RotAndScaleMixin:
         self._set_attr("scale_y", value, tr)
         return self
 
-    def rotate(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def rotate(self, value: FloatLike, tr: Transition = None) -> Self:
         """Rotate the node around its pivot point.
 
         The pivot is controlled by ``pivot_x`` / ``pivot_y`` attributes,
@@ -831,7 +839,7 @@ class Group(
         result["layout"] = self._layout.serialize(serializer)
         return result
 
-    def clip_x(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def clip_x(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the x offset of the clipping window.
 
         Values are relative to the node width: ``0.0`` is the left edge and
@@ -848,7 +856,7 @@ class Group(
         self._set_attr("clip_x", value, tr)
         return self
 
-    def clip_y(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def clip_y(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the y offset of the clipping window.
 
         Values are relative to the node height: ``0.0`` is the top edge and
@@ -864,7 +872,7 @@ class Group(
         self._set_attr("clip_y", value, tr)
         return self
 
-    def clip_w(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def clip_w(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the width of the clipping window.
 
         Values are relative to the node width: ``1.0`` shows the full width
@@ -880,7 +888,7 @@ class Group(
         self._set_attr("clip_w", value, tr)
         return self
 
-    def clip_h(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def clip_h(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the height of the clipping window.
 
         Values are relative to the node height: ``1.0`` shows the full height
@@ -896,124 +904,116 @@ class Group(
         self._set_attr("clip_h", value, tr)
         return self
 
-    def hide_right(self, time: SupportsFloat = 1) -> Self:
+    def hide_right(self, tr: Transition = 1) -> Self:
         """Animate hiding the group with a wipe-right effect.
 
         Animates ``clip_x`` from its current value to ``1.0``, causing the
         content to disappear by sweeping toward the right.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_x", 1, time)
+        with Seq():
+            self.clip_x(0)
+            self.clip_x(1, tr=tr)
         return self
 
-    def hide_left(self, time: SupportsFloat = 1) -> Self:
+    def hide_left(self, tr: Transition = 1) -> Self:
         """Animate hiding the group with a wipe-left effect.
 
         Animates ``clip_w`` from its current value to ``0.0``, causing the
         content to disappear by shrinking toward the left.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_w", 0, time)
+        with Seq():
+            self.clip_w(1)
+            self.clip_w(0, tr=tr)
         return self
 
-    def reveal_right(self, time: SupportsFloat = 1) -> Self:
+    def reveal_right(self, tr: Transition = 1) -> Self:
         """Animate revealing the group with a wipe-right effect.
 
         Sets ``clip_w`` to ``0.0`` at the current frame and animates it to
         ``1.0``, causing the content to appear by expanding toward the right.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_w", 1, time, start=0)
+        with Seq():
+            self.clip_w(0)
+            self.clip_w(1, tr=tr)
         return self
 
-    def reveal_left(self, time: SupportsFloat = 1) -> Self:
+    def reveal_left(self, tr: Transition = 1) -> Self:
         """Animate revealing the group with a wipe-left effect.
 
         Sets ``clip_x`` to ``1.0`` at the current frame and animates it to
         ``0.0``, causing the content to appear by sweeping toward the left.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_x", 0, time, start=1)
+        with Seq():
+            self.clip_w(1)
+            self.clip_w(0, tr=tr)
         return self
 
-    def hide_down(self, time: SupportsFloat = 1) -> Self:
+    def hide_down(self, tr: Transition = 1) -> Self:
         """Animate hiding the group with a wipe-down effect.
 
         Animates ``clip_y`` from its current value to ``1.0``, causing the
         content to disappear by sweeping toward the bottom.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_y", 1, time)
+        with Seq():
+            self.clip_y(0)
+            self.clip_y(1, tr=tr)
         return self
 
-    def hide_up(self, time: SupportsFloat = 1) -> Self:
+    def hide_up(self, tr: Transition = 1) -> Self:
         """Animate hiding the group with a wipe-up effect.
 
         Animates ``clip_h`` from its current value to ``0.0``, causing the
         content to disappear by shrinking toward the top.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_h", 0, time)
+        with Seq():
+            self.clip_h(1)
+            self.clip_h(0, tr=tr)
         return self
 
-    def reveal_down(self, time: SupportsFloat = 1) -> Self:
+    def reveal_down(self, tr: Transition = 1) -> Self:
         """Animate revealing the group with a wipe-down effect.
 
         Sets ``clip_h`` to ``0.0`` at the current frame and animates it to
         ``1.0``, causing the content to appear by expanding toward the bottom.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_h", 1, time, start=0)
+        with Seq():
+            self.clip_h(0)
+            self.clip_h(1, tr=tr)
         return self
 
-    def reveal_up(self, time: SupportsFloat = 1) -> Self:
+    def reveal_up(self, tr: Transition = 1) -> Self:
         """Animate revealing the group with a wipe-up effect.
 
         Sets ``clip_y`` to ``1.0`` at the current frame and animates it to
         ``0.0``, causing the content to appear by sweeping toward the top.
 
-        Args:
-            time: Duration of the animation in seconds.
-
         Returns:
             self, for method chaining.
         """
-        self._anim_attr("clip_y", 0, time, start=1)
+        with Seq():
+            self.clip_y(1)
+            self.clip_y(0, tr=tr)
         return self
 
 
@@ -1040,7 +1040,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         color: str | Color | None = None,
         cue_at_start: bool | None = None,
     ):
-        set_frame(0)
+        reset_ctx()
         super().__init__(put_in_context=False)
         self._init_context_manager()
         if width is None:
@@ -1064,7 +1064,11 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
     def __enter__(self):
         super().__enter__()
 
-    def color(self, value: ColorLike, tr: OpTr = None) -> Self:
+    def __exit__(self, *args):
+        self.max_frame = end_frame()
+        return super().__exit__(*args)
+
+    def color(self, value: ColorLike, tr: Transition = None) -> Self:
         """Set the background color of the scene.
 
         Args:
@@ -1152,7 +1156,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         else:
             return (0, 0)
 
-    def crop_start(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def crop_start(self, value: FloatLike, tr: Transition = None) -> Self:
         """Crop the path from its start.
 
         Args:
@@ -1163,7 +1167,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         self._set_attr("crop_start", value, tr)
         return self
 
-    def crop_end(self, value: FloatLike, tr: OpTr = None) -> Self:
+    def crop_end(self, value: FloatLike, tr: Transition = None) -> Self:
         """Crop the path from its end.
 
         Args:
@@ -1363,7 +1367,7 @@ class PathCubic(Node, PositionMixin):
         self._add_attr("c2_x", 0)
         self._add_attr("c2_y", 0)
 
-    def c1_x(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def c1_x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of control point 1, relative to the segment's start point.
 
         Args:
@@ -1373,7 +1377,7 @@ class PathCubic(Node, PositionMixin):
         self._set_attr("c1_x", px, tr)
         return self
 
-    def c1_y(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def c1_y(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the y coordinate of control point 1, relative to the segment's start point.
 
         Args:
@@ -1383,7 +1387,7 @@ class PathCubic(Node, PositionMixin):
         self._set_attr("c1_y", px, tr)
         return self
 
-    def c2_x(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def c2_x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of control point 2, relative to the segment's end point.
 
         Args:
@@ -1393,7 +1397,7 @@ class PathCubic(Node, PositionMixin):
         self._set_attr("c2_x", px, tr)
         return self
 
-    def c2_y(self, px: FloatLike, tr: OpTr = None) -> Self:
+    def c2_y(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the y coordinate of control point 2, relative to the segment's end point.
 
         Args:
@@ -1403,7 +1407,7 @@ class PathCubic(Node, PositionMixin):
         self._set_attr("c2_y", px, tr)
         return self
 
-    def c1_xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
+    def c1_xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
         """Set both coordinates of control point 1, relative to the segment's start point.
 
         Args:
@@ -1418,7 +1422,7 @@ class PathCubic(Node, PositionMixin):
         self.c1_y(y, tr)
         return self
 
-    def c2_xy(self, x: FloatLike, y: FloatLike, tr: OpTr = None) -> Self:
+    def c2_xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
         """Set both coordinates of control point 2, relative to the segment's end point.
 
         Args:

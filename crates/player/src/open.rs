@@ -437,7 +437,7 @@ impl ApplicationHandler for PlayerApp {
                         w.set_fullscreen(Some(Fullscreen::Borderless(None)));
                     }
                 }
-                KeyCode::ArrowRight => {
+                KeyCode::ArrowRight | KeyCode::PageDown => {
                     if self.paused {
                         // Resume forward playback
                         self.backward = false;
@@ -454,7 +454,7 @@ impl ApplicationHandler for PlayerApp {
                         w.request_redraw();
                     }
                 }
-                KeyCode::ArrowLeft => {
+                KeyCode::ArrowLeft | KeyCode::PageUp => {
                     if self.paused {
                         // Resume backward playback
                         self.backward = true;

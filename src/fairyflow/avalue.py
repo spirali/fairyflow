@@ -1,6 +1,6 @@
-from typing import TypeVar, Generic, SupportsFloat
+from typing import TypeVar, Generic
 from beartype import beartype
-from .ctxvars import get_frame, get_transition, Transition, time_to_frames
+from .ctxvars import get_frame, Transition, wait
 from .exprs import Call, Expr
 
 
@@ -27,46 +27,32 @@ class AnimatedValue(Generic[T], Expr):
         self,
         value: T,
         *,
-        time: SupportsFloat | None = None,
-        frame: int | None = None,
-        tr: Transition | None = None,
+        tr: Transition = None,
     ):
-        if frame is None:
-            if time is None:
-                frame = get_frame()
-            else:
-                frame = time_to_frames(time)
-        if tr is None:
-            tr = get_transition()
+        frame = get_frame()
+        if tr is not None:
+            if frame not in self.values:
+                self.values[frame] = HOLD
+            frame = wait(tr)
+            self.transitions[frame] = "L"
+        else:
+            self.transitions[frame] = "S"
         self.values[frame] = value
-        self.transitions[frame] = tr
         if frame != self.init_frame:
             self.single_value = False
 
-    def hold(self, *, time: SupportsFloat | None = None, frame: int | None = None):
-        if frame is None:
-            if time is None:
-                frame = get_frame()
-            else:
-                frame = time_to_frames(time)
-        if frame not in self.values:
-            self.values[frame] = HOLD
+    def _get(self) -> T:
+        frame = get_frame()
+        f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
+        return self.values[f]
 
     def move(
         self,
-        delta,
+        delta: T,
         *,
-        time: SupportsFloat | None = None,
-        frame: int | None = None,
-        tr: Transition | None = None,
+        tr: Transition = None,
     ):
-        if frame is None:
-            if time is None:
-                frame = get_frame()
-            else:
-                frame = time_to_frames(time)
-        f = max(f for f in self.values if f <= frame and self.values[f] != HOLD)
-        self.set(Call.add(self.values[f], delta), time=time, frame=frame, tr=tr)
+        self.set(Call.add(self._get(), delta), tr=tr)
 
     def is_single_value(self):
         return self.single_value

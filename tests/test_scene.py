@@ -1,4 +1,4 @@
-from fairyflow import Rect, Group, adv_frames, set_frame, linear
+from fairyflow import Rect, Group, next_frame, wait, Frames, Par
 
 
 def test_zlevel_overlapping(test_scene):
@@ -39,31 +39,21 @@ def test_zlevel_mixed_own_and_inherited(test_scene):
 def test_simple_boxes(test_scene):
     with test_scene:
         Rect().xy(5, 5).size(10, 20).color("orange")
-        adv_frames(1)
+        next_frame()
         r = Rect().xy(25, 5).size(10, 20).color("red")
-        adv_frames(1)
+        next_frame()
         r.remove()
 
 
 def test_simple_move(test_scene):
     with test_scene:
+        f3 = Frames(3)
         r = Rect().size(10, 20).color("red").xy(5, 5)
-
-        set_frame(3)
-        r.hold()
-
-        set_frame(6)
-        linear()
-        r.xy(15, 5).color("orange")
-
-        set_frame(9)
-        r.hold()
-
-        set_frame(12)
-        r.move(12, 4).color("blue")
-
-        set_frame(15)
-        r.hold()
-
-        set_frame(18)
-        r.move(5, 0)
+        wait(f3)
+        with Par():
+            r.xy(15, 5, f3).color("orange", f3)
+        wait(Frames(3))
+        with Par():
+            r.move(12, 4, f3).color("blue", f3)
+        wait(Frames(3))
+        r.move(5, 0, f3)

@@ -1,106 +1,24 @@
 import contextvars
-from typing import Literal, SupportsFloat
 from beartype import beartype
-from . import config
-from copy import copy
 
-type Transition = Literal["S", "L"]
-
-
-class BuildState:
-    def __init__(self):
-        self._frame = 0
-        self._time = 0
-        self._transition = "S"
-        self._prev = None
-
-    def get_frame(self):
-        return self._frame
-
-    def _set_frame(self, frame: int):
-        node = CURRENT_NODE.get()
-        if node:
-            node.get_scene().update_max_frame(frame)
-        self._frame = frame
-
-    def set_frame(self, frame: int):
-        self._set_frame(frame)
-        self._time = frames_to_time(frame)
-
-    def adv_frames(self, frames: int):
-        new_frames = self._frame + frames
-        self._set_frame(new_frames)
-        self._time = frames_to_time(new_frames)
-
-    def set_time(self, time: SupportsFloat):
-        self._time = time
-        self._set_frame(time_to_frames(time))
-
-    def adv_time(self, time: SupportsFloat):
-        self._time += time
-        self._set_frame(time_to_frames(self._time))
-
-    def transition(self, tr: Transition):
-        self._transition = tr
-
-    def __enter__(self):
-        assert self._prev is None
-        self._prev = B_STATE.get()
-        B_STATE.set(self)
-
-    def __exit__(self, exc_type, exc, tb):
-        B_STATE.set(self._prev)
-        self._prev = None
-
+from .animtime import Transition, tr_to_frames
 
 ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
-B_STATE = contextvars.ContextVar("B_state", default=BuildState())
-
-
-def time_to_frames(time: SupportsFloat) -> int:
-    """
-    Convert time in seconds to a frame number.
-    """
-    return int(round(config.FPS * time))
-
-
-def frames_to_time(frames: int) -> float:
-    """
-    Convert a frame number to time in seconds.
-    """
-    return frames / config.FPS
-
-
-def set_frame(frame: int):
-    """
-    Set the current frame in the active build state, also updating time.
-    """
-    B_STATE.get().set_frame(frame)
+COMPOSER = contextvars.ContextVar("composer", default=None)
 
 
 @beartype
-def adv_frames(frames: int):
-    """
-    Advance the current frame by the given number of frames.
-    """
-    B_STATE.get().adv_frames(frames)
-
-
-@beartype
-def set_time(time: float):
-    """
-    Set the current time in seconds, also updating the current frame.
-    """
-    B_STATE.get().set_time(time)
-
-
-@beartype
-def adv_time(time: SupportsFloat):
+def wait(tr: Transition) -> int:
     """
     Advance the current time by the given duration in seconds.
     """
-    B_STATE.get().adv_time(time)
+    frames = tr_to_frames(tr)
+    return COMPOSER.get().move_frame(frames)
+
+
+def next_frame() -> int:
+    return COMPOSER.get().move_frame(1)
 
 
 def cue():
@@ -111,32 +29,11 @@ def cue():
     node.get_scene().cues.add(get_frame())
 
 
-def step():
-    """
-    Set the default transition to step ('S') — properties change instantaneously.
-    """
-    B_STATE.get().transition("S")
-
-
-def linear():
-    """
-    Set the default transition to linear ('L') — properties interpolate between keyframes.
-    """
-    B_STATE.get().transition("L")
-
-
 def get_frame() -> int:
     """
     Return the current frame number.
     """
-    return B_STATE.get()._frame
-
-
-def get_transition() -> Transition:
-    """
-    Return the current transition type ('S' for step, 'L' for linear).
-    """
-    return B_STATE.get()._transition
+    return COMPOSER.get().frame
 
 
 def set_current_node(node):
@@ -150,18 +47,89 @@ def get_current_node():
 def reset_ctx():
     ROOT_OBJECTS.set([])
     CURRENT_NODE.set(None)
-    B_STATE.set(BuildState())
+    COMPOSER.set(Seq())
 
 
-def get_bstate() -> BuildState:
-    """
-    Return the active BuildState from the context variable.
-    """
-    return B_STATE.get()
+def move_frame(frames: int):
+    return COMPOSER.get().move_frame(frames)
 
 
-def bstate() -> BuildState:
+def process_tr(tr: Transition):
+    frames = tr_to_frames(tr)
+    return COMPOSER.get().move_frame(frames)
+
+
+def end_frame():
+    return COMPOSER.get().end_frame()
+
+
+class Seq:
     """
-    Return a shallow copy of the current BuildState.
+    Sequential composition of animations
     """
-    return copy(B_STATE.get())
+
+    def __init__(self):
+        self.frame = 0
+        self.parent = None
+
+    def move_frame(self, frame):
+        self.frame += frame
+        return self.frame
+
+    def join_frame(self, frame):
+        self.frame = frame
+
+    def end_frame(self):
+        return self.frame
+
+    def __enter__(self):
+        assert self.parent is None
+        current = COMPOSER.get()
+        self.frame = current.frame
+        self.parent = current
+        COMPOSER.set(self)
+
+    def __exit__(self, exc_type, exc, tb):
+        assert self.parent is not None
+        self.parent.join_frame(self.frame)
+        COMPOSER.set(self.parent)
+        self.parent = None
+
+
+class Par:
+    """
+    Parallel composition of animations
+    """
+
+    def __init__(self):
+        self.frame = 0
+        self.max_frame = 0
+        self.parent = None
+
+    def move_frame(self, frame):
+        new_frame = self.frame + frame
+        self.max_frame = max(new_frame, self.max_frame)
+        return new_frame
+
+    def join_frame(self, frame):
+        self.max_frame = max(frame, self.max_frame)
+
+    def process_target_frame(self, frame):
+        self.frame = frame
+
+    def end_frame(self):
+        return self.max_frame
+
+    def __enter__(self):
+        assert self.parent is None
+        current = COMPOSER.get()
+        self.frame = current.frame
+        self.max_frame = current.frame
+        self.parent = current
+        COMPOSER.set(self)
+
+    def __exit__(self, exc_type, exc, tb):
+        assert self.parent is not None
+        self.parent.join_frame(self.max_frame)
+        COMPOSER.set(self.parent)
+        self.parent = None

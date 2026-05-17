@@ -5,7 +5,8 @@ from .exprs import Call, Expr
 
 
 class Hold:
-    pass
+    def __repr__(self):
+        return "<HOLD>"
 
 
 HOLD = Hold()
@@ -31,10 +32,14 @@ class AnimatedValue(Generic[T], Expr):
     ):
         frame = get_frame()
         if tr is not None:
-            if frame not in self.values:
-                self.values[frame] = HOLD
-            frame = wait(tr)
-            self.transitions[frame] = "L"
+            new_frame = wait(tr)
+            if frame != new_frame:
+                if frame not in self.values:
+                    self.values[frame] = HOLD
+                self.transitions[new_frame] = "L"
+                frame = new_frame
+            else:
+                self.transitions[frame] = "S"
         else:
             self.transitions[frame] = "S"
         self.values[frame] = value
@@ -74,6 +79,9 @@ class AnimatedValue(Generic[T], Expr):
             return serialize_expr(self.get_first_value())
         else:
             return self.serialize()
+
+    def __repr__(self):
+        return f"<AV values={self.values} trs={self.transitions}>"
 
 
 def serialize_frame_value(frame, obj, transitions):

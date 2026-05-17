@@ -20,6 +20,7 @@ from .ctxvars import (
     end_frame,
     get_current_node,
     ROOT_OBJECTS,
+    reset_scene,
     set_current_node,
     reset_ctx,
 )
@@ -200,7 +201,7 @@ class AlphaMixin:
         self._set_attr("alpha", value, tr)
         return self
 
-    def fade_in(self, tr: Transition) -> Self:
+    def fade_in(self, tr: Transition = 1) -> Self:
         """Animate a fade-in effect by transitioning alpha from 0 to 1.
 
         Sets the node alpha to ``0`` at the current frame and animates it to
@@ -746,8 +747,9 @@ class RotAndScaleMixin:
         Returns:
             self, for method chaining.
         """
-        self._set_attr("scale_x", value, tr)
-        self._set_attr("scale_y", value, tr)
+        with Par():
+            self._set_attr("scale_x", value, tr)
+            self._set_attr("scale_y", value, tr)
         return self
 
     def rotate(self, value: FloatLike, tr: Transition = None) -> Self:
@@ -1040,7 +1042,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         color: str | Color | None = None,
         cue_at_start: bool | None = None,
     ):
-        reset_ctx()
+        reset_scene()
         super().__init__(put_in_context=False)
         self._init_context_manager()
         if width is None:

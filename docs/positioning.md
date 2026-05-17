@@ -114,9 +114,7 @@ with Scene(width=300, height=160):
     line.move_to().pos(anchor.get_pos(0.5, 0.5))  # fixed end
     line.line_to().pos(box.get_pos(0.5, 0.5))     # tracks box center
 
-    linear()
-    adv_time(1.5)
-    box.xy(180, 55)   # move the box — the line stretches automatically
+    box.xy(180, 55, tr=1.5)   # move the box — the line stretches automatically
 ```
 
 ### Fine-tuning with `.move()`
@@ -140,9 +138,9 @@ with Scene(width=300, height=160):
 
 ## Following a path — `.follow_path()`
 
-`.follow_path(path, time=1)` animates a node along a `Path` over the given duration. The
+`.follow_path(path, tr=1)` animates a node along a `Path` over the given duration. The
 node travels from the path's start (parameter 0) to its end (parameter 1), centered on the
-curve at every frame. The timeline advances automatically by `time` seconds.
+curve at every frame. The clock advances automatically by `tr` seconds.
 
 Any `Path` shape works as the track — straight lines, multi-segment paths, or Bézier curves.
 Use `cubic_to()` to add a cubic Bézier segment; its two control points are set with
@@ -161,11 +159,11 @@ with Scene(width=300, height=200):
 
     # A ball that travels along the arch
     ball = Ellipse().size(22, 22).color("steelblue")
-    ball.follow_path(track, time=2)
+    ball.follow_path(track, tr=2)
 ```
 
-The same path can be used to animate multiple nodes. Starting each one at a different time
-with `bstate()` creates a staggered procession:
+The same path can be used to animate multiple nodes. Nesting `Seq` inside `Par` creates a
+staggered procession where each traveller starts slightly after the previous one:
 
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
@@ -177,9 +175,9 @@ with Scene(width=300, height=200):
     curve.c2_xy(-60, -130)
 
     colors = ["steelblue", "coral", "gold"]
-    for i, color in enumerate(colors):
-        with bstate():
-            adv_time(0.4 * i)
-            Ellipse().size(22, 22).color(color).follow_path(track, time=2)
-    adv_time(0.4 * (len(colors) - 1) + 2)
+    with Par():
+        for i, color in enumerate(colors):
+            with Seq():
+                wait(0.4 * i)
+                Ellipse().size(22, 22).color(color).follow_path(track, tr=2)
 ```

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unrealeased
+
+  * Paralel / Sequential operators for animations
+  * PgUp/PgDown in player
+
 ## 0.2.0
 
 ### New

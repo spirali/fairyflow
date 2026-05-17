@@ -50,6 +50,11 @@ def reset_ctx():
     COMPOSER.set(Seq())
 
 
+def reset_scene():
+    CURRENT_NODE.set(None)
+    COMPOSER.set(Seq())
+
+
 def move_frame(frames: int):
     return COMPOSER.get().move_frame(frames)
 

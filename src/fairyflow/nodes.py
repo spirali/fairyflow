@@ -22,7 +22,6 @@ from .ctxvars import (
     ROOT_OBJECTS,
     reset_scene,
     set_current_node,
-    reset_ctx,
 )
 from .config import DEFAULT_SCENE_CONFIG
 

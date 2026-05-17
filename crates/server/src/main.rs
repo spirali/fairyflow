@@ -297,6 +297,7 @@ fn parse_resolution(s: &str) -> Result<(u32, u32), String> {
     Ok((w, h))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_render_png(
     json_path: PathBuf,
     output_dir: PathBuf,

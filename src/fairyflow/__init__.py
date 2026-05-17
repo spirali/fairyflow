@@ -1,5 +1,5 @@
 from .nodes import Group, Rect, Path, Ellipse, Scene, Image
-from .ctxvars import wait, next_frame, cue, Par, Seq
+from .ctxvars import wait, next_frame, cue, Par, Seq, get_frame
 from .animtime import time_to_frames, Frames, frames_to_time
 
 from .color import Color
@@ -25,4 +25,5 @@ __all__ = [
     "Par",
     "Seq",
     "Frames",
+    "get_frame",
 ]

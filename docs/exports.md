@@ -30,8 +30,8 @@ fairyflow play <mypackage.ffpkg>
 
 | Key | Action |
 |---|---|
-| ++right++ | Continue to next cue / advance animation |
-| ++left++ | Step back |
+| ++right++ or ++page-down++ | Continue to next cue / advance animation |
+| ++left++ or ++page-up++ | Step back |
 | ++home++ | Jump to first frame |
 | ++end++ | Jump to last frame |
 | ++f5++ | Toggle fullscreen |

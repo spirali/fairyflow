@@ -156,6 +156,9 @@ jobs:
           pip install dist/*.whl
           pip install zensical pdoc fairyflow-zensical/
 
+      - name: Check doc snippets
+        run: python scripts/check_docs_snippets.py
+
       - name: Build zensical docs
         run: zensical build --clean
         env:

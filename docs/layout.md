@@ -115,8 +115,5 @@ with Scene():
         Rect().size(60, 50).color("steelblue")
         Rect().size(60, 50).color("coral")
         Rect().size(60, 50).color("gold")
-    g.hold()
-    linear()
-    adv_time(1.5)
-    g.rotate(180)
+    g.rotate(180, tr=1.5)
 ```

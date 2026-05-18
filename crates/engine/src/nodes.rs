@@ -46,8 +46,8 @@ pub struct Size {
 /// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
 #[derive(Debug, Deserialize)]
 pub struct Style {
-    pub fill_color: AttrExpr<Option<Color>>,
-    pub stroke_color: AttrExpr<Option<Color>>,
+    pub fill_color: AttrExpr<Color>,
+    pub stroke_color: AttrExpr<Color>,
     pub stroke_width: AttrExpr<f64>,
     pub alpha: AttrExpr<f64>,
 }
@@ -280,7 +280,7 @@ pub(crate) struct SceneDef {
     pub name: Option<String>,
     #[serde(flatten)]
     pub size: Size,
-    pub fill_color: AttrExpr<Option<Color>>,
+    pub fill_color: AttrExpr<Color>,
     pub frames: u32,
     #[serde(default)]
     pub cues: Vec<u32>,

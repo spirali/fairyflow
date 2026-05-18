@@ -42,4 +42,8 @@ impl Color {
         let c = &self.0;
         (c.r, c.g, c.b, c.a)
     }
+
+    pub fn is_transparent(&self) -> bool {
+        self.0.a == 0.0
+    }
 }

@@ -354,29 +354,32 @@ impl RasterRenderer {
                             .unwrap_or(0);
                         let byte_in_full = span_start_in_full + offset_in_span;
 
+                        let fallback = span.text_style.fill_color.value();
                         sh_colors
                             .color_at(byte_in_full)
                             .map(|c| color_to_skia(&c))
                             .or_else(|| {
-                                span.text_style
-                                    .fill_color
-                                    .value()
-                                    .as_ref()
-                                    .map(color_to_skia)
+                                if !fallback.is_transparent() {
+                                    Some(color_to_skia(fallback))
+                                } else {
+                                    None
+                                }
                             })
                     } else {
-                        span.text_style
-                            .fill_color
-                            .value()
-                            .as_ref()
-                            .map(color_to_skia)
+                        let c = span.text_style.fill_color.value();
+                        if !c.is_transparent() {
+                            Some(color_to_skia(c))
+                        } else {
+                            None
+                        }
                     }
                 } else {
-                    span.text_style
-                        .fill_color
-                        .value()
-                        .as_ref()
-                        .map(color_to_skia)
+                    let c = span.text_style.fill_color.value();
+                    if !c.is_transparent() {
+                        Some(color_to_skia(c))
+                    } else {
+                        None
+                    }
                 };
 
                 let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
@@ -393,7 +396,8 @@ impl RasterRenderer {
                         pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
                     }
                 }
-                if let Some(sc) = span.text_style.stroke_color.value() {
+                if !span.text_style.stroke_color.value().is_transparent() {
+                    let sc = span.text_style.stroke_color.value();
                     let mut color = color_to_skia(sc);
                     color.set_alpha(color.alpha() * alpha);
                     let mut paint = Paint::default();
@@ -495,10 +499,10 @@ fn fill_and_stroke(
     parent_alpha: f32,
 ) {
     let alpha = parent_alpha * style.alpha as f32;
-    if let Some(ref fc) = style.fill_color {
+    if !style.fill_color.is_transparent() {
         let b = path.bounds();
         if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
-            let mut color = color_to_skia(fc);
+            let mut color = color_to_skia(&style.fill_color);
             color.set_alpha(color.alpha() * alpha);
             let mut paint = Paint::default();
             paint.set_color(color);
@@ -506,8 +510,8 @@ fn fill_and_stroke(
             pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
         }
     }
-    if let Some(ref sc) = style.stroke_color {
-        let mut color = color_to_skia(sc);
+    if !style.stroke_color.is_transparent() {
+        let mut color = color_to_skia(&style.stroke_color);
         color.set_alpha(color.alpha() * alpha);
         let mut paint = Paint::default();
         paint.set_color(color);

@@ -331,8 +331,8 @@ impl Size {
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Style> {
         Ok(renderer_core::Style {
-            fill_color: self.fill_color.eval(ctx)?.map(|c| c.into_inner()),
-            stroke_color: self.stroke_color.eval(ctx)?.map(|c| c.into_inner()),
+            fill_color: self.fill_color.eval(ctx)?.into_inner(),
+            stroke_color: self.stroke_color.eval(ctx)?.into_inner(),
             stroke_width: self.stroke_width.eval(ctx)?,
             alpha: self.alpha.eval(ctx)?,
         })
@@ -346,12 +346,12 @@ impl TextStyle {
                 .style
                 .fill_color
                 .eval_as_inheritable(ctx)?
-                .map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+                .map(|v| v.clone().into_inner()),
             stroke_color: self
                 .style
                 .stroke_color
                 .eval_as_inheritable(ctx)?
-                .map(|v| v.as_ref().map(|v| v.clone().into_inner())),
+                .map(|v| v.clone().into_inner()),
             stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?,
             alpha: self.style.alpha.eval_as_inheritable(ctx)?,
             font_family: self.font.eval_as_inheritable(ctx)?,
@@ -612,11 +612,7 @@ impl Node {
 impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
-        let fill_color = self
-            .fill_color
-            .eval(ctx)?
-            .map(|x| x.into_inner())
-            .unwrap_or_default();
+        let fill_color = self.fill_color.eval(ctx)?.into_inner();
         let mut children = Vec::with_capacity(self.children.len());
         for &id in &self.children {
             let node = ctx.node(id)?;

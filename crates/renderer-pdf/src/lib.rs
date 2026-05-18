@@ -699,14 +699,29 @@ fn render_text_lines(
                         .copied()
                         .unwrap_or(0);
                     let byte_in_full = span_start_in_full + offset_in_span;
-                    sh_colors
-                        .color_at(byte_in_full)
-                        .or_else(|| span.text_style.fill_color.value().clone())
+                    let fallback = span.text_style.fill_color.value();
+                    sh_colors.color_at(byte_in_full).or_else(|| {
+                        if !fallback.is_transparent() {
+                            Some(fallback.clone())
+                        } else {
+                            None
+                        }
+                    })
                 } else {
-                    span.text_style.fill_color.value().clone()
+                    let c = span.text_style.fill_color.value();
+                    if !c.is_transparent() {
+                        Some(c.clone())
+                    } else {
+                        None
+                    }
                 }
             } else {
-                span.text_style.fill_color.value().clone()
+                let c = span.text_style.fill_color.value();
+                if !c.is_transparent() {
+                    Some(c.clone())
+                } else {
+                    None
+                }
             };
 
             // Build glyph path shifted by y_cursor.
@@ -725,7 +740,8 @@ fn render_text_lines(
                 surface.set_stroke(None);
                 surface.draw_path(&path);
             }
-            if let Some(sc) = span.text_style.stroke_color.value() {
+            if !span.text_style.stroke_color.value().is_transparent() {
+                let sc = span.text_style.stroke_color.value();
                 surface.set_fill(None);
                 surface.set_stroke(Some(color_stroke(
                     sc,
@@ -829,15 +845,15 @@ fn color_stroke(c: &Color, width: f32, alpha: f32) -> Stroke {
 
 fn fill_and_stroke(surface: &mut krilla::surface::Surface, path: &Path, style: &Style, alpha: f32) {
     let effective_alpha = alpha * style.alpha as f32;
-    if let Some(ref fc) = style.fill_color {
-        surface.set_fill(Some(color_fill(fc, effective_alpha)));
+    if !style.fill_color.is_transparent() {
+        surface.set_fill(Some(color_fill(&style.fill_color, effective_alpha)));
         surface.set_stroke(None);
         surface.draw_path(path);
     }
-    if let Some(ref sc) = style.stroke_color {
+    if !style.stroke_color.is_transparent() {
         surface.set_fill(None);
         surface.set_stroke(Some(color_stroke(
-            sc,
+            &style.stroke_color,
             style.stroke_width as f32,
             effective_alpha,
         )));

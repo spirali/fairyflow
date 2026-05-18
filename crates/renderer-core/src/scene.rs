@@ -62,8 +62,8 @@ pub struct Size {
 /// Mirrors StyleMixin (which extends AlphaMixin) in Python.
 #[derive(Debug, Clone, Serialize)]
 pub struct Style {
-    pub fill_color: Option<Color>,
-    pub stroke_color: Option<Color>,
+    pub fill_color: Color,
+    pub stroke_color: Color,
     pub stroke_width: f64,
     pub alpha: f64,
 }
@@ -73,9 +73,9 @@ pub struct Style {
 #[derive(Debug, Clone, Serialize)]
 pub struct TextStyle {
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-    pub fill_color: Inheritable<Option<Color>>,
+    pub fill_color: Inheritable<Color>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-    pub stroke_color: Inheritable<Option<Color>>,
+    pub stroke_color: Inheritable<Color>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub stroke_width: Inheritable<f64>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]

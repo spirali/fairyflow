@@ -57,3 +57,10 @@ def test_simple_move(test_scene):
             r.move(12, 4, f3).color("blue", f3)
         wait(Frames(3))
         r.move(5, 0, f3)
+
+
+def test_fill_color_in_next_frame(test_scene):
+    with test_scene:
+        r = Rect().size(20, 20)
+        next_frame()
+        r.color("green")

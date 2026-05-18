@@ -14,6 +14,9 @@ pub struct Color(RendererColor);
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let s = String::deserialize(d)?;
+        if s.is_empty() {
+            return Ok(Color(RendererColor::from_rgba8(0, 0, 0, 0)));
+        }
         RendererColor::from_html(&s)
             .map(Color)
             .ok_or_else(|| de::Error::custom(format!("invalid color '{}'", s)))
@@ -23,10 +26,6 @@ impl<'de> Deserialize<'de> for Color {
 impl Color {
     pub fn into_inner(self) -> RendererColor {
         self.0
-    }
-
-    pub fn set_alpha(&mut self, alpha: f32) {
-        self.0.set_alpha(alpha);
     }
 
     pub fn interpolate(a: &Color, b: &Color, t: f64) -> Color {
@@ -159,8 +158,8 @@ pub enum FloatCall {
 #[derive(Debug, Clone, Deserialize)]
 pub enum NoCall {}
 
-impl Eval<Option<Color>> for NoCall {
-    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<Option<Color>> {
+impl Eval<Color> for NoCall {
+    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<Color> {
         unreachable!()
     }
 }
@@ -177,26 +176,13 @@ impl Eval<bool> for NoCall {
     }
 }
 
-impl Value for Option<Color> {
+impl Value for Color {
     type Call = NoCall;
     fn recursive_value() -> Self {
-        None
+        Color(RendererColor::from_rgba8(0, 0, 0, 0))
     }
     fn interpolate(&self, other: &Self, t: f64) -> Self {
-        match (self, other) {
-            (None, None) => None,
-            (Some(a), Some(b)) => Some(Color::interpolate(a, b, t)),
-            (None, Some(rc)) => {
-                let mut lc = rc.clone();
-                lc.set_alpha(0.0);
-                Some(Color::interpolate(&lc, rc, t))
-            }
-            (Some(lc), None) => {
-                let mut rc = lc.clone();
-                rc.set_alpha(0.0);
-                Some(Color::interpolate(lc, &rc, t))
-            }
-        }
+        Color::interpolate(self, other, t)
     }
 }
 

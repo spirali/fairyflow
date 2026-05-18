@@ -11,7 +11,7 @@ class Color:
     @staticmethod
     def parse(value: str | None) -> Self | None:
         if value is None:
-            return value
+            return ""
         if isinstance(value, str):
             return Color(value)
         from .exprs import Expr

@@ -396,7 +396,7 @@ mod tests {
   "nodes": [
     {"kind": "rect", "id": 1,
      "x": 10, "y": 10, "width": 50, "height": 50,
-     "fill_color": "green", "stroke_color": null,
+     "fill_color": "green", "stroke_color": "",
      "stroke_width": 1, "alpha": 1,
      "z_level": {"kind": "inherited", "expr": 0}}
   ]

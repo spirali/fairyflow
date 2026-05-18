@@ -11,6 +11,10 @@ function fmt(v: number | string): number | string {
   return typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(1)) : v;
 }
 
+function isTransparent(color: string): boolean {
+  return color === "#00000000";
+}
+
 function shortHex(color: string): string {
   const m6 = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
   if (m6) {
@@ -79,7 +83,7 @@ function NodeLabel({
           changed={ch("width") || ch("height")}
         />
       )}
-      {node.fill_color != null && (
+      {node.fill_color != null && !isTransparent(node.fill_color) && (
         <span className={ch("fill_color") ? "prop-chip prop-chip-changed" : "prop-chip"}>
           <span
             style={{
@@ -96,7 +100,7 @@ function NodeLabel({
           {shortHex(node.fill_color)}
         </span>
       )}
-      {node.stroke_color != null && (
+      {node.stroke_color != null && !isTransparent(node.stroke_color) && (
         <span
           className={
             ch("stroke_color") || ch("stroke_width") ? "prop-chip prop-chip-changed" : "prop-chip"

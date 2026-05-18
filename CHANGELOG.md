@@ -1,5 +1,11 @@
 # Changelog
 
+## Unrealeased
+
+### Fixed
+
+  * Fixed animated colors with null values
+
 ## 0.3.0
 
 ### New

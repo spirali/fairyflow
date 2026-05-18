@@ -565,8 +565,8 @@ class StyleMixin(AlphaMixin):
     """Mixin that adds fill color, stroke color, stroke width, and alpha to a node."""
 
     def _init_style(self):
-        self._add_attr("fill_color", None)
-        self._add_attr("stroke_color", None)
+        self._add_attr("fill_color", "")
+        self._add_attr("stroke_color", "")
         self._add_attr("stroke_width", 1)
         self._init_alpha()
 

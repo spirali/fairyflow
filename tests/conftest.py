@@ -304,12 +304,30 @@ def test_scene(request):
             )
         pdf_pages = []
         for page in pdf_doc.pages():
-            pix = page.get_pixmap(matrix=pymupdf.Matrix(1, 1), colorspace=pymupdf.csRGB)
-            pdf_pages.append(
-                np.frombuffer(pix.samples, dtype=np.uint8)
-                .reshape(pix.height, pix.width, 3)
-                .copy()
-            )
+            if s.target_resolution is not None:
+                W, H = s.target_resolution
+                scale = min(W / page.rect.width, H / page.rect.height)
+                pix = page.get_pixmap(
+                    matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csRGB
+                )
+                canvas = np.zeros((H, W, 3), dtype=np.uint8)
+                x_off = (W - pix.width) // 2
+                y_off = (H - pix.height) // 2
+                canvas[y_off : y_off + pix.height, x_off : x_off + pix.width] = (
+                    np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                        pix.height, pix.width, 3
+                    )
+                )
+                pdf_pages.append(canvas)
+            else:
+                pix = page.get_pixmap(
+                    matrix=pymupdf.Matrix(1, 1), colorspace=pymupdf.csRGB
+                )
+                pdf_pages.append(
+                    np.frombuffer(pix.samples, dtype=np.uint8)
+                    .reshape(pix.height, pix.width, 3)
+                    .copy()
+                )
         pdf_doc.close()
 
         failure = None

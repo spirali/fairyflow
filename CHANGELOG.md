@@ -5,6 +5,7 @@
 ### Fixed
 
   * Fixed animated colors with null values
+  * Fixed double render of arrows
 
 ## 0.3.0
 

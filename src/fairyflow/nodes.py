@@ -1271,7 +1271,6 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dy = ny * width * 0.5
 
         path = Path()
-        self._parent._children.append(path)
         path.move_to().xy(px - dy, py + dx)
         path.line_to().pos(pos)
         path.line_to().xy(px + dy, py - dx)

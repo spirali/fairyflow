@@ -14,6 +14,8 @@ def test_follow_path(test_scene):
 
 
 def test_arrows(test_scene):
+    test_scene.target_resolution = (320, 320)
+    test_scene.pdf_tolerance = 60
     with test_scene.size(80, 80):
         p = Path()
         p.stroke_color("black")

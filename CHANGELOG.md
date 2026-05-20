@@ -2,6 +2,10 @@
 
 ## Unrealeased
 
+### New
+
+  * `follow_path` now supports option `backwards`
+
 ### Fixed
 
   * Fixed animated colors with null values

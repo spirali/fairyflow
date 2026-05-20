@@ -13,6 +13,18 @@ def test_follow_path(test_scene):
             Ellipse().size(5, 5).color("green").follow_path(p, tr=0.5)
 
 
+def test_follow_path_backwards(test_scene):
+    with test_scene.size(100, 100):
+        with Group().size(80, 80):
+            p = Path()
+            p.stroke_color("black")
+            p.move_to().xy(0, 0)
+            p.line_to().xy(30, 10)
+            p.cubic_to().xy(0, 50).c1_xy(10, 0).c2_xy(15, 45)
+            p.cubic_to().xy(40, 20).c1_xy(-15, -45).c2_xy(40, 20)
+            Ellipse().size(5, 5).color("red").follow_path(p, tr=0.5, backwards=True)
+
+
 def test_arrows(test_scene):
     test_scene.target_resolution = (320, 320)
     test_scene.pdf_tolerance = 60

@@ -4,7 +4,7 @@
 
 ### New
 
-  * `follow_path` now supports option `backwards`
+  * `follow_path` now optionaly takes `start` and `end` that allows to go backwards
 
 ### Fixed
 

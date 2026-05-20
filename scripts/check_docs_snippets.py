@@ -20,11 +20,22 @@ DOCS = ROOT / "docs"
 FENCE_RE = re.compile(r"^(```ffpy[^\n]*)\n(.*?)^```", re.MULTILINE | re.DOTALL)
 
 
+def _find_server_binary() -> Path | None:
+    for candidate in [
+        ROOT / "target" / "release" / "server",
+        ROOT / "target" / "debug" / "server",
+    ]:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def check_snippet(source: str, label: str) -> bool:
     with tempfile.TemporaryDirectory(prefix="ffpy-check-") as tmp_str:
         tmp = Path(tmp_str)
         (tmp / "prologue.py").write_text("from fairyflow import *\n")
         (tmp / "scene.py").write_text(source)
+        json_path = tmp / "anim.json"
         result = subprocess.run(
             [
                 sys.executable,
@@ -33,19 +44,44 @@ def check_snippet(source: str, label: str) -> bool:
                 "--prologue",
                 str(tmp / "prologue.py"),
                 str(tmp / "scene.py"),
-                str(tmp / "anim.json"),
+                str(json_path),
                 "24",
             ],
             capture_output=True,
             text=True,
             cwd=str(ROOT),
         )
-    if result.returncode != 0:
-        print(f"FAIL  {label}")
-        stderr = result.stderr.strip()
-        for line in stderr.splitlines():
-            print(f"      {line}")
-        return False
+        if result.returncode != 0:
+            print(f"FAIL  {label}")
+            for line in result.stderr.strip().splitlines():
+                print(f"      {line}")
+            return False
+
+        server = _find_server_binary()
+        if server is None:
+            print(f"ok    {label}  (skipped render: server binary not found)")
+            return True
+
+        frames_dir = tmp / "frames"
+        frames_dir.mkdir()
+        render = subprocess.run(
+            [
+                str(server),
+                "render-png",
+                str(json_path),
+                str(frames_dir),
+                "--frames=0",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT),
+        )
+        if render.returncode != 0:
+            print(f"FAIL  {label}  (render-png)")
+            for line in (render.stderr or render.stdout).strip().splitlines():
+                print(f"      {line}")
+            return False
+
     print(f"ok    {label}")
     return True
 

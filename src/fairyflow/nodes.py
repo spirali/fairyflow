@@ -550,16 +550,18 @@ class PositionMixin:
                 y = y + self._get_attr("height") * align_y
         return Position(self._parent, x, y)
 
-    def follow_path(self, path: "Path", *, tr: Transition = 1) -> Self:
+    def follow_path(
+        self, path: "Path", *, tr: Transition = 1, backwards: bool = False
+    ) -> Self:
         assert isinstance(path, Path)
-        av = AnimatedValue(0)
+        av = AnimatedValue(1 if backwards else 0)
         x = Call.path_x(path, av)
         y = Call.path_y(path, av)
         if self._has_attr("width"):
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
             self.xy(x, y)
-        av.set(1, tr=tr)
+        av.set(0 if backwards else 1, tr=tr)
         return self
 
 

@@ -138,7 +138,7 @@ class Node(AnimatedObject):
         Returns:
             ``True`` if every supplied criterion matches, ``False`` otherwise.
         """
-        if name is not None and self.name != name:
+        if name is not None and self._name != name:
             return False
         if kind is not None and self.kind != kind:
             return False
@@ -159,7 +159,7 @@ class Node(AnimatedObject):
         Returns:
             The first matching `Node`, or ``None`` if no match is found.
         """
-        if self.match(name, kind):
+        if self.match(name=name, kind=kind):
             return self
         else:
             return None
@@ -173,7 +173,10 @@ class Node(AnimatedObject):
         return self._parent.get_scene()
 
     def __repr__(self):
-        return f"<{self.kind} id={self._id}>"
+        if self._name:
+            return f"<{self.kind} id={self._id} name={self._name}>"
+        else:
+            return f"<{self.kind} id={self._id}>"
 
 
 @beartype
@@ -645,6 +648,7 @@ class NodeWithChildren(Node):
             result = child.find_node(name=name, kind=kind)
             if result is not None:
                 return result
+        return None
 
     def get_child(
         self, *, name: str | None = None, kind: str | None = None

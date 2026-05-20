@@ -551,17 +551,35 @@ class PositionMixin:
         return Position(self._parent, x, y)
 
     def follow_path(
-        self, path: "Path", *, tr: Transition = 1, backwards: bool = False
+        self,
+        path: "Path",
+        *,
+        tr: Transition = 1,
+        start: FloatLike = 0,
+        end: FloatLike = 1,
     ) -> Self:
+        """Animate this node along a path.
+
+        Args:
+            path: The `Path` to follow.
+            tr: Duration of the animation in seconds.
+            start: Path parameter at the start of the animation (0 = path start, 1 = path end).
+            end: Path parameter at the end of the animation.
+
+        Pass ``start=1, end=0`` to travel backwards (from the path's end to its start).
+
+        Returns:
+            self, for method chaining.
+        """
         assert isinstance(path, Path)
-        av = AnimatedValue(1 if backwards else 0)
+        av = AnimatedValue(start)
         x = Call.path_x(path, av)
         y = Call.path_y(path, av)
         if self._has_attr("width"):
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
             self.xy(x, y)
-        av.set(0 if backwards else 1, tr=tr)
+        av.set(end, tr=tr)
         return self
 
 

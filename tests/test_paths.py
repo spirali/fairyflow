@@ -22,7 +22,7 @@ def test_follow_path_backwards(test_scene):
             p.line_to().xy(30, 10)
             p.cubic_to().xy(0, 50).c1_xy(10, 0).c2_xy(15, 45)
             p.cubic_to().xy(40, 20).c1_xy(-15, -45).c2_xy(40, 20)
-            Ellipse().size(5, 5).color("red").follow_path(p, tr=0.5, backwards=True)
+            Ellipse().size(5, 5).color("red").follow_path(p, tr=0.5, start=1, end=0)
 
 
 def test_arrows(test_scene):

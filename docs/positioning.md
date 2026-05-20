@@ -138,12 +138,10 @@ with Scene(width=300, height=160):
 
 ## Following a path — `.follow_path()`
 
-`.follow_path(path, tr=1, backwards=False)` animates a node along a `Path` over the given
-duration. The node travels from the path's start (parameter 0) to its end (parameter 1),
-centered on the curve at every frame. The clock advances automatically by `tr` seconds.
-
-Pass `backwards=True` to reverse the direction: the node starts at the end of the path and
-travels toward the start.
+`.follow_path(path, tr=1, start=0, end=1)` animates a node along a `Path` over the given
+duration. The node travels from `start` to `end` (both are path parameters in the range
+0–1, where 0 is the path's start and 1 is its end), centered on the curve at every frame.
+The clock advances automatically by `tr` seconds.
 
 Any `Path` shape works as the track — straight lines, multi-segment paths, or Bézier curves.
 Use `cubic_to()` to add a cubic Bézier segment; its two control points are set with
@@ -165,7 +163,7 @@ with Scene(width=300, height=200):
     ball.follow_path(track, tr=2)
 ```
 
-Use `backwards=True` to travel in the opposite direction — from the end of the path to the
+Pass `start=1, end=0` to travel in the opposite direction — from the end of the path to the
 start. This is useful for animating a return trip or for reversing entrance effects:
 
 ```ffpy video="mp4"
@@ -179,7 +177,7 @@ with Scene(width=300, height=200):
 
     with Par():
         Ellipse().size(22, 22).color("steelblue").follow_path(track, tr=2)
-        Ellipse().size(22, 22).color("coral").follow_path(track, tr=2, backwards=True)
+        Ellipse().size(22, 22).color("coral").follow_path(track, tr=2, start=1, end=0)
 ```
 
 The same path can be used to animate multiple nodes. Nesting `Seq` inside `Par` creates a

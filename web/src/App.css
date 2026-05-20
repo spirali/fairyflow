@@ -579,11 +579,10 @@
 }
 
 .timeline-tick.active {
-  background: var(--accent);
-  border-color: var(--accent);
   width: 11px;
   height: 11px;
   margin-top: 2px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .timeline-tick-num {
@@ -594,23 +593,23 @@
 }
 
 .timeline-tick-num.active {
-  color: var(--accent);
+  color: var(--text-primary, #e0e0e0);
   font-weight: 600;
 }
 
 .timeline-tick.key {
-  background: #6a6a6a;
-  border-color: #6a6a6a;
+  background: #c8a84b;
+  border-color: #c8a84b;
 }
 
 .timeline-tick.key.active {
   background: #c8a84b;
   border-color: #c8a84b;
-  box-shadow: 0 0 4px 1px rgba(200, 168, 75, 0.5);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .timeline-tick-num.key {
-  color: #9a9a9a;
+  color: #c8a84b;
 }
 
 .timeline-tick-num.key.active {
@@ -619,22 +618,22 @@
 }
 
 .timeline-tick.cue {
-  background: #b85520;
-  border-color: #b85520;
+  background: #7a3810;
+  border-color: #a85228;
 }
 
 .timeline-tick.cue.active {
-  background: #e0703a;
-  border-color: #e0703a;
-  box-shadow: 0 0 4px 1px rgba(224, 112, 58, 0.5);
+  background: #c06030;
+  border-color: #d88050;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .timeline-tick-num.cue {
-  color: #b87a5a;
+  color: #906040;
 }
 
 .timeline-tick-num.cue.active {
-  color: #e0703a;
+  color: #d07848;
   font-weight: 600;
 }
 

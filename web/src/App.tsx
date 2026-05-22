@@ -150,7 +150,9 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   const [fps, setFps] = useState(24);
-  const [stopOnCue, setStopOnCue] = useState(true);
+  const [playMode, setPlayMode] = useState<"stop-at-cue" | "100-frames" | "all-frames">(
+    "stop-at-cue",
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
@@ -159,6 +161,10 @@ export default function App() {
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playReturnFrameRef = useRef(0);
   const cancelledRef = useRef(false);
+  const prefetchAbortRef = useRef<AbortController | null>(null);
+  const [prefetchProgress, setPrefetchProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
 
   // ── video export ─────────────────────────────────────────────────────────
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -820,15 +826,32 @@ export default function App() {
 
     const startFrame = frame;
     const totalFrames = frames;
+    const capturedCueFrames = cueFrames;
+
+    const toFrame = computeToFrame(startFrame, totalFrames, capturedCueFrames);
+    await doPrefetchAndPlay(toFrame, startFrame);
+  }
+
+  function computeToFrame(startFrame: number, totalFrames: number, capturedCueFrames: number[]) {
+    switch (playMode) {
+      case "stop-at-cue":
+        return capturedCueFrames.find((c) => c > startFrame) ?? totalFrames - 1;
+      case "100-frames":
+        return Math.min(startFrame + 99, totalFrames - 1);
+      case "all-frames":
+        return totalFrames - 1;
+    }
+  }
+
+  async function doPrefetchAndPlay(toFrame: number, startFrame: number) {
+    if (!canvasLayout) return;
     const capturedFps = fps;
     const capturedCueFrames = cueFrames;
-    const capturedStopOnCue = stopOnCue;
     const sk = canvasLayout.serverScale.toFixed(3);
 
-    // Find which frames need caching
     const uncachedImages: number[] = [];
     const uncachedTrees: number[] = [];
-    for (let i = 0; i < totalFrames; i++) {
+    for (let i = 0; i <= toFrame; i++) {
       if (!imageCacheRef.current.has(cacheKey(i, sk))) uncachedImages.push(i);
       if (!treeCacheRef.current.has(`${runId}-${sceneCacheKey}-${i}`)) uncachedTrees.push(i);
     }
@@ -836,45 +859,59 @@ export default function App() {
     if (uncachedImages.length > 0 || uncachedTrees.length > 0) {
       setIsPrefetching(true);
       try {
-        await Promise.all([
-          // Images: one bulk request
-          uncachedImages.length > 0
-            ? fetch(
-                withToken(
-                  `/frames?from=${uncachedImages[0]}&to=${uncachedImages.at(-1)}&scale=${sk}&v=${runId}${sceneParam}`,
-                ),
-              )
-                .then((r) => {
-                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                  return r.json() as Promise<RenderedFrameResponse[]>;
-                })
-                .then((data) => {
-                  for (const { n, png } of data) storeCachedFrame(n, sk, png);
-                  setCacheVersion((v) => v + 1);
-                })
-            : Promise.resolve(),
-          // Trees: one bulk request
-          uncachedTrees.length > 0
-            ? fetch(
-                withToken(
-                  `/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}${sceneParam}`,
-                ),
-              )
-                .then((r) =>
-                  r.ok ? (r.json() as Promise<Array<{ n: number; scene: SceneData }>>) : null,
-                )
-                .then((data) => {
-                  if (!data) return;
-                  for (const { n, scene } of data)
-                    treeCacheRef.current.set(`${runId}-${sceneCacheKey}-${n}`, scene);
-                })
-                .catch(() => {})
-            : Promise.resolve(),
-        ]);
-      } catch (e) {
-        console.error("prefetch failed", e);
+        // Batch image requests for progress tracking and cancellation
+        const BATCH = 20;
+        const imageBatches: number[][] = [];
+        for (let i = 0; i < uncachedImages.length; i += BATCH) {
+          imageBatches.push(uncachedImages.slice(i, i + BATCH));
+        }
+
+        let imagesDone = 0;
+        for (const batch of imageBatches) {
+          if (cancelledRef.current) break;
+          const ctrl = new AbortController();
+          prefetchAbortRef.current = ctrl;
+          try {
+            const r = await fetch(
+              withToken(
+                `/frames?from=${batch[0]}&to=${batch.at(-1)}&scale=${sk}&v=${runId}${sceneParam}`,
+              ),
+              { signal: ctrl.signal },
+            );
+            if (r.ok) {
+              const data = (await r.json()) as RenderedFrameResponse[];
+              for (const { n, png } of data) storeCachedFrame(n, sk, png);
+              setCacheVersion((v) => v + 1);
+            }
+          } catch (e) {
+            if ((e as Error).name === "AbortError") break;
+            console.error("prefetch batch failed", e);
+          }
+          imagesDone += batch.length;
+          setPrefetchProgress({ done: imagesDone, total: uncachedImages.length });
+        }
+        prefetchAbortRef.current = null;
+
+        // Trees: single request (fast, no progress needed)
+        if (!cancelledRef.current && uncachedTrees.length > 0) {
+          try {
+            const r = await fetch(
+              withToken(
+                `/trees?from=${uncachedTrees[0]}&to=${uncachedTrees.at(-1)}&v=${runId}${sceneParam}`,
+              ),
+            );
+            if (r.ok) {
+              const data = (await r.json()) as Array<{ n: number; scene: SceneData }>;
+              for (const { n, scene } of data)
+                treeCacheRef.current.set(`${runId}-${sceneCacheKey}-${n}`, scene);
+            }
+          } catch (e) {
+            console.error("trees prefetch failed", e);
+          }
+        }
       } finally {
         setIsPrefetching(false);
+        setPrefetchProgress(null);
       }
     }
 
@@ -886,12 +923,12 @@ export default function App() {
     let f = startFrame;
     playIntervalRef.current = setInterval(() => {
       f++;
-      if (f >= totalFrames) {
+      if (f > toFrame) {
         clearInterval(playIntervalRef.current!);
         playIntervalRef.current = null;
         setIsPlaying(false);
         setFrame(playReturnFrameRef.current);
-      } else if (capturedStopOnCue && f > startFrame && capturedCueFrames.includes(f)) {
+      } else if (capturedCueFrames.includes(f) && playMode === "stop-at-cue" && f > startFrame) {
         clearInterval(playIntervalRef.current!);
         playIntervalRef.current = null;
         setIsPlaying(false);
@@ -905,12 +942,16 @@ export default function App() {
 
   function handleStop() {
     cancelledRef.current = true;
+    fetch(withToken("/cancel-frames"), { method: "POST" }).catch(() => {});
+    prefetchAbortRef.current?.abort();
+    prefetchAbortRef.current = null;
     if (playIntervalRef.current) {
       clearInterval(playIntervalRef.current);
       playIntervalRef.current = null;
     }
     setIsPlaying(false);
     setIsPrefetching(false);
+    setPrefetchProgress(null);
     setFrame(playReturnFrameRef.current);
   }
 
@@ -1481,7 +1522,17 @@ export default function App() {
                               disabled={!canvasLayout}
                               title={isActive ? "Stop" : "Play animation"}
                             >
-                              {isPrefetching ? "…" : isPlaying ? "■" : "▶ Play"}
+                              {isPrefetching
+                                ? prefetchProgress && prefetchProgress.total > 0
+                                  ? `${prefetchProgress.done}/${prefetchProgress.total}`
+                                  : "…"
+                                : isPlaying
+                                  ? "■"
+                                  : (() => {
+                                      const tf = computeToFrame(frame, frames, cueFrames);
+                                      const n = tf - frame;
+                                      return n > 0 ? `▶ Play (${n})` : "▶ Play";
+                                    })()}
                             </button>
 
                             <button
@@ -1501,18 +1552,19 @@ export default function App() {
                               ●▸
                             </button>
 
-                            <label
-                              className="tl-stop-on-cue"
-                              title="Stop playback on the next cue frame"
+                            <select
+                              className="tl-play-mode"
+                              value={playMode}
+                              onChange={(e) =>
+                                setPlayMode(e.target.value as typeof playMode)
+                              }
+                              disabled={isActive}
+                              title="Play range"
                             >
-                              <input
-                                type="checkbox"
-                                checked={stopOnCue}
-                                onChange={(e) => setStopOnCue(e.target.checked)}
-                                disabled={isActive}
-                              />
-                              stop on cue
-                            </label>
+                              <option value="stop-at-cue">Stop at cue</option>
+                              <option value="100-frames">100 frames</option>
+                              <option value="all-frames">All frames</option>
+                            </select>
 
                             <span className="tl-sep" />
 

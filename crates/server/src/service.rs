@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use tower_http::services::ServeDir;
@@ -27,6 +28,7 @@ pub(crate) struct AppState {
     file_changed_tx: broadcast::Sender<String>,
     recently_saved: Arc<Mutex<HashMap<PathBuf, std::time::Instant>>>,
     token: Arc<String>,
+    pub(crate) render_cancel: Arc<AtomicBool>,
 }
 
 #[derive(Deserialize)]
@@ -165,6 +167,7 @@ pub async fn start_service(
         file_changed_tx,
         recently_saved,
         token: Arc::new(token.clone()),
+        render_cancel: Arc::new(AtomicBool::new(false)),
     };
 
     let app = Router::new()
@@ -175,6 +178,7 @@ pub async fn start_service(
         .route("/new-dir", post(new_dir_handler))
         .route("/frame/{n}", get(frame_handler))
         .route("/frames", get(frames_handler))
+        .route("/cancel-frames", post(cancel_frames_handler))
         .route("/tree/{n}", get(tree_handler))
         .route("/trees", get(trees_handler))
         .route("/node-bounds", get(node_bounds_handler))
@@ -464,10 +468,14 @@ async fn trees_handler(
         return (StatusCode::BAD_REQUEST, "invalid range").into_response();
     }
     let sel = scene_selection(params.scene);
+    let cancel = state.render_cancel.clone();
     let result = tokio::task::spawn_blocking(move || {
         renderer_skia::clear_image_cache();
         (params.from..=params.to)
             .map(|n| {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(anyhow::anyhow!("cancelled"));
+                }
                 anim.build_scene(FrameId::new(n), sel)
                     .map(|scene| TreeFrame { n, scene })
             })
@@ -551,12 +559,17 @@ async fn frames_handler(
     }
     let sel = scene_selection(params.scene);
 
+    state.render_cancel.store(false, Ordering::Relaxed);
+    let cancel = state.render_cancel.clone();
     let results = tokio::task::spawn_blocking(move || {
         renderer_skia::clear_image_cache();
         use rayon::prelude::*;
         (from..=to)
             .into_par_iter()
             .filter_map(|n| {
+                if cancel.load(Ordering::Relaxed) {
+                    return None;
+                }
                 let scene = anim.build_scene(FrameId::new(n), sel).ok()?;
                 let pixmap = renderer_skia::render_scene(&scene, scale);
                 let png = pixmap.encode_png().ok()?;
@@ -577,6 +590,11 @@ async fn frames_handler(
             (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
         }
     }
+}
+
+async fn cancel_frames_handler(State(state): State<AppState>) -> impl IntoResponse {
+    state.render_cancel.store(true, Ordering::Relaxed);
+    StatusCode::NO_CONTENT
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {

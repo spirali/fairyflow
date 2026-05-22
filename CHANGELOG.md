@@ -4,8 +4,11 @@
 
 ### New
 
+  * Improvements in cancelling rendering
+  * Shows rendering progress
   * `follow_path` now optionaly takes `start` and `end` that allows to go backwards
   * Updated colors in timeline
+  
 
 ### Fixed
 

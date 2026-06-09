@@ -257,14 +257,50 @@ def _add_tag_to(parent, node):
             _add_node_to(g, child)
 
 
+def _flush_line(parent, current_line):
+    if not current_line:
+        return
+    if len(current_line) == 1:
+        item = current_line[0]
+        if isinstance(item, str):
+            parent.span(item)
+        else:
+            _add_tag_to(parent, item)
+    else:
+        g = parent.group()
+        for item in current_line:
+            if isinstance(item, str):
+                g.span(item)
+            else:
+                _add_tag_to(g, item)
+    current_line.clear()
+
+
+def _add_nodes_as_lines(parent, nodes):
+    """Add mixed tag/text nodes to parent, splitting on \\n as line boundaries."""
+    current_line = []
+    for node in nodes:
+        if isinstance(node, str):
+            pieces = node.split("\n")
+            for i, piece in enumerate(pieces):
+                if i > 0:
+                    _flush_line(parent, current_line)
+                if piece:
+                    current_line.append(piece)
+        else:
+            current_line.append(node)
+    _flush_line(parent, current_line)
+
+
 @beartype
 def stext(input_text: str, *, strip: bool = True, delimiters: str = "<>"):
     """
     Parse input_text and create a text() node from it.
 
     Plain text is split on newlines into spans. Named tags become spans (leaf)
-    or groups (nested), with the tag name assigned via .name(). Multiple
-    top-level items are wrapped in an anonymous group.
+    or groups (nested), with the tag name assigned via .name(). Newlines act as
+    line boundaries at the top level: items sharing a line are grouped inline,
+    each newline starts a new top-level line.
 
     Tag attributes are applied as styles:
       color='...'            → .color(...)
@@ -300,8 +336,6 @@ def stext(input_text: str, *, strip: bool = True, delimiters: str = "<>"):
     if len(nodes) == 1:
         _add_tag_to(t, nodes[0])
     else:
-        g = t.group()
-        for node in nodes:
-            _add_node_to(g, node)
+        _add_nodes_as_lines(t, nodes)
 
     return t

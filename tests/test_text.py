@@ -61,6 +61,20 @@ def test_named_span_with_newlines(sc):
     assert t._children[1]._name == "a"
 
 
+def test_mixed_newlines_create_top_level_lines(sc):
+    # Tag + text with \n: B should share line 1 with <s>, C and D are separate lines
+    t = stext("<s color='green'>A</s>B\nC\nD")
+    assert len(t._children) == 3
+    g = t._children[0]
+    assert isinstance(g, TextGroup) and g._name is None
+    assert len(g._children) == 2
+    assert isinstance(g._children[0], TextSpan) and _span_text(g._children[0]) == "A"
+    assert g._children[0]._name == "s"
+    assert isinstance(g._children[1], TextSpan) and _span_text(g._children[1]) == "B"
+    assert isinstance(t._children[1], TextSpan) and _span_text(t._children[1]) == "C"
+    assert isinstance(t._children[2], TextSpan) and _span_text(t._children[2]) == "D"
+
+
 def test_mixed_top_level(sc):
     t = stext("Text <abc>Hello</abc> <xyz>world!</xyz>")
     assert len(t._children) == 1

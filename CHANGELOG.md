@@ -14,6 +14,7 @@
 
   * Fixed animated colors with null values
   * Fixed double render of arrows
+  * Fixed stext and mixed styles and multilines
 
 ## 0.3.0
 

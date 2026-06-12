@@ -434,6 +434,15 @@ export default function App() {
   const sceneWidth = sceneData?.width ?? null;
   const sceneHeight = sceneData?.height ?? null;
 
+  let frameSceneIdx = -1;
+  if (selectedScene === "all" && scenes.length > 0) {
+    let offset = 0;
+    for (let i = 0; i < scenes.length; i++) {
+      if (frame < offset + scenes[i].frame_count) { frameSceneIdx = i; break; }
+      offset += scenes[i].frame_count;
+    }
+  }
+
   // ── node info map (id → stack) built from all scenes' info arrays ─────────
   const nodeInfoMap = useMemo(() => {
     const map = new Map<number, InfoEntry>();
@@ -1577,6 +1586,25 @@ export default function App() {
                             {scenes.length > 1 && (
                               <>
                                 <span className="tl-sep" />
+                                <button
+                                  className="tl-btn tl-scene-nav-btn"
+                                  onClick={() =>
+                                    setSelectedScene(
+                                      selectedScene === "all"
+                                        ? frameSceneIdx - 1
+                                        : selectedScene - 1,
+                                    )
+                                  }
+                                  disabled={
+                                    isActive ||
+                                    (selectedScene === "all"
+                                      ? frameSceneIdx <= 0
+                                      : selectedScene === 0)
+                                  }
+                                  title="Previous scene"
+                                >
+                                  ‹
+                                </button>
                                 <select
                                   className="tl-scene-select"
                                   value={selectedScene === "all" ? "all" : String(selectedScene)}
@@ -1593,6 +1621,25 @@ export default function App() {
                                     </option>
                                   ))}
                                 </select>
+                                <button
+                                  className="tl-btn tl-scene-nav-btn"
+                                  onClick={() =>
+                                    setSelectedScene(
+                                      selectedScene === "all"
+                                        ? frameSceneIdx + 1
+                                        : selectedScene + 1,
+                                    )
+                                  }
+                                  disabled={
+                                    isActive ||
+                                    (selectedScene === "all"
+                                      ? frameSceneIdx >= scenes.length - 1
+                                      : selectedScene === scenes.length - 1)
+                                  }
+                                  title="Next scene"
+                                >
+                                  ›
+                                </button>
                               </>
                             )}
 

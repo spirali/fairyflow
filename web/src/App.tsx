@@ -130,12 +130,13 @@ export default function App() {
     scenesRef.current = sc;
     setScenes_(sc);
   };
-  const [selectedScene, setSelectedScene_] = useState<number | "all">("all");
-  const selectedSceneRef = useRef<number | "all">("all");
-  const setSelectedScene = (v: number | "all") => {
-    selectedSceneRef.current = v;
-    setSelectedScene_(v);
-  };
+  const [viewMode, setViewMode_] = useState<"all" | "single">("all");
+  const viewModeRef = useRef<"all" | "single">("all");
+  const setViewMode = (v: "all" | "single") => { viewModeRef.current = v; setViewMode_(v); };
+
+  const [activeSceneIdx, setActiveSceneIdx_] = useState(0);
+  const activeSceneIdxRef = useRef(0);
+  const setActiveSceneIdx = (i: number) => { activeSceneIdxRef.current = i; setActiveSceneIdx_(i); };
 
   // ── canvas layout ─────────────────────────────────────────────────────────
   interface CanvasLayout {
@@ -150,9 +151,6 @@ export default function App() {
 
   // ── playback ──────────────────────────────────────────────────────────────
   const [fps, setFps] = useState(24);
-  const [playMode, setPlayMode] = useState<"stop-at-cue" | "100-frames" | "all-frames">(
-    "stop-at-cue",
-  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
@@ -418,6 +416,7 @@ export default function App() {
   const reconnectCount = useRef(0);
 
   // ── scene selection ───────────────────────────────────────────────────────
+  const selectedScene: number | "all" = viewMode === "all" ? "all" : activeSceneIdx;
   const sceneParam = selectedScene === "all" ? "" : `&scene=${selectedScene}`;
   const sceneCacheKey = selectedScene === "all" ? "all" : String(selectedScene);
 
@@ -425,8 +424,6 @@ export default function App() {
   const maxFrame = frames - 1;
   const keyFrameSet = new Set(keyFrames);
   const cueFrameSet = new Set(cueFrames);
-  const prevKeyFrame: number | null = keyFrames.filter((kf) => kf < frame).at(-1) ?? null;
-  const nextKeyFrame: number | null = keyFrames.find((kf) => kf > frame) ?? null;
   const navCueFrames = cueFrames[0] === 0 ? cueFrames : [0, ...cueFrames];
   const prevCueFrame: number | null = navCueFrames.filter((cf) => cf < frame).at(-1) ?? null;
   const nextCueFrame: number | null = navCueFrames.find((cf) => cf > frame) ?? null;
@@ -435,12 +432,17 @@ export default function App() {
   const sceneHeight = sceneData?.height ?? null;
 
   let frameSceneIdx = -1;
-  if (selectedScene === "all" && scenes.length > 0) {
+  if (scenes.length > 0) {
     let offset = 0;
     for (let i = 0; i < scenes.length; i++) {
       if (frame < offset + scenes[i].frame_count) { frameSceneIdx = i; break; }
       offset += scenes[i].frame_count;
     }
+  }
+  function sceneStartFrame(idx: number): number {
+    let offset = 0;
+    for (let i = 0; i < idx; i++) offset += scenes[i].frame_count;
+    return offset;
   }
 
   // ── node info map (id → stack) built from all scenes' info arrays ─────────
@@ -489,11 +491,10 @@ export default function App() {
         } else if (msg.type === "tree") {
           const sc = msg.scenes ?? [];
           setScenes(sc);
-          const prevSel = selectedSceneRef.current;
-          const prevName = typeof prevSel === "number" ? scenesRef.current[prevSel]?.name : null;
+          const prevName = scenesRef.current[activeSceneIdxRef.current]?.name ?? null;
           const restoredIdx = prevName != null ? sc.findIndex((s) => s.name === prevName) : -1;
+          setActiveSceneIdx(restoredIdx >= 0 ? restoredIdx : 0);
           pendingFrameRef.current = frameRef.current < msg.frame_count ? frameRef.current : 0;
-          setSelectedScene(restoredIdx >= 0 ? restoredIdx : "all");
           setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
           setCueFrames(msg.cue_frames ?? []);
@@ -578,10 +579,10 @@ export default function App() {
     imgCache.clear();
     treeCacheRef.current.clear();
     setCacheVersion(0);
-    const targetFrame = pendingFrameRef.current ?? 0;
+    const targetFrame = pendingFrameRef.current ?? (viewMode === "single" ? 0 : frameRef.current);
     pendingFrameRef.current = null;
     setFrame(targetFrame);
-    if (selectedScene === "all") {
+    if (viewMode === "all") {
       // Recompute from all scenes combined
       if (scenes.length > 0) {
         let offset = 0;
@@ -599,7 +600,7 @@ export default function App() {
         setFrames(offset);
       }
     } else {
-      const s = scenes[selectedScene as number];
+      const s = scenes[activeSceneIdx];
       if (s) {
         setKeyFrames(s.key_frames);
         setCueFrames(s.cue_frames ?? []);
@@ -607,7 +608,7 @@ export default function App() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedScene, runId]);
+  }, [viewMode, activeSceneIdx, runId]);
 
   // ── fetch scene tree on demand (with cache) ────────────────────────────────
   useEffect(() => {
@@ -838,21 +839,22 @@ export default function App() {
     const capturedCueFrames = cueFrames;
 
     const toFrame = computeToFrame(startFrame, totalFrames, capturedCueFrames);
-    await doPrefetchAndPlay(toFrame, startFrame);
+    await doPrefetchAndPlay(toFrame, startFrame, false);
+  }
+
+  async function handlePlayAndReturn() {
+    if (!canvasLayout || !hasScene) return;
+    cancelledRef.current = false;
+    const startFrame = frame;
+    const toFrame = computeToFrame(startFrame, frames, cueFrames);
+    await doPrefetchAndPlay(toFrame, startFrame, true);
   }
 
   function computeToFrame(startFrame: number, totalFrames: number, capturedCueFrames: number[]) {
-    switch (playMode) {
-      case "stop-at-cue":
-        return capturedCueFrames.find((c) => c > startFrame) ?? totalFrames - 1;
-      case "100-frames":
-        return Math.min(startFrame + 99, totalFrames - 1);
-      case "all-frames":
-        return totalFrames - 1;
-    }
+    return capturedCueFrames.find((c) => c > startFrame) ?? totalFrames - 1;
   }
 
-  async function doPrefetchAndPlay(toFrame: number, startFrame: number) {
+  async function doPrefetchAndPlay(toFrame: number, startFrame: number, returnToStart: boolean) {
     if (!canvasLayout) return;
     const capturedFps = fps;
     const capturedCueFrames = cueFrames;
@@ -937,12 +939,16 @@ export default function App() {
         playIntervalRef.current = null;
         setIsPlaying(false);
         setFrame(playReturnFrameRef.current);
-      } else if (capturedCueFrames.includes(f) && playMode === "stop-at-cue" && f > startFrame) {
+      } else if (capturedCueFrames.includes(f) && f > startFrame) {
         clearInterval(playIntervalRef.current!);
         playIntervalRef.current = null;
         setIsPlaying(false);
-        setFrame(f);
-        playReturnFrameRef.current = f;
+        if (returnToStart) {
+          setFrame(playReturnFrameRef.current);
+        } else {
+          setFrame(f);
+          playReturnFrameRef.current = f;
+        }
       } else {
         setFrame(f);
       }
@@ -1472,26 +1478,97 @@ export default function App() {
                   <>
                     {/* Timeline bar */}
                     <div className="timeline-bar">
-                      {!hasScene ? (
-                        <span className="timeline-no-scene">No scene</span>
-                      ) : (
+                      {hasScene && (
                         <>
                           <FrameSlider />
                           <div className="tl-controls">
+                            {scenes.length > 1 && (
+                              <>
+                                <button
+                                  className="tl-btn tl-scene-nav-btn"
+                                  onClick={() => {
+                                    const cur =
+                                      viewMode === "all" ? frameSceneIdx : activeSceneIdx;
+                                    if (viewMode === "all") {
+                                      setFrame(sceneStartFrame(cur - 1));
+                                      setActiveSceneIdx(cur - 1);
+                                    } else {
+                                      setActiveSceneIdx(cur - 1);
+                                    }
+                                  }}
+                                  disabled={
+                                    isActive ||
+                                    (viewMode === "all"
+                                      ? frameSceneIdx <= 0
+                                      : activeSceneIdx === 0)
+                                  }
+                                  title="Previous scene"
+                                >
+                                  ‹
+                                </button>
+                                <select
+                                  className="tl-scene-select"
+                                  value={String(
+                                    viewMode === "all"
+                                      ? Math.max(0, frameSceneIdx)
+                                      : activeSceneIdx,
+                                  )}
+                                  onChange={(e) => {
+                                    const idx = Number(e.target.value);
+                                    setActiveSceneIdx(idx);
+                                    if (viewMode === "all") setFrame(sceneStartFrame(idx));
+                                  }}
+                                  disabled={isActive}
+                                >
+                                  {scenes.map((s, i) => (
+                                    <option key={i} value={String(i)}>
+                                      {s.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  className="tl-btn tl-scene-nav-btn"
+                                  onClick={() => {
+                                    const cur =
+                                      viewMode === "all" ? frameSceneIdx : activeSceneIdx;
+                                    if (viewMode === "all") {
+                                      setFrame(sceneStartFrame(cur + 1));
+                                      setActiveSceneIdx(cur + 1);
+                                    } else {
+                                      setActiveSceneIdx(cur + 1);
+                                    }
+                                  }}
+                                  disabled={
+                                    isActive ||
+                                    (viewMode === "all"
+                                      ? frameSceneIdx >= scenes.length - 1
+                                      : activeSceneIdx === scenes.length - 1)
+                                  }
+                                  title="Next scene"
+                                >
+                                  ›
+                                </button>
+                                <select
+                                  className="tl-play-mode"
+                                  value={viewMode}
+                                  onChange={(e) =>
+                                    setViewMode(e.target.value as "all" | "single")
+                                  }
+                                  disabled={isActive}
+                                  title="Scene view mode"
+                                >
+                                  <option value="all">All scenes</option>
+                                  <option value="single">Single scene</option>
+                                </select>
+                                <span className="tl-sep" />
+                              </>
+                            )}
                             <button
                               className="tl-btn"
                               onClick={() => setFrame(0)}
                               disabled={frame === 0 || isActive}
                             >
                               ⏮
-                            </button>
-                            <button
-                              className="tl-btn"
-                              onClick={() => setFrame(prevKeyFrame!)}
-                              disabled={prevKeyFrame === null || isActive}
-                              title="Prev key frame"
-                            >
-                              ◂◂
                             </button>
                             <button
                               className="tl-btn"
@@ -1506,14 +1583,6 @@ export default function App() {
                               disabled={frame === maxFrame || isActive}
                             >
                               ▶
-                            </button>
-                            <button
-                              className="tl-btn"
-                              onClick={() => setFrame(nextKeyFrame!)}
-                              disabled={nextKeyFrame === null || isActive}
-                              title="Next key frame"
-                            >
-                              ▸▸
                             </button>
                             <button
                               className="tl-btn"
@@ -1543,6 +1612,20 @@ export default function App() {
                                       return n > 0 ? `▶ Play (${n})` : "▶ Play";
                                     })()}
                             </button>
+                            <button
+                              className={`tl-btn tl-play-btn tl-return-btn${isActive ? " active" : ""}`}
+                              onClick={isActive ? handleStop : handlePlayAndReturn}
+                              disabled={!canvasLayout}
+                              title={isActive ? "Stop" : "Play and return to start"}
+                            >
+                              {isPrefetching
+                                ? prefetchProgress && prefetchProgress.total > 0
+                                  ? `${prefetchProgress.done}/${prefetchProgress.total}`
+                                  : "…"
+                                : isPlaying
+                                  ? "■"
+                                  : "↻"}
+                            </button>
 
                             <button
                               className="tl-btn"
@@ -1561,20 +1644,6 @@ export default function App() {
                               ●▸
                             </button>
 
-                            <select
-                              className="tl-play-mode"
-                              value={playMode}
-                              onChange={(e) =>
-                                setPlayMode(e.target.value as typeof playMode)
-                              }
-                              disabled={isActive}
-                              title="Play range"
-                            >
-                              <option value="stop-at-cue">Stop at cue</option>
-                              <option value="100-frames">100 frames</option>
-                              <option value="all-frames">All frames</option>
-                            </select>
-
                             <span className="tl-sep" />
 
                             <span className="timeline-label">
@@ -1582,66 +1651,6 @@ export default function App() {
                             </span>
                             {cueFrameSet.has(frame) && <span className="tl-cue-badge">cue</span>}
                             {keyFrameSet.has(frame) && <span className="tl-key-badge">key</span>}
-
-                            {scenes.length > 1 && (
-                              <>
-                                <span className="tl-sep" />
-                                <button
-                                  className="tl-btn tl-scene-nav-btn"
-                                  onClick={() =>
-                                    setSelectedScene(
-                                      selectedScene === "all"
-                                        ? frameSceneIdx - 1
-                                        : selectedScene - 1,
-                                    )
-                                  }
-                                  disabled={
-                                    isActive ||
-                                    (selectedScene === "all"
-                                      ? frameSceneIdx <= 0
-                                      : selectedScene === 0)
-                                  }
-                                  title="Previous scene"
-                                >
-                                  ‹
-                                </button>
-                                <select
-                                  className="tl-scene-select"
-                                  value={selectedScene === "all" ? "all" : String(selectedScene)}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setSelectedScene(v === "all" ? "all" : Number(v));
-                                  }}
-                                  disabled={isActive}
-                                >
-                                  <option value="all">All scenes</option>
-                                  {scenes.map((s, i) => (
-                                    <option key={i} value={String(i)}>
-                                      {s.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  className="tl-btn tl-scene-nav-btn"
-                                  onClick={() =>
-                                    setSelectedScene(
-                                      selectedScene === "all"
-                                        ? frameSceneIdx + 1
-                                        : selectedScene + 1,
-                                    )
-                                  }
-                                  disabled={
-                                    isActive ||
-                                    (selectedScene === "all"
-                                      ? frameSceneIdx >= scenes.length - 1
-                                      : selectedScene === scenes.length - 1)
-                                  }
-                                  title="Next scene"
-                                >
-                                  ›
-                                </button>
-                              </>
-                            )}
 
                             <span className="tl-sep" />
 

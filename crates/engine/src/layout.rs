@@ -200,7 +200,7 @@ impl Node {
                         let self_w = self.get_outer_width(ctx)?;
                         (parent_w - self_w) * align.eval(ctx)? - off.x
                     }
-                    Layout::Row { gap, .. } => {
+                    Layout::Row { gap, reserve, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
@@ -212,7 +212,7 @@ impl Node {
                                 return Ok(x - off.x);
                             }
                             let node = ctx.node(*child)?;
-                            if node.is_active(ctx.frame()) {
+                            if *reserve || node.is_active(ctx.frame()) {
                                 x += gap + node.get_outer_width(ctx)?;
                             }
                         }
@@ -246,7 +246,7 @@ impl Node {
                         let self_h = self.get_outer_height(ctx)?;
                         (parent_h - self_h) / 2.0 - off.y
                     }
-                    Layout::Column { gap, .. } => {
+                    Layout::Column { gap, reserve, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
@@ -258,7 +258,7 @@ impl Node {
                                 return Ok(y - off.y);
                             }
                             let node = ctx.node(*child)?;
-                            if node.is_active(ctx.frame()) {
+                            if *reserve || node.is_active(ctx.frame()) {
                                 y += gap + node.get_outer_height(ctx)?;
                             }
                         }
@@ -309,12 +309,12 @@ impl Node {
                     }
                     w
                 }
-                Layout::Row { gap, .. } => {
+                Layout::Row { gap, reserve, .. } => {
                     let mut w = 0.0f64;
                     let mut count: u32 = 0;
                     for child in children {
                         let node = ctx.node(*child)?;
-                        if node.is_active(ctx.frame()) {
+                        if *reserve || node.is_active(ctx.frame()) {
                             w += node.get_width(ctx)?;
                             count += 1;
                         }
@@ -386,12 +386,12 @@ impl Node {
                     }
                     h
                 }
-                Layout::Column { gap, .. } => {
+                Layout::Column { gap, reserve, .. } => {
                     let mut h = 0.0f64;
                     let mut count: u32 = 0;
                     for child in children {
                         let node = ctx.node(*child)?;
-                        if node.is_active(ctx.frame()) {
+                        if *reserve || node.is_active(ctx.frame()) {
                             h += node.get_height(ctx)?;
                             count += 1;
                         }

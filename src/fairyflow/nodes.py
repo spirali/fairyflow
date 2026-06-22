@@ -825,7 +825,9 @@ class Group(
         self._init_position()
         self._layout = CENTERING_LAYOUT
 
-    def column(self, gap: FloatLike = 0, align: FloatLike = 0.5) -> Self:
+    def column(
+        self, gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True
+    ) -> Self:
         """Switch the group to column (vertical) layout.
 
         Children are stacked vertically with an optional gap and horizontal
@@ -835,14 +837,22 @@ class Group(
             gap: Vertical gap between children in pixels.
             align: Horizontal alignment of children within the column.
                 ``0.0`` = left, ``0.5`` = center, ``1.0`` = right.
+            reserve: If ``True`` (default), inactive children (not yet visible
+                or already removed) still occupy their full height in the
+                layout so that siblings never shift when items appear or
+                disappear.  If ``False``, only currently active children
+                contribute to the layout; siblings reposition as items come
+                and go.
 
         Returns:
             self, for method chaining.
         """
-        self._layout = ColumnLayout(get_frame(), gap, align)
+        self._layout = ColumnLayout(get_frame(), gap, align, reserve)
         return self
 
-    def row(self, gap: FloatLike = 0, align: FloatLike = 0.5) -> Self:
+    def row(
+        self, gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True
+    ) -> Self:
         """Switch the group to row (horizontal) layout.
 
         Children are placed side by side with an optional gap and vertical
@@ -852,11 +862,17 @@ class Group(
             gap: Horizontal gap between children in pixels.
             align: Vertical alignment of children within the row.
                 ``0.0`` = top, ``0.5`` = center, ``1.0`` = bottom.
+            reserve: If ``True`` (default), inactive children (not yet visible
+                or already removed) still occupy their full width in the
+                layout so that siblings never shift when items appear or
+                disappear.  If ``False``, only currently active children
+                contribute to the layout; siblings reposition as items come
+                and go.
 
         Returns:
             self, for method chaining.
         """
-        self._layout = RowLayout(get_frame(), gap, align)
+        self._layout = RowLayout(get_frame(), gap, align, reserve)
         return self
 
     def serialize(self, serializer):

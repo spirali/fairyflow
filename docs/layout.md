@@ -24,10 +24,11 @@ For absolute coordinates, proportional alignment, and cross-node positioning
 
 ## Column layout
 
-Call `.column(gap, align)` on a `Group` to stack its children **vertically**:
+Call `.column(gap, align, reserve)` on a `Group` to stack its children **vertically**:
 
 - `gap` — vertical spacing between children in pixels (default `0`)
 - `align` — horizontal alignment: `0.0` = left, `0.5` = center, `1.0` = right (default `0.5`)
+- `reserve` — whether inactive children still occupy space (default `True`; see [below](#the-reserve-parameter))
 
 ```ffpy frame="0"
 with Scene():
@@ -52,10 +53,11 @@ with Scene():
 
 ## Row layout
 
-Call `.row(gap, align)` on a `Group` to place its children **horizontally**:
+Call `.row(gap, align, reserve)` on a `Group` to place its children **horizontally**:
 
 - `gap` — horizontal spacing between children in pixels (default `0`)
 - `align` — vertical alignment: `0.0` = top, `0.5` = center, `1.0` = bottom (default `0.5`)
+- `reserve` — whether inactive children still occupy space (default `True`; see [below](#the-reserve-parameter))
 
 ```ffpy frame="0"
 with Scene():
@@ -100,6 +102,42 @@ with Scene(width=300, height=200):
             Rect().size(80, 48).color("lightgreen")
             Rect().size(80, 48).color("honeydew").stroke_color("mediumseagreen").stroke_width(1)
 ```
+
+---
+
+## The `reserve` parameter
+
+When items appear or disappear across frames, column and row layouts need to
+decide whether absent children still take up space.
+
+**`reserve=True` (default)** — every child always occupies its full size in
+the layout, even when it is not yet visible or has already been removed.
+This keeps the positions of all siblings stable: nothing shifts when a new
+item appears or an old one disappears.
+
+```ffpy frames="0,1"
+with Scene(width=200, height=120):
+    with Group().column(gap=10):   # reserve=True by default
+        Rect().size(160, 30).color("steelblue")
+        next_frame()
+        Rect().size(160, 50).color("coral")
+```
+
+**`reserve=False`** — only currently active children occupy space.  The
+layout shrinks and grows as items come and go, so siblings recentre or
+reflow on each frame.
+
+```ffpy frames="0,1"
+with Scene(width=200, height=120):
+    with Group().column(gap=10, reserve=False):
+        Rect().size(160, 30).color("steelblue")
+        next_frame()
+        Rect().size(160, 50).color("coral")
+```
+
+Use `reserve=True` when you want a stable layout where items "drop in" to
+their final position without displacing neighbours.  Use `reserve=False`
+when you want the group to tightly fit its visible children at every frame.
 
 ---
 

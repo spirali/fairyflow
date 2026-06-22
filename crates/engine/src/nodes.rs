@@ -70,10 +70,12 @@ pub enum Layout {
     Column {
         gap: AttrExpr<f64>,
         align: AttrExpr<f64>,
+        reserve: bool,
     },
     Row {
         gap: AttrExpr<f64>,
         align: AttrExpr<f64>,
+        reserve: bool,
     },
 }
 

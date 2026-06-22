@@ -1,12 +1,22 @@
 """
 Zensical plugin for ``ffpy`` custom fenced code blocks.
 
-Image mode:
+Image mode (single frame):
     ```ffpy frame=3
     with Scene():
         Rect().size(20, 20).color("green")
     ```
     Renders frame N as PNG, embeds as base64 data-URI <img>.
+
+Multi-frame mode (several frames, code written once):
+    ```ffpy frames="0,1,2"
+    with Scene():
+        Rect().size(20, 20).color("green")
+        next_frame()
+        Rect().size(20, 20).color("red")
+    ```
+    Compiles the source once, renders each listed frame as a PNG, and
+    displays them side-by-side with "Frame N" labels.
 
 Video mode:
     ```ffpy video="mp4"
@@ -43,7 +53,18 @@ def _project_root() -> Path:
 
 
 def _server_binary() -> Path | None:
-    # Check the binary bundled inside the installed fairyflow package first.
+    root = _project_root()
+    # In development (Cargo.toml present), prefer the locally-built binary so
+    # that Rust changes are picked up immediately instead of using a stale
+    # bundled binary from a previous release.
+    if (root / "Cargo.toml").exists():
+        for candidate in [
+            root / "target" / "release" / "server",
+            root / "target" / "debug" / "server",
+        ]:
+            if candidate.exists():
+                return candidate
+    # Otherwise use the binary bundled inside the installed fairyflow package.
     try:
         import fairyflow
 
@@ -54,8 +75,8 @@ def _server_binary() -> Path | None:
                 return candidate
     except ImportError:
         pass
-    # Fall back to local Cargo build artifacts.
-    root = _project_root()
+    # Last resort: local Cargo artifacts (cwd-rooted project without Cargo.toml
+    # found via __file__ walk).
     for candidate in [
         root / "target" / "release" / "server",
         root / "target" / "debug" / "server",
@@ -63,6 +84,23 @@ def _server_binary() -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def _binary_cache_key() -> str:
+    """Return a string that changes whenever the server binary is rebuilt.
+
+    Uses mtime + size rather than a full file hash — cheap to call on every
+    cache lookup while still catching any rebuild during a live docs server.
+    Returns an empty string when no binary is found.
+    """
+    binary = _server_binary()
+    if binary is None:
+        return ""
+    try:
+        st = binary.stat()
+        return f"{st.st_size}:{st.st_mtime_ns}"
+    except OSError:
+        return ""
 
 
 def _content_hash(source: str, *extra: str) -> str:
@@ -190,7 +228,7 @@ def ffpy_validator(language: str, inputs: dict, options: dict, attrs: dict, md) 
     unrecognised keys there.
     """
     for k, v in inputs.items():
-        if k in ("frame", "video", "title", "position"):
+        if k in ("frame", "frames", "video", "title", "position"):
             options[k] = v
         elif k == "hl_lines" and RE_HL_LINES.match(str(v)):
             options[k] = v
@@ -211,6 +249,7 @@ def ffpy_fence(
     """pymdownx.superfences custom format handler for ``ffpy`` blocks."""
     # Pop our custom options; leave hl_lines etc. for the highlighter
     frame_opt = options.pop("frame", None)
+    frames_opt = options.pop("frames", None)
     video_opt = options.pop("video", None)
     position = options.pop("position", "bottom")
 
@@ -227,6 +266,12 @@ def ffpy_fence(
 
     if video_opt is not None:
         return _do_video(source, highlighted, position)
+    elif frames_opt is not None:
+        try:
+            frame_list = [int(x.strip()) for x in frames_opt.split(",")]
+        except ValueError:
+            return _error_html(highlighted, f"Invalid frames= value: {frames_opt!r}")
+        return _do_frames(source, highlighted, frame_list, position)
     elif frame_opt is not None:
         try:
             frame_num = int(frame_opt)
@@ -239,7 +284,9 @@ def ffpy_fence(
 def _do_frame(
     source: str, highlighted: str, frame: int, position: str = "bottom"
 ) -> str:
-    cached_png = _cache_dir() / f"{_content_hash(source, str(frame))}.png"
+    cached_png = (
+        _cache_dir() / f"{_content_hash(source, str(frame), _binary_cache_key())}.png"
+    )
     if not cached_png.exists():
         try:
             with tempfile.TemporaryDirectory(prefix="ffpy-") as tmp:
@@ -266,8 +313,74 @@ def _do_frame(
     return f"{highlighted}\n{output}"
 
 
+def _do_frames(
+    source: str, highlighted: str, frames: list[int], position: str = "bottom"
+) -> str:
+    """Render multiple frames from the same source and display them side by side."""
+    cache = _cache_dir()
+    cached: dict[int, Path] = {}
+    uncached: list[int] = []
+    for f in frames:
+        path = cache / f"{_content_hash(source, str(f), _binary_cache_key())}.png"
+        if path.exists():
+            cached[f] = path
+        else:
+            uncached.append(f)
+
+    if uncached:
+        try:
+            server = _server_binary()
+            if server is None:
+                raise RuntimeError("server binary not found; run `cargo build` first")
+            with tempfile.TemporaryDirectory(prefix="ffpy-") as tmp:
+                json_file = _run_fairyflow(source, Path(tmp))
+                frames_dir = Path(tmp) / "frames"
+                frames_dir.mkdir()
+                result = subprocess.run(
+                    [
+                        str(server),
+                        "render-png",
+                        str(json_file),
+                        str(frames_dir),
+                        f"--frames={','.join(str(f) for f in uncached)}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(f"render-png failed:\n{result.stderr.strip()}")
+                for f in uncached:
+                    png = frames_dir / f"frame{f}.png"
+                    if not png.exists():
+                        raise RuntimeError(f"Expected frame PNG not written: {png}")
+                    dest = (
+                        cache
+                        / f"{_content_hash(source, str(f), _binary_cache_key())}.png"
+                    )
+                    shutil.copy2(png, dest)
+                    cached[f] = dest
+        except Exception as exc:
+            return _error_html(highlighted, str(exc))
+
+    items = []
+    for f in frames:
+        b64 = base64.b64encode(cached[f].read_bytes()).decode("ascii")
+        items.append(
+            f'<div style="display:inline-block;margin-right:1em;vertical-align:top">'
+            f'<p style="margin:.5em 0 .2em;font-style:italic;color:#666">Frame {f}</p>'
+            f'<img src="data:image/png;base64,{b64}" '
+            f'alt="fairyflow frame {f}" '
+            f'style="display:block;border:1px solid black" />'
+            f"</div>"
+        )
+    output = f'<div style="margin:.5em 0">{"".join(items)}</div>'
+    if position == "top":
+        return f"{output}\n{highlighted}"
+    return f"{highlighted}\n{output}"
+
+
 def _do_video(source: str, highlighted: str, position: str = "bottom") -> str:
-    key = _content_hash(source)
+    key = _content_hash(source, _binary_cache_key())
     cached_mp4 = _video_asset_dir() / f"{key}.mp4"
     if not cached_mp4.exists():
         try:

@@ -9,6 +9,7 @@
   * `follow_path` now optionaly takes `start` and `end` that allows to go backwards
   * Updated colors in timeline
   * UI refactoring
+  * `reserve` parameter for `.column()` and `.row()` — when `True` (default), inactive children (not yet visible or already removed) still occupy their full size in the layout so that siblings never shift when items appear or disappear; set to `False` to have the group tightly fit only its currently visible children
   
 
 ### Fixed

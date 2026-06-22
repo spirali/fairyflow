@@ -1,4 +1,4 @@
-from fairyflow import Group, Rect, Ellipse
+from fairyflow import Group, Rect, Ellipse, next_frame
 
 
 def test_centering_layout1(test_scene):
@@ -34,6 +34,24 @@ def test_row_layout(test_scene):
                 Rect().size(15, 10).color("blue")
                 Rect().size(10, 15).color("orange")
             Ellipse().size(10, 5).color("green")
+
+
+def test_column_reserve_true(test_scene):
+    """With reserve=True, the first item stays in place when the second appears."""
+    with test_scene.size(60, 60):
+        with Group().column(gap=10, reserve=True):
+            Rect().size(40, 10).color("steelblue")
+            next_frame()
+            Rect().size(40, 10).color("coral")
+
+
+def test_column_reserve_false(test_scene):
+    """With reserve=False, the first item recentres when the second appears."""
+    with test_scene.size(60, 60):
+        with Group().column(gap=10, reserve=False):
+            Rect().size(40, 10).color("steelblue")
+            next_frame()
+            Rect().size(40, 10).color("coral")
 
 
 def test_rsize_fills_half_parent(test_scene):

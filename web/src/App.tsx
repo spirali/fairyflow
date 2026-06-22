@@ -134,11 +134,17 @@ export default function App() {
   };
   const [viewMode, setViewMode_] = useState<"all" | "single">("all");
   const viewModeRef = useRef<"all" | "single">("all");
-  const setViewMode = (v: "all" | "single") => { viewModeRef.current = v; setViewMode_(v); };
+  const setViewMode = (v: "all" | "single") => {
+    viewModeRef.current = v;
+    setViewMode_(v);
+  };
 
   const [activeSceneIdx, setActiveSceneIdx_] = useState(0);
   const activeSceneIdxRef = useRef(0);
-  const setActiveSceneIdx = (i: number) => { activeSceneIdxRef.current = i; setActiveSceneIdx_(i); };
+  const setActiveSceneIdx = (i: number) => {
+    activeSceneIdxRef.current = i;
+    setActiveSceneIdx_(i);
+  };
 
   // ── canvas layout ─────────────────────────────────────────────────────────
   interface CanvasLayout {
@@ -437,7 +443,10 @@ export default function App() {
   if (scenes.length > 0) {
     let offset = 0;
     for (let i = 0; i < scenes.length; i++) {
-      if (frame < offset + scenes[i].frame_count) { frameSceneIdx = i; break; }
+      if (frame < offset + scenes[i].frame_count) {
+        frameSceneIdx = i;
+        break;
+      }
       offset += scenes[i].frame_count;
     }
   }
@@ -1498,8 +1507,7 @@ export default function App() {
                                 <button
                                   className="tl-btn tl-scene-nav-btn"
                                   onClick={() => {
-                                    const cur =
-                                      viewMode === "all" ? frameSceneIdx : activeSceneIdx;
+                                    const cur = viewMode === "all" ? frameSceneIdx : activeSceneIdx;
                                     if (viewMode === "all") {
                                       setFrame(sceneStartFrame(cur - 1));
                                       setActiveSceneIdx(cur - 1);
@@ -1509,9 +1517,7 @@ export default function App() {
                                   }}
                                   disabled={
                                     isActive ||
-                                    (viewMode === "all"
-                                      ? frameSceneIdx <= 0
-                                      : activeSceneIdx === 0)
+                                    (viewMode === "all" ? frameSceneIdx <= 0 : activeSceneIdx === 0)
                                   }
                                   title="Previous scene"
                                 >
@@ -1540,8 +1546,7 @@ export default function App() {
                                 <button
                                   className="tl-btn tl-scene-nav-btn"
                                   onClick={() => {
-                                    const cur =
-                                      viewMode === "all" ? frameSceneIdx : activeSceneIdx;
+                                    const cur = viewMode === "all" ? frameSceneIdx : activeSceneIdx;
                                     if (viewMode === "all") {
                                       setFrame(sceneStartFrame(cur + 1));
                                       setActiveSceneIdx(cur + 1);
@@ -1562,9 +1567,7 @@ export default function App() {
                                 <select
                                   className="tl-play-mode"
                                   value={viewMode}
-                                  onChange={(e) =>
-                                    setViewMode(e.target.value as "all" | "single")
-                                  }
+                                  onChange={(e) => setViewMode(e.target.value as "all" | "single")}
                                   disabled={isActive}
                                   title="Scene view mode"
                                 >

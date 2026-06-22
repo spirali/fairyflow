@@ -118,6 +118,8 @@ export default function App() {
   const [frame, setFrame_] = useState(0);
   const frameRef = useRef(0);
   const pendingFrameRef = useRef<number | null>(null);
+  const lastRunPathRef = useRef<string | null>(null);
+  const resetFrameOnNextTreeRef = useRef(false);
   const setFrame = (f: number | ((prev: number) => number)) => {
     const next = typeof f === "function" ? f(frameRef.current) : f;
     frameRef.current = next;
@@ -494,7 +496,12 @@ export default function App() {
           const prevName = scenesRef.current[activeSceneIdxRef.current]?.name ?? null;
           const restoredIdx = prevName != null ? sc.findIndex((s) => s.name === prevName) : -1;
           setActiveSceneIdx(restoredIdx >= 0 ? restoredIdx : 0);
-          pendingFrameRef.current = frameRef.current < msg.frame_count ? frameRef.current : 0;
+          if (resetFrameOnNextTreeRef.current) {
+            pendingFrameRef.current = 0;
+            resetFrameOnNextTreeRef.current = false;
+          } else {
+            pendingFrameRef.current = frameRef.current < msg.frame_count ? frameRef.current : 0;
+          }
           setFrames(msg.frame_count);
           setKeyFrames(msg.key_frames ?? []);
           setCueFrames(msg.cue_frames ?? []);
@@ -1096,6 +1103,10 @@ export default function App() {
     })
       .then(() => markActiveTabClean())
       .catch(() => {});
+    if (path !== lastRunPathRef.current) {
+      resetFrameOnNextTreeRef.current = true;
+    }
+    lastRunPathRef.current = path;
     setLines([]);
     setRunning(true);
     wsRef.current.send(JSON.stringify({ type: "run", path, debug }));

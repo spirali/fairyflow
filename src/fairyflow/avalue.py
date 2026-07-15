@@ -1,6 +1,7 @@
 from typing import TypeVar, Generic
 from beartype import beartype
-from .ctxvars import get_frame, Transition, wait
+from .animtime import Duration, Easing
+from .ctxvars import get_frame, wait
 from .exprs import Call, Expr
 
 
@@ -29,16 +30,17 @@ class AnimatedValue(Generic[T], Expr):
         self,
         value: T,
         *,
-        tr: Transition = None,
+        dur: Duration = None,
+        ease: Easing = None,
     ):
         self.is_default = False
         frame = get_frame()
-        if tr is not None:
-            new_frame = wait(tr)
+        if dur is not None:
+            new_frame = wait(dur)
             if frame != new_frame:
                 if frame not in self.values:
                     self.values[frame] = HOLD
-                self.transitions[new_frame] = "L"
+                self.transitions[new_frame] = ease or "linear"
                 frame = new_frame
             else:
                 self.transitions[frame] = "S"
@@ -57,9 +59,10 @@ class AnimatedValue(Generic[T], Expr):
         self,
         delta: T,
         *,
-        tr: Transition = None,
+        dur: Duration = None,
+        ease: Easing = None,
     ):
-        self.set(Call.add(self._get(), delta), tr=tr)
+        self.set(Call.add(self._get(), delta), dur=dur, ease=ease)
 
     def is_single_value(self):
         return self.single_value
@@ -94,4 +97,4 @@ def serialize_frame_value(frame, obj, transitions):
     tr = transitions.get(frame, "S")
     if tr == "S":
         return [frame, serialize_expr(obj)]
-    return [frame, serialize_expr(obj), "linear"]
+    return [frame, serialize_expr(obj), tr]

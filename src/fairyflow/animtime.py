@@ -1,4 +1,4 @@
-from typing import SupportsFloat
+from typing import Literal, SupportsFloat
 from . import config
 
 
@@ -21,13 +21,18 @@ class Frames:
         self.frames = frames
 
 
-type Transition = SupportsFloat | Frames | None
+type Duration = SupportsFloat | Frames | None
+
+# The 5 standard CSS-equivalent cubic-bezier presets (api-v2-proposal.md §3.2).
+# Sampled/custom-callable easing (`ease=lambda t: ...`) is deliberately not
+# supported yet — deferred alongside the rest of proposal §9.
+type Easing = Literal["linear", "in", "out", "in_out", "out_back"] | None
 
 
-def tr_to_frames(tr: Transition):
-    if tr is None:
+def duration_to_frames(dur: Duration):
+    if dur is None:
         return 0
-    if isinstance(tr, Frames):
-        return tr.frames
+    if isinstance(dur, Frames):
+        return dur.frames
     else:
-        return time_to_frames(tr)
+        return time_to_frames(dur)

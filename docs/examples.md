@@ -22,8 +22,8 @@ with Scene(1280, 720):
         with Group() as g3:
             Image("docs/ff_logo.png").height(200)
         wait(0.2)        
-        g2.fade_out(0.5)
-        g3.hide_right(0.5)
+        g2.fade_out(dur=0.5)
+        g3.hide_right(dur=0.5)
         wait(0.2)
         
 with Scene(1280, 720):
@@ -36,7 +36,7 @@ with Scene(1280, 720):
                     with Group().xy(50 * (i % 20), (i // 20) * 50) as n:                    
                         Rect().stroke_color("black").color("#ccc").size(40, 40)
                         Text().span(str(i + 1))
-                        n.fade_in(0.3)
+                        n.fade_in(dur=0.3)
                 numbers.append(n)
         wait(0.2)
 
@@ -48,20 +48,20 @@ with Scene(1280, 720):
         for step in [2, 3]:
             idx = step - 1
             with Par():
-                g.scale(1.90, tr=0.8)
-                g.xy(550, 400, tr=0.8)
+                g.scale(1.90, dur=0.8)
+                g.xy(550, 400, dur=0.8)
             if step == 2:
-                numbers[0].fade_out(0.5)
+                numbers[0].fade_out(dur=0.5)
                 wait(0.5)
 
             wait(0.5)
             with Par():
-                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), tr=0.5)
-                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), tr=0.5)
+                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
+                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)
 
             r = numbers[idx].get_child(kind="rect")
             wait(0.3)
-            r.color("green", tr=0.4)
+            r.color("green", dur=0.4)
             wait(0.2)
 
             with Group() as m:
@@ -75,23 +75,23 @@ with Scene(1280, 720):
                 p.line_to().pos(b.get_pos()).move(0, 4)        
                 t = Text().pos(numbers[idx].get_child(kind="text").get_pos())
                 t.span(str(step)).color("red")            
-                m.fade_in(0.5)
+                m.fade_in(dur=0.5)
            
             for i in range(3):
                 with Par():
-                    a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), tr=0.5)            
-                    b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), tr=0.5)
-                    t.pos(numbers[idx + i * step].get_pos().move(70, -30), tr=0.5)
+                    a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), dur=0.5)            
+                    b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), dur=0.5)
+                    t.pos(numbers[idx + i * step].get_pos().move(70, -30), dur=0.5)
                 #g.pos(numbers[1 + i * 2].get_pos())
                 wait(0.2)
                 r = numbers[idx + (i + 1) * step].get_child(kind="rect")              
-                r.color("red", tr=0.5)
+                r.color("red", dur=0.5)
                 wait(0.5)
 
             with Par():
-                m.alpha(0, tr=0.5)
-                g.scale(1, tr=0.5)
-                g.xy_reset(tr=0.5)
+                m.alpha(0, dur=0.5)
+                g.scale(1, dur=0.5)
+                g.xy_reset(dur=0.5)
 
             wait(0.5)
 
@@ -99,17 +99,17 @@ with Scene(1280, 720):
                 for i in range(idx + (i * step), 100, step):
                     with Seq():
                         wait(i * 0.02)
-                        numbers[i].get_child(kind="rect").color("red", 0.3)
+                        numbers[i].get_child(kind="rect").color("red", dur=0.3)
 
         for step in [5, 7, 11]:
             idx = step - 1
             wait(0.3)
             with Par():
-                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), tr=0.5)
-                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), tr=0.5)                                  
+                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
+                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)                                  
             wait(0.2)
             r = numbers[idx].get_child(kind="rect")
-            r.color("green", tr=0.4)
+            r.color("green", dur=0.4)
             wait(0.2)
 
             if step == 11:
@@ -119,10 +119,10 @@ with Scene(1280, 720):
                 for i in range(idx + 3 * step, 100, step):
                     with Seq():
                         wait(i * 0.01)
-                        numbers[i].get_child(kind="rect").color("red", tr=0.3)       
+                        numbers[i].get_child(kind="rect").color("red", dur=0.3)       
         with Par():
-            arrow.alpha(0, tr=0.3)
-            arrow_head.alpha(0, tr=0.3)            
+            arrow.alpha(0, dur=0.3)
+            arrow_head.alpha(0, dur=0.3)            
 
         PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
         with Par():
@@ -130,19 +130,19 @@ with Scene(1280, 720):
                 with Seq():
                     idx = p - 1
                     wait(i * 0.02)
-                    numbers[idx].get_child(kind="rect").color("green", tr=0.3)                           
+                    numbers[idx].get_child(kind="rect").color("green", dur=0.3)                           
 
         wait(0.5)
         with Par():
             for i in range(1, 100):            
                 if (i + 1) in PRIMES:
                     continue  
-                numbers[i].alpha(0, tr=0.5)
+                numbers[i].alpha(0, dur=0.5)
 
         with Par():
             for i, p in enumerate(PRIMES):
                 idx = p - 1
-                numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, tr=0.5)
+                numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, dur=0.5)
         
         wait(0.5)
 
@@ -185,8 +185,8 @@ with Scene(1280, 720):
         with Group() as g3:
             Image("../docs/ff_logo.png").height(200)
         wait(0.2)
-        g2.fade_out(0.5)
-        g3.hide_right(0.5)
+        g2.fade_out(dur=0.5)
+        g3.hide_right(dur=0.5)
         wait(0.2)
 ```
 
@@ -199,7 +199,7 @@ The `with Group() as g2:` pattern is the core FairyFlow idiom: every node create
 animate the group as a whole afterward.
 
 Once the children are placed, `wait(0.2)` moves the global clock forward 0.2 seconds, creating
-a brief pause where the title and logo are fully visible. `.fade_out(0.5)` and `.hide_right(0.5)`
+a brief pause where the title and logo are fully visible. `.fade_out(dur=0.5)` and `.hide_right(dur=0.5)`
 then animate the two groups away. Both helpers advance the clock automatically, so the outro
 takes 0.2 + 0.5 + 0.5 + 0.2 = 1.4 seconds in total. (Note that `fade_out` and `hide_right`
 run sequentially here — use `Par` to run them simultaneously.)
@@ -216,7 +216,7 @@ with Group().size(1000, 400) as g:
                 with Group().xy(50 * (i % 20), (i // 20) * 50) as n:
                     Rect().stroke_color("black").color("#ccc").size(40, 40)
                     Text().span(str(i + 1))
-                    n.fade_in(0.3)
+                    n.fade_in(dur=0.3)
             numbers.append(n)
     wait(0.2)
 ```
@@ -239,7 +239,7 @@ with Par():
         with Seq():
             wait(0.01 * i)
             ...
-            n.fade_in(0.3)
+            n.fade_in(dur=0.3)
 ```
 
 `Par` starts all 100 children at the same time (t = 0). Each child is a `Seq` that first
@@ -272,18 +272,18 @@ for step in [2, 3]:
     idx = step - 1
 
     with Par():
-        g.scale(1.90, tr=0.8)
-        g.xy(550, 400, tr=0.8)
+        g.scale(1.90, dur=0.8)
+        g.xy(550, 400, dur=0.8)
 ```
 
-`Par` runs both the scale and position change simultaneously. Passing `tr=0.8` on each attribute
+`Par` runs both the scale and position change simultaneously. Passing `dur=0.8` on each attribute
 creates a smooth animated transition over 0.8 seconds and advances the clock to the end of the
 transition. The grid zooms in and shifts in one fluid move.
 
 ```python
     with Par():
-        arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), tr=0.5)
-        arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), tr=0.5)
+        arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
+        arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)
 ```
 
 `get_pos(0.5)` returns the center of a cell as a `Position` object (the argument `0.5` is the
@@ -293,11 +293,11 @@ call applies a small relative offset, nudging the arrowhead above the cell.
 
 ```python
     r = numbers[idx].get_child(kind="rect")
-    r.color("green", tr=0.4)
+    r.color("green", dur=0.4)
 ```
 
 `get_child(kind="rect")` searches the cell's children for a `Rect` node and returns it.
-`color("green", tr=0.4)` creates a smooth colour transition from grey to green over 0.4 seconds.
+`color("green", dur=0.4)` creates a smooth colour transition from grey to green over 0.4 seconds.
 
 ### The crossing-line animation
 
@@ -313,7 +313,7 @@ with Group() as m:
     p.line_to().pos(b.get_pos()).move(0, 4)
     t = Text().pos(numbers[idx].get_child(kind="text").get_pos())
     t.span(str(step)).color("red")
-    m.fade_in(0.5)
+    m.fade_in(dur=0.5)
 ```
 
 This builds a red bracket: a horizontal line from `a` to `b` with a short vertical tick at each
@@ -333,12 +333,12 @@ The text label `t` sits next to the starting cell and shows the prime value in r
 ```python
 for i in range(3):
     with Par():
-        a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), tr=0.5)
-        b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), tr=0.5)
-        t.pos(numbers[idx + i * step].get_pos().move(70, -30), tr=0.5)
+        a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), dur=0.5)
+        b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), dur=0.5)
+        t.pos(numbers[idx + i * step].get_pos().move(70, -30), dur=0.5)
     wait(0.2)
     r = numbers[idx + (i + 1) * step].get_child(kind="rect")
-    r.color("red", tr=0.5)
+    r.color("red", dur=0.5)
     wait(0.5)
 ```
 
@@ -353,7 +353,7 @@ with Par():
     for i in range(idx + (i * step), 100, step):
         with Seq():
             wait(i * 0.02)
-            numbers[i].get_child(kind="rect").color("red", tr=0.3)
+            numbers[i].get_child(kind="rect").color("red", dur=0.3)
 ```
 
 After the animated demonstration the rest of the multiples are coloured red in a rapid sweep.
@@ -372,7 +372,7 @@ for step in [5, 7, 11]:
         for i in range(idx + 3 * step, 100, step):
             with Seq():
                 wait(i * 0.01)
-                numbers[i].get_child(kind="rect").color("red", tr=0.3)
+                numbers[i].get_child(kind="rect").color("red", dur=0.3)
 ```
 
 Primes 5, 7, and 11 get a simpler treatment: the arrow moves to each prime and its background
@@ -388,10 +388,10 @@ with Par():
     for i in range(1, 100):
         if (i + 1) in PRIMES:
             continue
-        numbers[i].alpha(0, tr=0.5)
+        numbers[i].alpha(0, dur=0.5)
 ```
 
-All non-prime cells fade out simultaneously in a single `Par` block. Using `tr=0.5` on each
+All non-prime cells fade out simultaneously in a single `Par` block. Using `dur=0.5` on each
 `alpha(0)` call creates a smooth 0.5-second fade, and since they are all inside `Par` they all
 start at the same moment.
 
@@ -399,10 +399,10 @@ start at the same moment.
 with Par():
     for i, p in enumerate(PRIMES):
         idx = p - 1
-        numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, tr=0.5)
+        numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, dur=0.5)
 ```
 
-The surviving primes are then repositioned together. Each `.xy()` call uses `tr=0.5` so all
+The surviving primes are then repositioned together. Each `.xy()` call uses `dur=0.5` so all
 cells slide smoothly to their new positions simultaneously inside `Par`. The new coordinates
 use the same column/row formula but shifted 300 px down to keep them within the canvas.
 

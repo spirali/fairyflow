@@ -339,6 +339,14 @@ pub(crate) struct NodeDef {
 
     pub layout: Option<Layout>,
     pub children: Vec<NodeId>,
+
+    /// Debug-only Python call-site info (currently `{"stack": [...]}`); present
+    /// only when the scene was generated with `--debug` (`info.py::get_info`),
+    /// and omitted entirely otherwise. The engine treats this as an opaque
+    /// blob — it never inspects or validates its shape, just carries it
+    /// through to `animdef.rs`, which tags it with the node's wire id and
+    /// forwards it to the frontend (`SceneInfo`/`SceneInfoMsg`) untouched.
+    pub info: Option<serde_json::Value>,
 }
 
 impl NodeDef {

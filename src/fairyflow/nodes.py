@@ -49,7 +49,7 @@ class Node(AnimatedObject):
             self._id = parent._new_id()
         else:
             self._id = None
-        self.info = get_info(self._id)
+        self.info = get_info()
         self._name = None
 
     def name(self, name: str | None):
@@ -65,7 +65,6 @@ class Node(AnimatedObject):
             self, for method chaining.
         """
         self._name = name
-        self.info["name"] = name
         return self
 
     def parent_chain(self) -> list["Group"]:
@@ -133,6 +132,8 @@ class Node(AnimatedObject):
             if av.is_default:
                 continue
             result[self._WIRE_KEY.get(name, name)] = serialize_expr(av)
+        if self.info:
+            result["info"] = self.info
         return result
 
     def _get_parent(self):

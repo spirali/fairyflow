@@ -28,6 +28,10 @@ pub struct SceneInfo {
     /// Cue frames within this scene (local frame numbers, 0-based).
     pub cue_frames: Vec<u32>,
     pub frame_count: u32,
+    /// Opaque per-node debug info (`--debug`), each tagged with its node's
+    /// wire id (array index); empty outside debug runs. The engine never
+    /// interprets the contents — see `NodeDef::info`.
+    pub info: Vec<serde_json::Value>,
 }
 
 // ───────────────────────────── Internal single scene ─────────────────────────
@@ -36,6 +40,7 @@ struct SingleScene {
     name: String,
     scene: SceneDef,
     nodes: HashMap<NodeId, Node>,
+    info: Vec<serde_json::Value>,
 }
 
 // ──────────────────────────────── Public type ─────────────────────────────────
@@ -115,11 +120,22 @@ impl SingleScene {
             children: raw.children,
         };
 
+        // The engine never interprets `info` — just tag it with the node's
+        // wire id (array index) and forward it opaquely (`NodeDef::info`).
+        let mut info = Vec::new();
         let raw_nodes = raw
             .nodes
             .into_iter()
             .enumerate()
-            .map(|(i, def)| Node::from_def(i as u32, def))
+            .map(|(i, mut def)| {
+                if let Some(mut node_info) = def.info.take() {
+                    if let serde_json::Value::Object(map) = &mut node_info {
+                        map.insert("id".to_string(), serde_json::Value::from(i as u64));
+                    }
+                    info.push(node_info);
+                }
+                Node::from_def(i as u32, def)
+            })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         let mut parents: Vec<(NodeId, NodeId)> = Vec::with_capacity(raw_nodes.len());
@@ -142,6 +158,7 @@ impl SingleScene {
             name: raw.name,
             scene,
             nodes,
+            info,
         })
     }
 
@@ -250,6 +267,7 @@ impl AnimationDef {
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
                     cue_frames: s.scene.cues.clone(),
                     frame_count: s.frame_count(),
+                    info: s.info.clone(),
                 }
             })
             .collect()

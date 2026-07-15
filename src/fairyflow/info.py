@@ -18,8 +18,8 @@ def get_current_stack():
     ]
 
 
-def get_info(node_id):
-    info: dict = {"id": node_id}
+def get_info():
+    info: dict = {}
     if _debug_mode:
         info["stack"] = get_current_stack()
     return info

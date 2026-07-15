@@ -23,14 +23,6 @@ class AnimatedValue(Generic[T], Expr):
         self.values = {init_frame: init_val}
         self.transitions = {}
         self.single_value = True
-        # Marks an eagerly-seeded attribute that was never explicitly set by
-        # the user — `Node.serialize` (nodes.py) omits these from the v2 wire
-        # format entirely (absence = auto-layout default / inherited-from-
-        # parent / literal engine default, api-v2-impl.md §A.4). Cleared
-        # unconditionally by `.set()`, the single choke point every real
-        # mutation goes through — this correctly distinguishes "still at its
-        # construction-time default" from "explicitly set, even at the same
-        # frame" (`single_value` alone can't tell those apart).
         self.is_default = is_default
 
     def set(

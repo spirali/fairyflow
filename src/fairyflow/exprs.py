@@ -13,72 +13,69 @@ class Expr:
 
 
 class Call(Expr):
-    def __init__(self, name, **kwargs):
-        self.name = name
-        self.args = kwargs
+    """An `["op", arg, ...]` s-expr call. `op` is the wire-format op name
+    (renamed from v1's `{"fn": ...}` object shape — see api-v2-impl.md §A.4);
+    `args` are positional, matching the Rust-side arity table exactly."""
+
+    def __init__(self, op, *args):
+        self.op = op
+        self.args = args
 
     def serialize_expr(self):
         from .serializer import serialize_expr
 
-        r = {"fn": self.name}
-        for k in self.args:
-            r[k] = serialize_expr(self.args[k])
-        return r
+        return [self.op] + [serialize_expr(a) for a in self.args]
 
     @staticmethod
     def add(a, b):
-        return Call("+", a=a, b=b)
+        return Call("+", a, b)
 
     @staticmethod
     def sub(a, b):
-        return Call("-", a=a, b=b)
+        return Call("-", a, b)
 
     @staticmethod
     def mul(a, b):
-        return Call("*", a=a, b=b)
+        return Call("*", a, b)
 
     @staticmethod
     def div(a, b):
-        return Call("/", a=a, b=b)
-
-    @staticmethod
-    def hold(av):
-        return Call("hold", av=av)
+        return Call("/", a, b)
 
     @staticmethod
     def default_x(node):
-        return Call("default_x", node=node)
+        return Call("auto_x", node)
 
     @staticmethod
     def default_y(node):
-        return Call("default_y", node=node)
+        return Call("auto_y", node)
 
     @staticmethod
     def default_width(node):
-        return Call("default_width", node=node)
+        return Call("auto_w", node)
 
     @staticmethod
     def default_height(node):
-        return Call("default_height", node=node)
+        return Call("auto_h", node)
 
     @staticmethod
     def path_x(node, t):
-        return Call("path_x", node=node, t=t)
+        return Call("path_x", node, t)
 
     @staticmethod
     def path_y(node, t):
-        return Call("path_y", node=node, t=t)
+        return Call("path_y", node, t)
 
     @staticmethod
     def norm(a, b):
-        return Call("norm", a=a, b=b)
+        return Call("norm", a, b)
 
     @staticmethod
     def path_length(path):
-        return Call("path_length", node=path._id)
+        return Call("path_len", path)
 
     def __repr__(self):
-        return f"<Call {self.name} {self.args}>"
+        return f"<Call {self.op} {self.args}>"
 
 
 class Const(Expr):
@@ -90,13 +87,20 @@ class Const(Expr):
 
 
 class Inherited(Expr):
+    """Marks a not-yet-set inherited attribute. No longer has its own wire
+    shape — absence *is* the inherited signal now (`api-v2-impl.md` §A.4) — so
+    this only exists as an internal placeholder; `Node.serialize` (nodes.py)
+    omits attributes still marked default before `serialize_expr` ever sees
+    them. Kept as a transparent passthrough purely as a defensive fallback in
+    case one is ever embedded cross-node."""
+
     def __init__(self, expr):
         self.expr = expr
 
     def serialize_expr(self):
         from .serializer import serialize_expr
 
-        return {"kind": "inherited", "expr": serialize_expr(self.expr)}
+        return serialize_expr(self.expr)
 
 
 def to_expr(obj):

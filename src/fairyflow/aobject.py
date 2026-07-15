@@ -12,11 +12,20 @@ class AnimatedObject:
     def _add_attr(self, name, value):
         self._attrs[name] = AnimatedValue(value, self._start)
 
+    def _add_default_attr(self, name, value):
+        """Like `_add_attr`, but marks the attribute as still-at-its-default —
+        `Node.serialize` (nodes.py) omits these from the wire format entirely
+        as long as nothing calls `.set()` on them (see `AnimatedValue.is_default`).
+        Only use this where the Rust engine has a matching fallback for
+        absence: auto-layout position/size, inherited-from-parent style/z, or
+        a literal constant it already hardcodes."""
+        self._attrs[name] = AnimatedValue(value, self._start, is_default=True)
+
     def _add_from_parent(self, name, default=None):
         if name in self._parent._attrs:
-            self._add_attr(name, Inherited(self._parent._get_attr(name)))
+            self._add_default_attr(name, Inherited(self._parent._get_attr(name)))
         else:
-            self._add_attr(name, Inherited(default))
+            self._add_default_attr(name, Inherited(default))
 
     def _set_attr(self, name, value, tr=None):
         self._attrs[name].set(value, tr=tr)

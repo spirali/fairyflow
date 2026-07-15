@@ -195,7 +195,7 @@ def test_scene(request):
         yield s
     except BaseException:
         raise
-    exported = create_export(0, s)
+    exported = {"version": 2, "scenes": [create_export(0, s)]}
 
     out_dir = CURRENT_DIR / request.node.name
     frames_dir = out_dir / "frames"

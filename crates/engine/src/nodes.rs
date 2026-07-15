@@ -4,47 +4,52 @@ use crate::values::{Color, Expr, Value};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::sync::Arc;
-// ──────────────────────────── Transition ───────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub enum Transition {
-    #[serde(rename = "S")]
-    Step,
-    #[serde(rename = "L")]
-    Linear,
-}
+// ──────────────────────────── Attribute wrapper ────────────────────────────
 
-#[derive(Debug, Deserialize)]
-#[serde(transparent)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub struct AttrExpr<T: Value + DeserializeOwned>(Expr<T>);
+/// A possibly-absent animatable attribute. Absence means "use the kind/field's
+/// default" (auto-layout position/size, inherited-from-parent style/z, or a
+/// literal constant) — resolved at eval time (`eval.rs`), not here. Plain
+/// internal type: `NodeDef` (below) is the only thing that's actually
+/// deserialized from JSON; `AttrExpr`/`NodeKind`/the mixins are built from it
+/// by `Node::from_def`.
+#[derive(Debug)]
+pub struct AttrExpr<T: Value + DeserializeOwned>(pub Option<Expr<T>>);
 
 impl<T: Value + DeserializeOwned> AttrExpr<T> {
     #[inline]
-    pub fn get_expr(&self) -> &Expr<T> {
-        &self.0
+    pub fn get_expr(&self) -> Option<&Expr<T>> {
+        self.0.as_ref()
+    }
+}
+
+impl<T: Value + DeserializeOwned> From<Option<Expr<T>>> for AttrExpr<T> {
+    fn from(v: Option<Expr<T>>) -> Self {
+        AttrExpr(v)
     }
 }
 
 // ──────────────────────────────── Mixins ───────────────────────────────────
 
 /// Mirrors `PositionMixin` in Python.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct Position {
     pub x: AttrExpr<f64>,
     pub y: AttrExpr<f64>,
 }
 
 /// Mirrors `SizeMixin` in Python.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct Size {
     pub width: AttrExpr<f64>,
     pub height: AttrExpr<f64>,
 }
 
-/// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
-#[derive(Debug, Deserialize)]
+/// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python. Own (non-inherited)
+/// literal defaults — used by shape nodes (rect/ellipse/path).
+#[derive(Debug)]
 pub struct Style {
     pub fill_color: AttrExpr<Color>,
     pub stroke_color: AttrExpr<Color>,
@@ -52,11 +57,14 @@ pub struct Style {
     pub alpha: AttrExpr<f64>,
 }
 
-/// Mirrors `StyleMixin` (which extends `AlphaMixin`) in Python.
-#[derive(Debug, Deserialize)]
+/// Mirrors `TextStyleMixin` in Python. Unlike `Style`, these fields are
+/// inherited-from-ancestor when absent (see `eval.rs::eval_inherited`).
+#[derive(Debug)]
 pub struct TextStyle {
-    #[serde(flatten)]
-    pub style: Style,
+    pub fill_color: AttrExpr<Color>,
+    pub stroke_color: AttrExpr<Color>,
+    pub stroke_width: AttrExpr<f64>,
+    pub alpha: AttrExpr<f64>,
     pub font: AttrExpr<Arc<String>>,
     pub font_size: AttrExpr<f64>,
     pub font_weight: AttrExpr<f64>,
@@ -68,25 +76,22 @@ pub struct TextStyle {
 pub enum Layout {
     Center,
     Column {
-        gap: AttrExpr<f64>,
-        align: AttrExpr<f64>,
+        gap: Expr<f64>,
+        align: Expr<f64>,
         reserve: bool,
     },
     Row {
-        gap: AttrExpr<f64>,
-        align: AttrExpr<f64>,
+        gap: Expr<f64>,
+        align: Expr<f64>,
         reserve: bool,
     },
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug)]
 pub enum NodeKind {
     /// Python: `Group(PositionMixin, SizeMixin, AlphaMixin)` + rotation + scale
     Group {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         size: Size,
         alpha: AttrExpr<f64>,
         rotation: AttrExpr<f64>,
@@ -100,79 +105,59 @@ pub enum NodeKind {
         clip_w: AttrExpr<f64>,
         clip_h: AttrExpr<f64>,
         layout: Layout,
-        #[serde(default)]
         children: Vec<NodeId>,
     },
     /// Python: `Rect(PositionMixin, SizeMixin, StyleMixin)`
     Rect {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         size: Size,
         z_level: AttrExpr<f64>,
-        #[serde(flatten)]
         style: Style,
     },
     /// Python: `Ellipse(PositionMixin, SizeMixin, StyleMixin)`
     Ellipse {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         size: Size,
         z_level: AttrExpr<f64>,
-        #[serde(flatten)]
         style: Style,
     },
     /// Python: `Path(StyleMixin)`
     Path {
-        #[serde(flatten)]
         style: Style,
         z_level: AttrExpr<f64>,
         crop_start: AttrExpr<f64>,
         crop_end: AttrExpr<f64>,
-        #[serde(default)]
         children: Vec<NodeId>,
     },
 
     /// Python: `Text` — block of styled text with Line children
     Text {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         text_style: TextStyle,
         z_level: AttrExpr<f64>,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
-        #[serde(default)]
         children: Vec<NodeId>,
     },
     /// Group containing instance of other TextGroups or TextSpans.
-    #[serde(rename = "t_group")]
     TextGroup {
-        #[serde(flatten)]
         text_style: TextStyle,
-        #[serde(default)]
         children: Vec<NodeId>,
     },
     /// A text run with a concrete string value
-    #[serde(rename = "t_span")]
     TextSpan {
-        #[serde(flatten)]
         text_style: TextStyle,
         text: AttrExpr<Arc<String>>,
     },
 
     /// Path commands; They always have Path as parent
     Move {
-        #[serde(flatten)]
         position: Position,
     },
     Line {
-        #[serde(flatten)]
         position: Position,
     },
     Cubic {
-        #[serde(flatten)]
         position: Position,
         c1_x: AttrExpr<f64>,
         c1_y: AttrExpr<f64>,
@@ -183,9 +168,7 @@ pub enum NodeKind {
 
     /// An image (SVG for now).  `path` is resolved relative to the project directory.
     Image {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         size: Size,
         z_level: AttrExpr<f64>,
         alpha: AttrExpr<f64>,
@@ -194,21 +177,17 @@ pub enum NodeKind {
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
         keep_aspect: AttrExpr<bool>,
         /// Optional child layer nodes (kind = "layer").
-        #[serde(default)]
         children: Vec<NodeId>,
     },
 
     /// A layer within an SVG image.  Always a child of an Image node.
     Layer {
-        #[serde(flatten)]
         position: Position,
-        #[serde(flatten)]
         size: Size,
         z_level: AttrExpr<f64>,
         alpha: AttrExpr<f64>,
         /// Matches the SVG group `id` attribute.
         layer_name: Arc<String>,
-        #[serde(default)]
         children: Vec<NodeId>,
     },
 }
@@ -227,16 +206,12 @@ impl NodeKind {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct Node {
     pub id: NodeId,
-    #[serde(skip)]
     pub parent: Option<NodeId>,
-    #[serde(default)]
     pub start: FrameId,
-    #[serde(default)]
     pub end: Option<FrameId>,
-    #[serde(flatten)]
     pub kind: NodeKind,
 }
 
@@ -269,23 +244,284 @@ impl Node {
     }
 
     pub fn collect_images(&self, image_paths: &mut HashSet<Arc<String>>) {
-        if let NodeKind::Image { path, .. } = &self.kind {
-            path.get_expr().collect_strings(image_paths);
+        if let NodeKind::Image { path, .. } = &self.kind
+            && let Some(expr) = path.get_expr()
+        {
+            expr.collect_strings(image_paths);
         }
     }
 }
 
 /// Root of the scene definition. Mirrors `Scene(SizeMixin)` in Python.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub(crate) struct SceneDef {
-    #[serde(default)]
-    pub name: Option<String>,
-    #[serde(flatten)]
     pub size: Size,
     pub fill_color: AttrExpr<Color>,
     pub frames: u32,
-    #[serde(default)]
     pub cues: Vec<u32>,
-    #[serde(default)]
     pub children: Vec<NodeId>,
+}
+
+// ──────────────────────── Wire format: NodeDef ─────────────────────────────
+
+#[derive(Debug, Deserialize, Default, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Kind {
+    #[default]
+    Group,
+    Rect,
+    Ellipse,
+    Path,
+    Text,
+    #[serde(rename = "t_group")]
+    TextGroup,
+    #[serde(rename = "t_span")]
+    TextSpan,
+    #[serde(rename = "move")]
+    Move,
+    Line,
+    Cubic,
+    Close,
+    Image,
+    Layer,
+}
+
+/// The one sparse struct actually deserialized from JSON (`api-v2-impl.md` §A.5/§A.7):
+/// no `#[serde(flatten)]`, no `#[serde(tag = ...)]` payload dispatch — `kind` is an
+/// ordinary fieldless-enum field, and every attribute is `Option`. `Node::from_def`
+/// (below) converts this into the internal `NodeKind` enum used by `eval.rs`/`layout.rs`.
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields, default)]
+pub(crate) struct NodeDef {
+    pub kind: Kind,
+    pub start: Option<FrameId>,
+    pub end: Option<FrameId>,
+
+    pub x: Option<Expr<f64>>,
+    pub y: Option<Expr<f64>>,
+    pub w: Option<Expr<f64>>,
+    pub h: Option<Expr<f64>>,
+    pub alpha: Option<Expr<f64>>,
+    pub rotation: Option<Expr<f64>>,
+    pub pivot_x: Option<Expr<f64>>,
+    pub pivot_y: Option<Expr<f64>>,
+    pub scale_x: Option<Expr<f64>>,
+    pub scale_y: Option<Expr<f64>>,
+    pub z: Option<Expr<f64>>,
+    pub clip_x: Option<Expr<f64>>,
+    pub clip_y: Option<Expr<f64>>,
+    pub clip_w: Option<Expr<f64>>,
+    pub clip_h: Option<Expr<f64>>,
+
+    pub fill: Option<Expr<Color>>,
+    pub stroke: Option<Expr<Color>>,
+    pub stroke_width: Option<Expr<f64>>,
+
+    pub crop_start: Option<Expr<f64>>,
+    pub crop_end: Option<Expr<f64>>,
+
+    pub c1_x: Option<Expr<f64>>,
+    pub c1_y: Option<Expr<f64>>,
+    pub c2_x: Option<Expr<f64>>,
+    pub c2_y: Option<Expr<f64>>,
+
+    pub font: Option<Expr<Arc<String>>>,
+    pub font_size: Option<Expr<f64>>,
+    pub font_weight: Option<Expr<f64>>,
+    pub italic: Option<Expr<bool>>,
+    pub text: Option<Expr<Arc<String>>>,
+    pub sh_language: Option<Arc<String>>,
+    pub sh_theme: Option<Arc<String>>,
+
+    pub file: Option<Expr<Arc<String>>>,
+    pub keep_aspect: Option<Expr<bool>>,
+    pub layer_name: Option<Arc<String>>,
+
+    pub layout: Option<Layout>,
+    pub children: Vec<NodeId>,
+}
+
+impl NodeDef {
+    fn position(&mut self) -> Position {
+        Position {
+            x: AttrExpr(self.x.take()),
+            y: AttrExpr(self.y.take()),
+        }
+    }
+
+    fn size(&mut self) -> Size {
+        Size {
+            width: AttrExpr(self.w.take()),
+            height: AttrExpr(self.h.take()),
+        }
+    }
+
+    fn style(&mut self) -> Style {
+        Style {
+            fill_color: AttrExpr(self.fill.take()),
+            stroke_color: AttrExpr(self.stroke.take()),
+            stroke_width: AttrExpr(self.stroke_width.take()),
+            alpha: AttrExpr(self.alpha.take()),
+        }
+    }
+
+    fn text_style(&mut self) -> TextStyle {
+        TextStyle {
+            fill_color: AttrExpr(self.fill.take()),
+            stroke_color: AttrExpr(self.stroke.take()),
+            stroke_width: AttrExpr(self.stroke_width.take()),
+            alpha: AttrExpr(self.alpha.take()),
+            font: AttrExpr(self.font.take()),
+            font_size: AttrExpr(self.font_size.take()),
+            font_weight: AttrExpr(self.font_weight.take()),
+            italic: AttrExpr(self.italic.take()),
+        }
+    }
+
+    fn z_level(&mut self) -> AttrExpr<f64> {
+        AttrExpr(self.z.take())
+    }
+}
+
+impl Node {
+    /// Convert the flat wire-format `NodeDef` (array index `idx`) into the internal
+    /// `NodeKind` enum used everywhere else in the engine. Kind-specific field
+    /// validity (e.g. a `rect` shouldn't carry `children`) is not checked — the
+    /// Python serializer is the sole producer of this format.
+    pub(crate) fn from_def(idx: u32, mut def: NodeDef) -> anyhow::Result<Node> {
+        let id = NodeId::new(idx);
+        let children = std::mem::take(&mut def.children);
+        let kind = match def.kind {
+            Kind::Group => {
+                let position = def.position();
+                let size = def.size();
+                let z_level = def.z_level();
+                NodeKind::Group {
+                    position,
+                    size,
+                    alpha: AttrExpr(def.alpha.take()),
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
+                    z_level,
+                    clip_x: AttrExpr(def.clip_x.take()),
+                    clip_y: AttrExpr(def.clip_y.take()),
+                    clip_w: AttrExpr(def.clip_w.take()),
+                    clip_h: AttrExpr(def.clip_h.take()),
+                    layout: def
+                        .layout
+                        .take()
+                        .ok_or_else(|| anyhow::anyhow!("group node {} missing `layout`", idx))?,
+                    children,
+                }
+            }
+            Kind::Rect => {
+                let position = def.position();
+                let size = def.size();
+                let z_level = def.z_level();
+                NodeKind::Rect {
+                    position,
+                    size,
+                    z_level,
+                    style: def.style(),
+                }
+            }
+            Kind::Ellipse => {
+                let position = def.position();
+                let size = def.size();
+                let z_level = def.z_level();
+                NodeKind::Ellipse {
+                    position,
+                    size,
+                    z_level,
+                    style: def.style(),
+                }
+            }
+            Kind::Path => {
+                let z_level = def.z_level();
+                NodeKind::Path {
+                    style: def.style(),
+                    z_level,
+                    crop_start: AttrExpr(def.crop_start.take()),
+                    crop_end: AttrExpr(def.crop_end.take()),
+                    children,
+                }
+            }
+            Kind::Text => {
+                let position = def.position();
+                let z_level = def.z_level();
+                NodeKind::Text {
+                    position,
+                    text_style: def.text_style(),
+                    z_level,
+                    sh_language: def.sh_language.take(),
+                    sh_theme: def.sh_theme.take(),
+                    children,
+                }
+            }
+            Kind::TextGroup => NodeKind::TextGroup {
+                text_style: def.text_style(),
+                children,
+            },
+            Kind::TextSpan => NodeKind::TextSpan {
+                text_style: def.text_style(),
+                text: AttrExpr(def.text.take()),
+            },
+            Kind::Move => NodeKind::Move {
+                position: def.position(),
+            },
+            Kind::Line => NodeKind::Line {
+                position: def.position(),
+            },
+            Kind::Cubic => {
+                let position = def.position();
+                NodeKind::Cubic {
+                    position,
+                    c1_x: AttrExpr(def.c1_x.take()),
+                    c1_y: AttrExpr(def.c1_y.take()),
+                    c2_x: AttrExpr(def.c2_x.take()),
+                    c2_y: AttrExpr(def.c2_y.take()),
+                }
+            }
+            Kind::Close => NodeKind::Close,
+            Kind::Image => {
+                let position = def.position();
+                let size = def.size();
+                let z_level = def.z_level();
+                NodeKind::Image {
+                    position,
+                    size,
+                    z_level,
+                    alpha: AttrExpr(def.alpha.take()),
+                    path: AttrExpr(def.file.take()),
+                    keep_aspect: AttrExpr(def.keep_aspect.take()),
+                    children,
+                }
+            }
+            Kind::Layer => {
+                let position = def.position();
+                let size = def.size();
+                let z_level = def.z_level();
+                NodeKind::Layer {
+                    position,
+                    size,
+                    z_level,
+                    alpha: AttrExpr(def.alpha.take()),
+                    layer_name: def.layer_name.take().ok_or_else(|| {
+                        anyhow::anyhow!("layer node {} missing `layer_name`", idx)
+                    })?,
+                    children,
+                }
+            }
+        };
+        Ok(Node {
+            id,
+            parent: None,
+            start: def.start.unwrap_or_default(),
+            end: def.end,
+            kind,
+        })
+    }
 }

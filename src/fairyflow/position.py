@@ -8,8 +8,8 @@ class Position:
         self.y = y
 
     def into_node(self, node):
-        x = Call("node_transform_x", source=self.node, target=node, x=self.x, y=self.y)
-        y = Call("node_transform_y", source=self.node, target=node, x=self.x, y=self.y)
+        x = Call("map_x", self.node, node, self.x, self.y)
+        y = Call("map_y", self.node, node, self.x, self.y)
         return Position(node, x, y)
 
     def move(self, x, y):

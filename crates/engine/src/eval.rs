@@ -2,7 +2,7 @@ use crate::FrameId;
 use crate::basictypes::NodeId;
 use crate::nodes::{AttrExpr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle};
 use crate::paths::{path_length, point_in_path};
-use crate::values::{Eval, Expr, FloatCall, FloatParamsPair, Value};
+use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Value};
 use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
 use serde::de::DeserializeOwned;
 use std::cell::RefCell;
@@ -27,11 +27,11 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn scene_width(&self) -> anyhow::Result<f64> {
-        self.scene_def.size.width.eval(self)
+        self.scene_def.size.width.eval_or(self, 0.0)
     }
 
     pub fn scene_height(&self) -> anyhow::Result<f64> {
-        self.scene_def.size.height.eval(self)
+        self.scene_def.size.height.eval_or(self, 0.0)
     }
 
     #[inline]
@@ -118,8 +118,6 @@ impl GroupTransform {
 fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform> {
     match &node.kind {
         NodeKind::Group {
-            position,
-            size,
             scale_x,
             scale_y,
             rotation,
@@ -127,15 +125,18 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform>
             pivot_y,
             ..
         } => {
-            let pos = RcPosition::new(position.x.eval(ctx)?, position.y.eval(ctx)?);
+            let pos = RcPosition::new(node.get_x(ctx)?, node.get_y(ctx)?);
             let scale = RcSize {
-                width: scale_x.eval(ctx)?,
-                height: scale_y.eval(ctx)?,
+                width: scale_x.eval_or(ctx, 1.0)?,
+                height: scale_y.eval_or(ctx, 1.0)?,
             };
-            let r = rotation.eval(ctx)?.to_radians();
-            let w = size.width.eval(ctx)?;
-            let h = size.height.eval(ctx)?;
-            let pivot = RcPosition::new(pivot_x.eval(ctx)? * w, pivot_y.eval(ctx)? * h);
+            let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+            let w = node.get_width(ctx)?;
+            let h = node.get_height(ctx)?;
+            let pivot = RcPosition::new(
+                pivot_x.eval_or(ctx, 0.5)? * w,
+                pivot_y.eval_or(ctx, 0.5)? * h,
+            );
             Ok(GroupTransform {
                 pos,
                 scale,
@@ -196,24 +197,140 @@ fn node_transform(
 
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
-impl<T: Value + DeserializeOwned + Clone> Eval<T> for AttrExpr<T> {
-    fn eval<'a>(&'a self, ctx: &'a EvalCtx<'a>) -> anyhow::Result<T> {
-        let expr = self.get_expr();
-        if !ctx.begin_eval(expr) {
-            return Ok(T::recursive_value());
+impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
+    /// Evaluate this attribute, falling back to `default` when absent. For
+    /// literal-default fields only (alpha, rotation, scale, pivot, clip,
+    /// crop, c1/c2, keep_aspect, ...) — position/size use `Node::get_x` etc.
+    /// (auto-layout fallback) and inheritable style/z fields use
+    /// `eval_inherited` (parent-chain fallback) instead.
+    pub fn eval_or<'a>(&'a self, ctx: &'a EvalCtx<'a>, default: T) -> anyhow::Result<T> {
+        match self.get_expr() {
+            None => Ok(default),
+            Some(expr) => {
+                if !ctx.begin_eval(expr) {
+                    return Ok(T::recursive_value());
+                }
+                let result = expr.eval(ctx);
+                ctx.end_eval(expr);
+                result
+            }
         }
-        let result = expr.eval(ctx);
-        ctx.end_eval(expr);
-        result
     }
 }
 
-impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
-    fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<Inheritable<T>> {
-        Ok(match self.get_expr() {
-            Expr::Inherited { .. } => Inheritable::Inherited(self.eval(ctx)?),
-            _ => Inheritable::Own(self.eval(ctx)?),
-        })
+/// Resolve an inheritable attribute: if `node` has its own value, use it (`Own`);
+/// otherwise walk `node.parent` until an ancestor has one, or fall back to
+/// `root_default` at the top of the tree (`Inherited`). This reproduces v1's
+/// `Inherited(...)` expression-chain semantics, which is now represented purely
+/// by attribute *absence* instead of an explicit wrapper (`api-v2-impl.md` §A.4).
+fn eval_inherited<'a, T, F>(
+    ctx: &'a EvalCtx<'a>,
+    node: &'a Node,
+    get: F,
+    root_default: T,
+) -> anyhow::Result<Inheritable<T>>
+where
+    T: Value + DeserializeOwned + Debug + Clone + 'a,
+    F: Fn(&'a NodeKind) -> Option<&'a AttrExpr<T>>,
+{
+    let mut current = node;
+    let mut own = true;
+    loop {
+        if let Some(expr) = get(&current.kind).and_then(|a| a.get_expr()) {
+            if !ctx.begin_eval(expr) {
+                return Ok(Inheritable::Own(T::recursive_value()));
+            }
+            let v = expr.eval(ctx);
+            ctx.end_eval(expr);
+            let v = v?;
+            return Ok(if own {
+                Inheritable::Own(v)
+            } else {
+                Inheritable::Inherited(v)
+            });
+        }
+        own = false;
+        match current.parent {
+            Some(pid) => current = ctx.node(pid)?,
+            None => return Ok(Inheritable::Inherited(root_default)),
+        }
+    }
+}
+
+fn z_level_of(kind: &NodeKind) -> Option<&AttrExpr<f64>> {
+    match kind {
+        NodeKind::Group { z_level, .. }
+        | NodeKind::Rect { z_level, .. }
+        | NodeKind::Ellipse { z_level, .. }
+        | NodeKind::Path { z_level, .. }
+        | NodeKind::Text { z_level, .. }
+        | NodeKind::Image { z_level, .. }
+        | NodeKind::Layer { z_level, .. } => Some(z_level),
+        _ => None,
+    }
+}
+
+fn eval_z(ctx: &EvalCtx, node: &Node) -> anyhow::Result<Inheritable<f64>> {
+    eval_inherited(ctx, node, z_level_of, 0.0)
+}
+
+fn text_style_of(kind: &NodeKind) -> Option<&TextStyle> {
+    match kind {
+        NodeKind::Text { text_style, .. }
+        | NodeKind::TextGroup { text_style, .. }
+        | NodeKind::TextSpan { text_style, .. } => Some(text_style),
+        _ => None,
+    }
+}
+
+/// Like `eval_inherited`, but for `TextStyle` fields specifically: the walk
+/// must stop at the nearest `Text` ancestor rather than continuing past it.
+/// `Text`'s own style is seeded with *literal* defaults in Python
+/// (`_init_text_style`, own `_add_attr`), not `_add_from_parent` like
+/// `TextGroup`/`TextSpan` — so an absent field there is already the terminal
+/// value, not a cue to keep climbing into its (non-text) `Group` parent.
+fn eval_text_inherited<'a, T, F>(
+    ctx: &'a EvalCtx<'a>,
+    node: &'a Node,
+    get: F,
+    root_default: T,
+) -> anyhow::Result<Inheritable<T>>
+where
+    T: Value + DeserializeOwned + Debug + Clone + 'a,
+    F: Fn(&'a TextStyle) -> &'a AttrExpr<T>,
+{
+    let mut current = node;
+    let mut own = true;
+    loop {
+        let Some(ts) = text_style_of(&current.kind) else {
+            // Structurally unreachable (t_group/t_span always chain up to a
+            // Text ancestor) — fall back to the literal default defensively.
+            return Ok(terminal(own, root_default));
+        };
+        if let Some(expr) = get(ts).get_expr() {
+            if !ctx.begin_eval(expr) {
+                return Ok(Inheritable::Own(T::recursive_value()));
+            }
+            let v = expr.eval(ctx);
+            ctx.end_eval(expr);
+            return Ok(terminal(own, v?));
+        }
+        if matches!(current.kind, NodeKind::Text { .. }) {
+            return Ok(terminal(own, root_default));
+        }
+        own = false;
+        match current.parent {
+            Some(pid) => current = ctx.node(pid)?,
+            None => return Ok(Inheritable::Inherited(root_default)),
+        }
+    }
+}
+
+fn terminal<T: Debug + Clone>(own: bool, v: T) -> Inheritable<T> {
+    if own {
+        Inheritable::Own(v)
+    } else {
+        Inheritable::Inherited(v)
     }
 }
 
@@ -227,74 +344,40 @@ impl Eval<f64> for FloatCall {
     fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         match self {
             FloatCall::Add(pair) => {
-                tracing::trace!("Call::Add");
                 let (va, vb) = pair.eval(ctx)?;
-                tracing::trace!(a = va, b = vb, result = va + vb, "Call::Add result");
                 Ok(va + vb)
             }
             FloatCall::Sub(pair) => {
-                tracing::trace!("Call::Sub");
                 let (va, vb) = pair.eval(ctx)?;
-                tracing::trace!(a = va, b = vb, result = va - vb, "Call::Sub result");
                 Ok(va - vb)
             }
             FloatCall::Mul(pair) => {
-                tracing::trace!("Call::Mul");
                 let (va, vb) = pair.eval(ctx)?;
-                tracing::trace!(a = va, b = vb, result = va * vb, "Call::Mul result");
                 Ok(va * vb)
             }
             FloatCall::Div(pair) => {
-                tracing::trace!("Call::Div");
                 let (va, vb) = pair.eval(ctx)?;
-                let result = if vb.abs() < 0.000001 { 0.0 } else { va / vb };
-                tracing::trace!(a = va, b = vb, result = result, "Call::Div result");
-                Ok(result)
+                Ok(if vb.abs() < 0.000001 { 0.0 } else { va / vb })
             }
             FloatCall::Norm(pair) => {
-                tracing::trace!("Call::Mul");
                 let (va, vb) = pair.eval(ctx)?;
                 let d = va * va + vb * vb;
-                let result = if d < 0.0001 { 0.0 } else { va / d.sqrt() };
-                tracing::trace!(a = va, b = vb, result = result, "Call::Norm result");
-                Ok(result)
+                Ok(if d < 0.0001 { 0.0 } else { va / d.sqrt() })
             }
             FloatCall::NodeTransformX(params) => {
-                tracing::trace!(
-                    source = params.source.as_u64(),
-                    target = params.target.as_u64(),
-                    "Call::NodeTransformX"
-                );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
                 Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.x)
             }
             FloatCall::NodeTransformY(params) => {
-                tracing::trace!(
-                    source = params.source.as_u64(),
-                    target = params.target.as_u64(),
-                    "Call::NodeTransformY"
-                );
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
                 Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.y)
             }
-            FloatCall::DefaultWidth { node } => {
-                let node = ctx.node(*node)?;
-                Ok(node.default_width(ctx)?)
-            }
-            FloatCall::DefaultHeight { node } => {
-                let node = ctx.node(*node)?;
-                Ok(node.default_height(ctx)?)
-            }
-            FloatCall::DefaultX { node } => {
-                let node = ctx.node(*node)?;
-                Ok(node.default_x(ctx)?)
-            }
-            FloatCall::DefaultY { node } => {
-                let node = ctx.node(*node)?;
-                Ok(node.default_y(ctx)?)
-            }
+            FloatCall::DefaultWidth { node } => ctx.node(*node)?.default_width(ctx),
+            FloatCall::DefaultHeight { node } => ctx.node(*node)?.default_height(ctx),
+            FloatCall::DefaultX { node } => ctx.node(*node)?.default_x(ctx),
+            FloatCall::DefaultY { node } => ctx.node(*node)?.default_y(ctx),
             FloatCall::PathX(p) => {
                 let t = p.t.eval(ctx)?;
                 Ok(point_in_path(ctx, p.node, t)?.x)
@@ -311,19 +394,35 @@ impl Eval<f64> for FloatCall {
 // ─────────────────────────── Mixin eval impls ───────────────────────────────
 
 impl Position {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Position> {
+    /// `owner` is the node this `Position` belongs to — needed to resolve the
+    /// auto-layout default (`Node::default_x/default_y`) when an axis is absent.
+    pub fn eval(&self, ctx: &EvalCtx, owner: &Node) -> anyhow::Result<renderer_core::Position> {
         Ok(renderer_core::Position {
-            x: self.x.eval(ctx)?,
-            y: self.y.eval(ctx)?,
+            x: match self.x.get_expr() {
+                Some(e) => e.eval(ctx)?,
+                None => owner.default_x(ctx)?,
+            },
+            y: match self.y.get_expr() {
+                Some(e) => e.eval(ctx)?,
+                None => owner.default_y(ctx)?,
+            },
         })
     }
 }
 
 impl Size {
-    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Size> {
+    /// `owner` is the node this `Size` belongs to — needed to resolve the
+    /// auto-layout default (`Node::default_width/default_height`) when absent.
+    pub fn eval(&self, ctx: &EvalCtx, owner: &Node) -> anyhow::Result<renderer_core::Size> {
         Ok(renderer_core::Size {
-            width: self.width.eval(ctx)?,
-            height: self.height.eval(ctx)?,
+            width: match self.width.get_expr() {
+                Some(e) => e.eval(ctx)?,
+                None => owner.default_width(ctx)?,
+            },
+            height: match self.height.get_expr() {
+                Some(e) => e.eval(ctx)?,
+                None => owner.default_height(ctx)?,
+            },
         })
     }
 }
@@ -331,33 +430,54 @@ impl Size {
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Style> {
         Ok(renderer_core::Style {
-            fill_color: self.fill_color.eval(ctx)?.into_inner(),
-            stroke_color: self.stroke_color.eval(ctx)?.into_inner(),
-            stroke_width: self.stroke_width.eval(ctx)?,
-            alpha: self.alpha.eval(ctx)?,
+            fill_color: self
+                .fill_color
+                .eval_or(ctx, Color::recursive_value())?
+                .into_inner(),
+            stroke_color: self
+                .stroke_color
+                .eval_or(ctx, Color::recursive_value())?
+                .into_inner(),
+            stroke_width: self.stroke_width.eval_or(ctx, 1.0)?,
+            alpha: self.alpha.eval_or(ctx, 1.0)?,
         })
     }
 }
 
 impl TextStyle {
-    pub fn eval_as_inheritable(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextStyle> {
+    pub fn eval_as_inheritable(
+        &self,
+        ctx: &EvalCtx,
+        owner: &Node,
+    ) -> anyhow::Result<renderer_core::TextStyle> {
+        // `self` is `owner`'s own text_style; fields are (re-)read from `owner`
+        // via `text_style_of` so the walk-up-parents fallback shares one code path.
         Ok(renderer_core::TextStyle {
-            fill_color: self
-                .style
-                .fill_color
-                .eval_as_inheritable(ctx)?
-                .map(|v| v.clone().into_inner()),
-            stroke_color: self
-                .style
-                .stroke_color
-                .eval_as_inheritable(ctx)?
-                .map(|v| v.clone().into_inner()),
-            stroke_width: self.style.stroke_width.eval_as_inheritable(ctx)?,
-            alpha: self.style.alpha.eval_as_inheritable(ctx)?,
-            font_family: self.font.eval_as_inheritable(ctx)?,
-            font_size: self.font_size.eval_as_inheritable(ctx)?,
-            font_weight: self.font_weight.eval_as_inheritable(ctx)?,
-            italic: self.italic.eval_as_inheritable(ctx)?,
+            fill_color: eval_text_inherited(
+                ctx,
+                owner,
+                |ts| &ts.fill_color,
+                Color::recursive_value(),
+            )?
+            .map(|v| v.clone().into_inner()),
+            stroke_color: eval_text_inherited(
+                ctx,
+                owner,
+                |ts| &ts.stroke_color,
+                Color::recursive_value(),
+            )?
+            .map(|v| v.clone().into_inner()),
+            stroke_width: eval_text_inherited(ctx, owner, |ts| &ts.stroke_width, 1.0)?,
+            alpha: eval_text_inherited(ctx, owner, |ts| &ts.alpha, 1.0)?,
+            font_family: eval_text_inherited(
+                ctx,
+                owner,
+                |ts| &ts.font,
+                std::sync::Arc::new("sans-serif".to_string()),
+            )?,
+            font_size: eval_text_inherited(ctx, owner, |ts| &ts.font_size, 16.0)?,
+            font_weight: eval_text_inherited(ctx, owner, |ts| &ts.font_weight, 400.0)?,
+            italic: eval_text_inherited(ctx, owner, |ts| &ts.italic, false)?,
         })
     }
 }
@@ -369,8 +489,6 @@ impl Node {
         let _span = tracing::trace_span!("node.eval", node_id = self.id.as_u64()).entered();
         let kind = match &self.kind {
             NodeKind::Group {
-                position,
-                size,
                 alpha,
                 rotation,
                 pivot_x,
@@ -383,21 +501,24 @@ impl Node {
                 clip_h,
                 layout: _,
                 children,
-                z_level,
+                ..
             } => renderer_core::NodeKind::Group {
-                position: position.eval(ctx)?,
-                size: size.eval(ctx)?,
-                alpha: alpha.eval(ctx)?,
-                rotation: rotation.eval(ctx)?,
-                pivot_x: pivot_x.eval(ctx)?,
-                pivot_y: pivot_y.eval(ctx)?,
-                scale_x: scale_x.eval(ctx)?,
-                scale_y: scale_y.eval(ctx)?,
-                clip_x: clip_x.eval(ctx)?,
-                clip_y: clip_y.eval(ctx)?,
-                clip_w: clip_w.eval(ctx)?,
-                clip_h: clip_h.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
+                position: RcPosition::new(self.get_x(ctx)?, self.get_y(ctx)?),
+                size: RcSize {
+                    width: self.get_width(ctx)?,
+                    height: self.get_height(ctx)?,
+                },
+                alpha: alpha.eval_or(ctx, 1.0)?,
+                rotation: rotation.eval_or(ctx, 0.0)?,
+                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
+                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
+                scale_x: scale_x.eval_or(ctx, 1.0)?,
+                scale_y: scale_y.eval_or(ctx, 1.0)?,
+                clip_x: clip_x.eval_or(ctx, 0.0)?,
+                clip_y: clip_y.eval_or(ctx, 0.0)?,
+                clip_w: clip_w.eval_or(ctx, 1.0)?,
+                clip_h: clip_h.eval_or(ctx, 1.0)?,
+                z_level: eval_z(ctx, self)?,
                 children: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -413,35 +534,35 @@ impl Node {
                 position,
                 size,
                 style,
-                z_level,
+                ..
             } => renderer_core::NodeKind::Rect {
-                position: position.eval(ctx)?,
-                size: size.eval(ctx)?,
+                position: position.eval(ctx, self)?,
+                size: size.eval(ctx, self)?,
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
+                z_level: eval_z(ctx, self)?,
             },
             NodeKind::Ellipse {
                 position,
                 size,
                 style,
-                z_level,
+                ..
             } => renderer_core::NodeKind::Ellipse {
-                position: position.eval(ctx)?,
-                size: size.eval(ctx)?,
+                position: position.eval(ctx, self)?,
+                size: size.eval(ctx, self)?,
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
+                z_level: eval_z(ctx, self)?,
             },
             NodeKind::Path {
                 style,
-                z_level,
                 children,
                 crop_start,
                 crop_end,
+                ..
             } => renderer_core::NodeKind::Path {
                 style: style.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
-                crop_start: crop_start.eval(ctx)?,
-                crop_end: crop_end.eval(ctx)?,
+                z_level: eval_z(ctx, self)?,
+                crop_start: crop_start.eval_or(ctx, 0.0)?,
+                crop_end: crop_end.eval_or(ctx, 1.0)?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_path_cmd(ctx))
@@ -450,16 +571,16 @@ impl Node {
             NodeKind::Text {
                 position,
                 text_style,
-                z_level,
                 sh_language,
                 sh_theme,
                 children,
+                ..
             } => renderer_core::NodeKind::Text {
-                position: position.eval(ctx)?,
-                text_style: text_style.eval_as_inheritable(ctx)?,
+                position: position.eval(ctx, self)?,
+                text_style: text_style.eval_as_inheritable(ctx, self)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),
-                z_level: z_level.eval_as_inheritable(ctx)?,
+                z_level: eval_z(ctx, self)?,
                 lines: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
@@ -468,18 +589,18 @@ impl Node {
             NodeKind::Image {
                 position,
                 size,
-                z_level,
                 alpha,
                 path,
                 keep_aspect,
                 children,
+                ..
             } => renderer_core::NodeKind::Image {
-                position: position.eval(ctx)?,
-                size: size.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
-                alpha: alpha.eval(ctx)?,
-                path: path.eval(ctx)?,
-                keep_aspect: keep_aspect.eval(ctx)?,
+                position: position.eval(ctx, self)?,
+                size: size.eval(ctx, self)?,
+                z_level: eval_z(ctx, self)?,
+                alpha: alpha.eval_or(ctx, 1.0)?,
+                path: path.eval_or(ctx, std::sync::Arc::new(String::new()))?,
+                keep_aspect: keep_aspect.eval_or(ctx, true)?,
                 layers: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -502,7 +623,9 @@ impl Node {
                     }
                     result
                 },
-                all_svg_layers: renderer_core::svg_image_layers(&path.eval(ctx)?),
+                all_svg_layers: renderer_core::svg_image_layers(
+                    &path.eval_or(ctx, std::sync::Arc::new(String::new()))?,
+                ),
             },
             _ => anyhow::bail!(
                 "path command / text-internal nodes cannot appear as scene tree nodes"
@@ -518,11 +641,11 @@ impl Node {
         match &self.kind {
             NodeKind::Move { position } => Ok(renderer_core::PathCommand::Move {
                 id: self.id.as_u64(),
-                position: position.eval(ctx)?,
+                position: position.eval(ctx, self)?,
             }),
             NodeKind::Line { position } => Ok(renderer_core::PathCommand::Line {
                 id: self.id.as_u64(),
-                position: position.eval(ctx)?,
+                position: position.eval(ctx, self)?,
             }),
             NodeKind::Cubic {
                 position,
@@ -532,11 +655,11 @@ impl Node {
                 c2_y,
             } => Ok(renderer_core::PathCommand::Cubic {
                 id: self.id.as_u64(),
-                position: position.eval(ctx)?,
-                c1_x: c1_x.eval(ctx)?,
-                c1_y: c1_y.eval(ctx)?,
-                c2_x: c2_x.eval(ctx)?,
-                c2_y: c2_y.eval(ctx)?,
+                position: position.eval(ctx, self)?,
+                c1_x: c1_x.eval_or(ctx, 0.0)?,
+                c1_y: c1_y.eval_or(ctx, 0.0)?,
+                c2_x: c2_x.eval_or(ctx, 0.0)?,
+                c2_y: c2_y.eval_or(ctx, 0.0)?,
             }),
             NodeKind::Close => Ok(renderer_core::PathCommand::Close {
                 id: self.id.as_u64(),
@@ -564,7 +687,7 @@ impl Node {
                 children,
             } => Ok(renderer_core::TextGroup {
                 id: self.id.as_u64(),
-                text_style: text_style.eval_as_inheritable(ctx)?,
+                text_style: text_style.eval_as_inheritable(ctx, self)?,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
@@ -579,17 +702,16 @@ impl Node {
             NodeKind::Layer {
                 position,
                 size,
-                z_level,
                 alpha,
                 layer_name,
                 ..
             } => Ok(renderer_core::ImageLayer {
                 id: self.id.as_u64(),
                 layer_name: layer_name.clone(),
-                position: position.eval(ctx)?,
-                size: size.eval(ctx)?,
-                z_level: z_level.eval_as_inheritable(ctx)?,
-                alpha: alpha.eval(ctx)?,
+                position: position.eval(ctx, self)?,
+                size: size.eval(ctx, self)?,
+                z_level: eval_z(ctx, self)?,
+                alpha: alpha.eval_or(ctx, 1.0)?,
             }),
             _ => anyhow::bail!("expected layer node, got {:?}", self.id),
         }
@@ -599,8 +721,8 @@ impl Node {
         match &self.kind {
             NodeKind::TextSpan { text_style, text } => Ok(renderer_core::TextSpan {
                 id: self.id.as_u64(),
-                text: text.eval(ctx)?,
-                text_style: text_style.eval_as_inheritable(ctx)?,
+                text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
+                text_style: text_style.eval_as_inheritable(ctx, self)?,
             }),
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }
@@ -612,7 +734,10 @@ impl Node {
 impl SceneDef {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Scene> {
         let _span = tracing::debug_span!("frame", frame = ctx.frame().as_u32()).entered();
-        let fill_color = self.fill_color.eval(ctx)?.into_inner();
+        let fill_color = self
+            .fill_color
+            .eval_or(ctx, Color::recursive_value())?
+            .into_inner();
         let mut children = Vec::with_capacity(self.children.len());
         for &id in &self.children {
             let node = ctx.node(id)?;
@@ -621,8 +746,8 @@ impl SceneDef {
             }
         }
         Ok(renderer_core::Scene {
-            width: self.size.width.eval(ctx)?,
-            height: self.size.height.eval(ctx)?,
+            width: self.size.width.eval_or(ctx, 0.0)?,
+            height: self.size.height.eval_or(ctx, 0.0)?,
             fill_color,
             children,
         })

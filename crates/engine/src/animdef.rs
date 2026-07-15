@@ -1,12 +1,13 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
-use crate::nodes::{Node, NodeKind, SceneDef};
-use crate::values::Eval;
+use crate::nodes::{AttrExpr, Node, NodeDef, NodeKind, SceneDef, Size};
+use crate::values::{Color, Expr};
 use renderer_core::{
     AffineTransform, Position as RcPosition, Size as RcSize, positional_transform,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -27,8 +28,6 @@ pub struct SceneInfo {
     /// Cue frames within this scene (local frame numbers, 0-based).
     pub cue_frames: Vec<u32>,
     pub frame_count: u32,
-    /// Raw debug info from the scene JSON, passed through uninterpreted.
-    pub info: serde_json::Value,
 }
 
 // ───────────────────────────── Internal single scene ─────────────────────────
@@ -37,7 +36,6 @@ struct SingleScene {
     name: String,
     scene: SceneDef,
     nodes: HashMap<NodeId, Node>,
-    info: serde_json::Value,
 }
 
 // ──────────────────────────────── Public type ─────────────────────────────────
@@ -58,14 +56,31 @@ impl AnimationDef {
     }
 }
 
-// ────────────────────────── Deserialization helpers ──────────────────────────
+// ────────────────────────── Deserialization: wire format v2 ──────────────────
+
+/// Top-level document (`api-v2-impl.md` §A.1): one well-defined shape, no more
+/// "single object vs. bare array of objects" polymorphism.
+#[derive(Deserialize)]
+struct RawDocument {
+    #[serde(default)]
+    #[allow(dead_code)]
+    version: u32,
+    scenes: Vec<RawScene>,
+}
 
 #[derive(Deserialize)]
-struct RawAnimationDef {
-    scene: SceneDef,
-    nodes: Vec<Node>,
+struct RawScene {
+    name: String,
+    width: Expr<f64>,
+    height: Expr<f64>,
+    background: Expr<Color>,
+    frames: u32,
     #[serde(default)]
-    info: serde_json::Value,
+    cues: Vec<u32>,
+    #[serde(default)]
+    children: Vec<NodeId>,
+    #[serde(default)]
+    nodes: Vec<NodeDef>,
 }
 
 fn check_no_cycles(
@@ -76,7 +91,7 @@ fn check_no_cycles(
 ) -> anyhow::Result<()> {
     for child_id in children {
         if !visited.insert(*child_id) && visited.contains(child_id) {
-            anyhow::bail!("cycle detected; path: {:?}", &stack);
+            anyhow::bail!("cycle detected; path: {:?}", stack);
         }
         stack.push(*child_id);
         let node = nodes.get(child_id).unwrap();
@@ -88,34 +103,45 @@ fn check_no_cycles(
 }
 
 impl SingleScene {
-    fn from_raw(raw: RawAnimationDef) -> anyhow::Result<Self> {
-        let mut parents: Vec<(NodeId, NodeId)> = Vec::with_capacity(raw.nodes.len());
-        for node in &raw.nodes {
+    fn from_raw(raw: RawScene) -> anyhow::Result<Self> {
+        let scene = SceneDef {
+            size: Size {
+                width: AttrExpr(Some(raw.width)),
+                height: AttrExpr(Some(raw.height)),
+            },
+            fill_color: AttrExpr(Some(raw.background)),
+            frames: raw.frames,
+            cues: raw.cues,
+            children: raw.children,
+        };
+
+        let raw_nodes = raw
+            .nodes
+            .into_iter()
+            .enumerate()
+            .map(|(i, def)| Node::from_def(i as u32, def))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let mut parents: Vec<(NodeId, NodeId)> = Vec::with_capacity(raw_nodes.len());
+        for node in &raw_nodes {
             for child_id in node.kind.children() {
                 parents.push((*child_id, node.id));
             }
         }
-        let mut nodes: HashMap<NodeId, Node> = raw.nodes.into_iter().map(|n| (n.id, n)).collect();
+        let mut nodes: HashMap<NodeId, Node> = raw_nodes.into_iter().map(|n| (n.id, n)).collect();
 
         let mut visited = HashSet::new();
         let mut stack = Vec::new();
-        check_no_cycles(&nodes, &raw.scene.children, &mut visited, &mut stack)?;
+        check_no_cycles(&nodes, &scene.children, &mut visited, &mut stack)?;
 
         for (node_id, parent_id) in parents {
             nodes.get_mut(&node_id).unwrap().parent = Some(parent_id);
         }
 
-        let name = raw
-            .scene
-            .name
-            .clone()
-            .unwrap_or_else(|| "Scene".to_string());
-
         Ok(SingleScene {
-            name,
-            scene: raw.scene,
+            name: raw.name,
+            scene,
             nodes,
-            info: raw.info,
         })
     }
 
@@ -224,7 +250,6 @@ impl AnimationDef {
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
                     cue_frames: s.scene.cues.clone(),
                     frame_count: s.frame_count(),
-                    info: s.info.clone(),
                 }
             })
             .collect()
@@ -252,16 +277,12 @@ impl AnimationDef {
     }
 
     pub fn from_json(s: &str) -> anyhow::Result<Self> {
-        let raws: Vec<RawAnimationDef> = if s.trim_start().starts_with('[') {
-            serde_json::from_str(s)?
-        } else {
-            let single: RawAnimationDef = serde_json::from_str(s)?;
-            vec![single]
-        };
-        if raws.is_empty() {
+        let doc: RawDocument = serde_json::from_str(s)?;
+        if doc.scenes.is_empty() {
             anyhow::bail!("animation must contain at least one scene");
         }
-        let scenes = raws
+        let scenes = doc
+            .scenes
             .into_iter()
             .enumerate()
             .map(|(i, raw)| {
@@ -320,11 +341,11 @@ fn collect_world_bounds(
         ..
     } = &node.kind
     {
-        let sx = scale_x.eval(ctx).unwrap_or(1.0);
-        let sy = scale_y.eval(ctx).unwrap_or(1.0);
-        let rot = rotation.eval(ctx).unwrap_or(0.0);
-        let pvx = (pivot_x.eval(ctx).unwrap_or(0.0) * w) as f32;
-        let pvy = (pivot_y.eval(ctx).unwrap_or(0.0) * h) as f32;
+        let sx = scale_x.eval_or(ctx, 1.0).unwrap_or(1.0);
+        let sy = scale_y.eval_or(ctx, 1.0).unwrap_or(1.0);
+        let rot = rotation.eval_or(ctx, 0.0).unwrap_or(0.0);
+        let pvx = (pivot_x.eval_or(ctx, 0.5).unwrap_or(0.5) * w) as f32;
+        let pvy = (pivot_y.eval_or(ctx, 0.5).unwrap_or(0.5) * h) as f32;
         let pos = RcPosition { x, y };
 
         // Maps group-local coordinates → world coordinates
@@ -388,22 +409,20 @@ fn corners_aabb(x: f32, y: f32, w: f32, h: f32, t: AffineTransform) -> NodeBound
 mod tests {
     use super::*;
 
-    /// A minimal single-scene JSON using the current inline-expression format.
+    /// A minimal single-scene JSON using the v2 wire format.
     const SCENE_JSON: &str = r#"{
-  "scene": {"kind": "scene", "id": 0, "width": 200, "height": 200, "frames": 1,
-            "fill_color": "white", "children": [1], "name": "Test"},
-  "animated_values": [],
-  "nodes": [
-    {"kind": "rect", "id": 1,
-     "x": 10, "y": 10, "width": 50, "height": 50,
-     "fill_color": "green", "stroke_color": "",
-     "stroke_width": 1, "alpha": 1,
-     "z_level": {"kind": "inherited", "expr": 0}}
+  "version": 2,
+  "scenes": [
+    {"name": "Test", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "rect", "x": 10, "y": 10, "w": 50, "h": 50, "fill": "green"}
+     ]}
   ]
 }"#;
 
     #[test]
-    fn parse_flat_format() {
+    fn parse_v2_format() {
         let anim = AnimationDef::from_json(SCENE_JSON).unwrap();
         assert_eq!(anim.scene_count(), 1);
         assert_eq!(anim.scenes[0].name, "Test");
@@ -412,15 +431,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_array_format() {
-        let json = format!("[{}]", SCENE_JSON);
-        let anim = AnimationDef::from_json(&json).unwrap();
-        assert_eq!(anim.scene_count(), 1);
-    }
-
-    #[test]
     fn multi_scene_frame_offsets() {
-        let json = format!("[{0}, {0}]", SCENE_JSON);
+        let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
+        let scene = doc["scenes"][0].clone();
+        let json = serde_json::json!({"version": 2, "scenes": [scene.clone(), scene]}).to_string();
         let anim = AnimationDef::from_json(&json).unwrap();
         assert_eq!(anim.scene_count(), 2);
         // Each scene has only frame 0 → frame_count = 1.
@@ -441,7 +455,9 @@ mod tests {
 
     #[test]
     fn build_scene_multi_resolves_correctly() {
-        let json = format!("[{0}, {0}]", SCENE_JSON);
+        let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
+        let scene = doc["scenes"][0].clone();
+        let json = serde_json::json!({"version": 2, "scenes": [scene.clone(), scene]}).to_string();
         let anim = AnimationDef::from_json(&json).unwrap();
         // Frame 0 → scene 0, local 0
         anim.build_scene(FrameId::new(0), SceneSelection::All)

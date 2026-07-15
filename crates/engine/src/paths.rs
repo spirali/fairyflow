@@ -1,7 +1,6 @@
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::nodes::NodeKind;
-use crate::values::Eval;
 use anyhow::bail;
 use renderer_core::Position;
 
@@ -74,15 +73,15 @@ fn build_segments(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<PathSegments> {
     for &child_id in children {
         let child = ctx.node(child_id)?;
         match &child.kind {
-            NodeKind::Move { position } => {
-                cur = Position::new(position.x.eval(ctx)?, position.y.eval(ctx)?);
+            NodeKind::Move { .. } => {
+                cur = Position::new(child.get_x(ctx)?, child.get_y(ctx)?);
                 subpath_start = Some(cur);
                 if first_point.is_none() {
                     first_point = Some(cur);
                 }
             }
-            NodeKind::Line { position } => {
-                let end = Position::new(position.x.eval(ctx)?, position.y.eval(ctx)?);
+            NodeKind::Line { .. } => {
+                let end = Position::new(child.get_x(ctx)?, child.get_y(ctx)?);
                 if first_point.is_none() {
                     first_point = Some(cur);
                 }
@@ -90,16 +89,22 @@ fn build_segments(ctx: &EvalCtx, node: NodeId) -> anyhow::Result<PathSegments> {
                 cur = end;
             }
             NodeKind::Cubic {
-                position,
                 c1_x,
                 c1_y,
                 c2_x,
                 c2_y,
+                ..
             } => {
-                let end = Position::new(position.x.eval(ctx)?, position.y.eval(ctx)?);
+                let end = Position::new(child.get_x(ctx)?, child.get_y(ctx)?);
                 // c1 is relative to the start point, c2 is relative to the end point
-                let c1 = Position::new(cur.x + c1_x.eval(ctx)?, cur.y + c1_y.eval(ctx)?);
-                let c2 = Position::new(end.x + c2_x.eval(ctx)?, end.y + c2_y.eval(ctx)?);
+                let c1 = Position::new(
+                    cur.x + c1_x.eval_or(ctx, 0.0)?,
+                    cur.y + c1_y.eval_or(ctx, 0.0)?,
+                );
+                let c2 = Position::new(
+                    end.x + c2_x.eval_or(ctx, 0.0)?,
+                    end.y + c2_y.eval_or(ctx, 0.0)?,
+                );
                 if first_point.is_none() {
                     first_point = Some(cur);
                 }

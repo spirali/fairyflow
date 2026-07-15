@@ -108,17 +108,31 @@ class Node(AnimatedObject):
     def _new_id(self):
         return self._parent._new_id()
 
+    # v1 attribute name -> v2 wire key, for the handful that were renamed
+    # (api-v2-impl.md §A.5); everything else keeps its Python-internal name.
+    # Python method names are unaffected either way — this only changes what
+    # gets written to JSON.
+    _WIRE_KEY = {
+        "width": "w",
+        "height": "h",
+        "fill_color": "fill",
+        "stroke_color": "stroke",
+        "z_level": "z",
+        "path": "file",
+    }
+
     def serialize(self, serializer):
         from .serializer import serialize_expr
 
-        result = {"kind": self.kind, "id": self._id}
+        result = {"kind": self.kind}
         if self._start > 0:
             result["start"] = self._start
         if self._end is not None:
             result["end"] = self._end
-        attrs = self._attrs
-        for name in attrs:
-            result[name] = serialize_expr(attrs[name])
+        for name, av in self._attrs.items():
+            if av.is_default:
+                continue
+            result[self._WIRE_KEY.get(name, name)] = serialize_expr(av)
         return result
 
     def _get_parent(self):
@@ -184,7 +198,7 @@ class AlphaMixin:
     """Mixin that adds animatable opacity (`alpha`) to a node."""
 
     def _init_alpha(self):
-        self._add_attr("alpha", 1)
+        self._add_default_attr("alpha", 1)
 
     def _init_alpha_from_parent(self):
         self._add_from_parent("alpha")
@@ -267,11 +281,13 @@ class SizeMixin:
 
     def _init_size(self, width=None, height=None):
         if width is None:
-            width = Call.default_width(self)
+            self._add_default_attr("width", Call.default_width(self))
+        else:
+            self._add_attr("width", width)
         if height is None:
-            height = Call.default_height(self)
-        self._add_attr("width", width)
-        self._add_attr("height", height)
+            self._add_default_attr("height", Call.default_height(self))
+        else:
+            self._add_attr("height", height)
 
     def width(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the width of the node in pixels.
@@ -369,11 +385,13 @@ class PositionMixin:
 
     def _init_position(self, x=None, y=None):
         if x is None:
-            x = Call.default_x(self)
+            self._add_default_attr("x", Call.default_x(self))
+        else:
+            self._add_attr("x", x)
         if y is None:
-            y = Call.default_y(self)
-        self._add_attr("x", x)
-        self._add_attr("y", y)
+            self._add_default_attr("y", Call.default_y(self))
+        else:
+            self._add_attr("y", y)
 
     def x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of the node.
@@ -588,9 +606,9 @@ class StyleMixin(AlphaMixin):
     """Mixin that adds fill color, stroke color, stroke width, and alpha to a node."""
 
     def _init_style(self):
-        self._add_attr("fill_color", "")
-        self._add_attr("stroke_color", "")
-        self._add_attr("stroke_width", 1)
+        self._add_default_attr("fill_color", "")
+        self._add_default_attr("stroke_color", "")
+        self._add_default_attr("stroke_width", 1)
         self._init_alpha()
 
     def _init_style_from_parent(self):
@@ -725,11 +743,11 @@ class RotAndScaleMixin:
     """Mixin that adds rotation, pivot point, and x/y scale attributes to a node."""
 
     def _init_rot_and_scale(self):
-        self._add_attr("rotation", 0)
-        self._add_attr("pivot_x", 0.5)
-        self._add_attr("pivot_y", 0.5)
-        self._add_attr("scale_x", 1)
-        self._add_attr("scale_y", 1)
+        self._add_default_attr("rotation", 0)
+        self._add_default_attr("pivot_x", 0.5)
+        self._add_default_attr("pivot_y", 0.5)
+        self._add_default_attr("scale_x", 1)
+        self._add_default_attr("scale_y", 1)
 
     def scale_x(self, value: FloatLike, tr: Transition = None) -> Self:
         """Scale the node along the x axis.
@@ -817,10 +835,10 @@ class Group(
         self._init_alpha()
         self._init_z()
         self._init_rot_and_scale()
-        self._add_attr("clip_x", 0)
-        self._add_attr("clip_y", 0)
-        self._add_attr("clip_w", 1)
-        self._add_attr("clip_h", 1)
+        self._add_default_attr("clip_x", 0)
+        self._add_default_attr("clip_y", 0)
+        self._add_default_attr("clip_w", 1)
+        self._add_default_attr("clip_h", 1)
 
         self._init_position()
         self._layout = CENTERING_LAYOUT
@@ -1128,13 +1146,28 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         return self._id_counter
 
     def serialize(self, serializer):
-        result = super().serialize(serializer)
-        result["name"] = self._name
-        result["frames"] = self.max_frame + 1
+        # The scene is not an addressable node in the v2 format (no `kind`/id
+        # — api-v2-impl.md §A.1), so this bypasses the generic
+        # `Node`/`NodeWithChildren` serialize pipeline entirely rather than
+        # going through it and overriding the result: width/height/background
+        # are scene-level fields with their own (unrenamed, always-present)
+        # wire keys, not sparse node attributes.
+        from .serializer import serialize_expr
+
+        result = {
+            "name": self._name,
+            "width": serialize_expr(self._attrs["width"]),
+            "height": serialize_expr(self._attrs["height"]),
+            "background": serialize_expr(self._attrs["fill_color"]),
+            "frames": self.max_frame + 1,
+        }
         if self.cue_at_start:
             self.cues.add(0)
         if self.cues:
             result["cues"] = sorted(self.cues)
+        if self._children:
+            result["children"] = [serializer.add_node(c) for c in self._children]
+        result["nodes"] = serializer.nodes
         return result
 
     def get_scene(self):
@@ -1187,8 +1220,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         super().__init__()
         self._init_style()
         self._init_z()
-        self._add_attr("crop_start", 0.0)
-        self._add_attr("crop_end", 1.0)
+        self._add_default_attr("crop_start", 0.0)
+        self._add_default_attr("crop_end", 1.0)
 
     def _prev_coords(self):
         if self._children:
@@ -1402,10 +1435,10 @@ class PathCubic(Node, PositionMixin):
     def __init__(self, parent, x, y):
         super().__init__(put_in_context=False, parent=parent)
         self._init_position(x, y)
-        self._add_attr("c1_x", 0)
-        self._add_attr("c1_y", 0)
-        self._add_attr("c2_x", 0)
-        self._add_attr("c2_y", 0)
+        self._add_default_attr("c1_x", 0)
+        self._add_default_attr("c1_y", 0)
+        self._add_default_attr("c2_x", 0)
+        self._add_default_attr("c2_y", 0)
 
     def c1_x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of control point 1, relative to the segment's start point.
@@ -1496,7 +1529,7 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
         self._init_alpha()
         self._add_attr("path", None)
         self.file_name(image_path)
-        self._add_attr("keep_aspect", keep_aspect)
+        self._add_default_attr("keep_aspect", keep_aspect)
 
     def layer(self, name: str) -> "ImageLayer":
         """Get or create a named layer from the image.

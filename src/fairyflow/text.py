@@ -6,31 +6,23 @@ from typing import Union
 from .types import StringLike, BoolLike, FloatLike
 from .exprs import Call
 from .position import Position
+from .aobject import INHERITED_VALUE
 
 from .nodes import (
     Node,
     NodeWithChildren,
     PositionMixin,
     StyleMixin,
+    InheritedStyleMixin,
     ZLevelMixin,
 )
 
 
 @beartype
-class TextStyleMixin(StyleMixin):
-    def _init_text_style(self):
-        self._init_style()
-        self._add_default_attr("font", "sans-serif")
-        self._add_default_attr("font_size", 16)
-        self._add_default_attr("font_weight", 400)
-        self._add_default_attr("italic", False)
-
-    def _init_text_style_from_parent(self):
-        self._init_style_from_parent()
-        self._add_from_parent("font")
-        self._add_from_parent("font_size")
-        self._add_from_parent("font_weight")
-        self._add_from_parent("italic")
+class TextStyleMethods:
+    """Public font/style setters, shared by `TextStyleMixin` (own defaults —
+    `Text`) and `InheritedTextStyleMixin` (cascading defaults — `TextGroup`/
+    `TextSpan`); the methods don't care which default strategy backs them."""
 
     def italic(self, value: BoolLike):
         self._set_attr("italic", value)
@@ -53,12 +45,40 @@ class TextStyleMixin(StyleMixin):
 
 
 @beartype
-class TextSpan(Node, TextStyleMixin):
+class TextStyleMixin(StyleMixin, TextStyleMethods):
+    """Own (literal) font defaults — used by the top-level `Text` block."""
+
+    _ATTR_DEFAULTS = {
+        "font": "sans-serif",
+        "font_size": 16,
+        "font_weight": 400,
+        "italic": False,
+    }
+
+
+@beartype
+class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
+    """Cascading font defaults — used by text runs (`t_group`/`t_span`),
+    which inherit from their ambient `Text`/`TextGroup` ancestor when unset.
+    Always terminates at a real value: these are only ever constructed under
+    a `Text` ancestor (`Text.group()`/`.span()`, or transitively via
+    `TextGroup.group()`/`.span()`), which has real literal font defaults via
+    `TextStyleMixin` — never a bare `Group`/`Scene`."""
+
+    _ATTR_DEFAULTS = {
+        "font": INHERITED_VALUE,
+        "font_size": INHERITED_VALUE,
+        "font_weight": INHERITED_VALUE,
+        "italic": INHERITED_VALUE,
+    }
+
+
+@beartype
+class TextSpan(Node, InheritedTextStyleMixin):
     kind = "t_span"
 
     def __init__(self, parent, text: StringLike):
         super().__init__(put_in_context=False, parent=parent)
-        self._init_text_style_from_parent()
         self._add_attr("text", text)
 
     def text(self, value: str):
@@ -69,12 +89,11 @@ class TextSpan(Node, TextStyleMixin):
 
 
 @beartype
-class TextGroup(NodeWithChildren, TextStyleMixin):
+class TextGroup(NodeWithChildren, InheritedTextStyleMixin):
     kind = "t_group"
 
     def __init__(self, parent):
         super().__init__(put_in_context=False, parent=parent)
-        self._init_text_style_from_parent()
 
     def span(self, text: StringLike):
         span = TextSpan(self, text)
@@ -92,9 +111,6 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
 
     def __init__(self):
         super().__init__()
-        self._init_position()
-        self._init_text_style()
-        self._init_z()
         self.color("black")
         self.sh_language = None
         self.sh_theme = None

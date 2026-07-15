@@ -6,7 +6,7 @@ from .types import ColorLike, FloatLike
 from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .info import get_info
-from .aobject import AnimatedObject, get_frame
+from .aobject import INHERITED_VALUE, AnimatedObject, get_frame
 from .avalue import AnimatedValue
 from .color import Color
 from .exprs import (
@@ -196,13 +196,13 @@ class Node(AnimatedObject):
 
 @beartype
 class AlphaMixin:
-    """Mixin that adds animatable opacity (`alpha`) to a node."""
+    """Mixin that adds animatable opacity (`alpha`) to a node. Own (literal)
+    default of 1 — used standalone (Group/Image/Layer) and as the base of
+    `StyleMixin`. `InheritedStyleMixin` (listed before `AlphaMixin` in its
+    own bases, so its `_ATTR_DEFAULTS` entry is found first) overrides
+    `alpha` to be inherited instead (text runs)."""
 
-    def _init_alpha(self):
-        self._add_default_attr("alpha", 1)
-
-    def _init_alpha_from_parent(self):
-        self._add_from_parent("alpha")
+    _ATTR_DEFAULTS = {"alpha": 1}
 
     def alpha(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the opacity of this node and all its children.
@@ -255,10 +255,10 @@ class AlphaMixin:
 
 @beartype
 class ZLevelMixin:
-    """Mixin that adds a `z_level` attribute for controlling rendering order."""
+    """Mixin that adds a `z_level` attribute for controlling rendering order.
+    Always inherited-from-parent when unset — there is no "own" variant."""
 
-    def _init_z(self):
-        self._add_from_parent("z_level", 0)
+    _ATTR_DEFAULTS = {"z_level": INHERITED_VALUE}
 
     def z_level(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the z-level (rendering order) of the node.
@@ -278,17 +278,16 @@ class ZLevelMixin:
 
 @beartype
 class SizeMixin:
-    """Mixin that adds animatable `width` and `height` attributes to a node."""
+    """Mixin that adds animatable `width` and `height` attributes to a node.
+    Defaults to the layout-computed size when unset — for shape kinds with no
+    layout concept of their own (rect/ellipse) the engine's fallback already
+    resolves this to 0 either way (`layout.rs::default_width/height`'s
+    catch-all), so there's no need for those kinds to special-case it."""
 
-    def _init_size(self, width=None, height=None):
-        if width is None:
-            self._add_default_attr("width", Call.default_width(self))
-        else:
-            self._add_attr("width", width)
-        if height is None:
-            self._add_default_attr("height", Call.default_height(self))
-        else:
-            self._add_attr("height", height)
+    _ATTR_DEFAULTS = {
+        "width": Call.default_width,
+        "height": Call.default_height,
+    }
 
     def width(self, value: FloatLike, tr: Transition = None) -> Self:
         """Set the width of the node in pixels.
@@ -382,17 +381,17 @@ class SizeMixin:
 
 @beartype
 class PositionMixin:
-    """Mixin that adds animatable `x` / `y` position and alignment helpers to a node."""
+    """Mixin that adds animatable `x` / `y` position and alignment helpers to
+    a node. Defaults to the layout-computed position when unset. Path
+    commands (move/line/cubic) also mix this in for their `.x()`/`.y()`/
+    `.xy()` setters, but their coordinates are always required constructor
+    arguments — `Path.move_to`/`line_to`/`cubic_to` seed them directly via
+    `_add_attr`, so this lazy default never actually gets consulted there."""
 
-    def _init_position(self, x=None, y=None):
-        if x is None:
-            self._add_default_attr("x", Call.default_x(self))
-        else:
-            self._add_attr("x", x)
-        if y is None:
-            self._add_default_attr("y", Call.default_y(self))
-        else:
-            self._add_attr("y", y)
+    _ATTR_DEFAULTS = {
+        "x": Call.default_x,
+        "y": Call.default_y,
+    }
 
     def x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of the node.
@@ -594,7 +593,11 @@ class PositionMixin:
         av = AnimatedValue(start)
         x = Call.path_x(path, av)
         y = Call.path_y(path, av)
-        if self._has_attr("width"):
+        # `isinstance` here, not `_has_attr("width")`: under lazy attributes,
+        # a freshly-created sizeable node has no "width" entry yet either —
+        # the question is whether this *kind* has a size concept at all
+        # (used to center it on the path), not whether it's been touched.
+        if isinstance(self, SizeMixin):
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
             self.xy(x, y)
@@ -603,20 +606,10 @@ class PositionMixin:
 
 
 @beartype
-class StyleMixin(AlphaMixin):
-    """Mixin that adds fill color, stroke color, stroke width, and alpha to a node."""
-
-    def _init_style(self):
-        self._add_default_attr("fill_color", "")
-        self._add_default_attr("stroke_color", "")
-        self._add_default_attr("stroke_width", 1)
-        self._init_alpha()
-
-    def _init_style_from_parent(self):
-        self._add_from_parent("fill_color")
-        self._add_from_parent("stroke_color")
-        self._add_from_parent("stroke_width")
-        self._init_alpha_from_parent()
+class StyleMethods:
+    """Public fill/stroke setters, shared by `StyleMixin` (own defaults) and
+    `InheritedStyleMixin` (inherited defaults) — the methods themselves don't
+    care which default strategy backs the attribute."""
 
     def color(self, value: ColorLike, tr: Transition = None) -> Self:
         """Set the fill color of the node.
@@ -658,6 +651,38 @@ class StyleMixin(AlphaMixin):
         """
         self._set_attr("stroke_width", value, tr)
         return self
+
+
+@beartype
+class StyleMixin(AlphaMixin, StyleMethods):
+    """Mixin that adds fill color, stroke color, stroke width, and alpha to a
+    node, with literal (own) defaults — used by shapes (rect/ellipse/path)
+    and the top-level `Text` block. See `InheritedStyleMixin` for the
+    cascading variant used by text runs."""
+
+    _ATTR_DEFAULTS = {
+        "fill_color": "",
+        "stroke_color": "",
+        "stroke_width": 1,
+    }
+
+
+@beartype
+class InheritedStyleMixin(AlphaMixin, StyleMethods):
+    """Like `StyleMixin`, but fill/stroke/stroke_width/alpha default to the
+    parent's resolved value when unset instead of a literal constant — used
+    by text runs (`t_group`/`t_span`), which cascade style from their
+    ambient `Text`/`TextGroup` ancestor. `alpha` is overridden here (listed
+    before `AlphaMixin` in the bases, so this entry is found first) since it
+    cascades the same way as the rest of the style here, unlike everywhere
+    else it's used."""
+
+    _ATTR_DEFAULTS = {
+        "fill_color": INHERITED_VALUE,
+        "stroke_color": INHERITED_VALUE,
+        "stroke_width": INHERITED_VALUE,
+        "alpha": INHERITED_VALUE,
+    }
 
 
 @beartype
@@ -743,12 +768,13 @@ class ContextManagerMixin:
 class RotAndScaleMixin:
     """Mixin that adds rotation, pivot point, and x/y scale attributes to a node."""
 
-    def _init_rot_and_scale(self):
-        self._add_default_attr("rotation", 0)
-        self._add_default_attr("pivot_x", 0.5)
-        self._add_default_attr("pivot_y", 0.5)
-        self._add_default_attr("scale_x", 1)
-        self._add_default_attr("scale_y", 1)
+    _ATTR_DEFAULTS = {
+        "rotation": 0,
+        "pivot_x": 0.5,
+        "pivot_y": 0.5,
+        "scale_x": 1,
+        "scale_y": 1,
+    }
 
     def scale_x(self, value: FloatLike, tr: Transition = None) -> Self:
         """Scale the node along the x axis.
@@ -829,19 +855,16 @@ class Group(
 
     kind = "group"
 
+    _ATTR_DEFAULTS = {
+        "clip_x": 0,
+        "clip_y": 0,
+        "clip_w": 1,
+        "clip_h": 1,
+    }
+
     def __init__(self):
         super().__init__()
         self._init_context_manager()
-        self._init_size()
-        self._init_alpha()
-        self._init_z()
-        self._init_rot_and_scale()
-        self._add_default_attr("clip_x", 0)
-        self._add_default_attr("clip_y", 0)
-        self._add_default_attr("clip_w", 1)
-        self._add_default_attr("clip_h", 1)
-
-        self._init_position()
         self._layout = CENTERING_LAYOUT
 
     def column(
@@ -1093,6 +1116,11 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 
     kind = "scene"
 
+    # Scene has no z-ordering of its own — this exists purely to terminate
+    # every top-level node's inherited z_level walk (`ZLevelMixin`) at a real
+    # value instead of the parent chain running out with nothing declared.
+    _ATTR_DEFAULTS = {"z_level": 0}
+
     def __init__(
         self,
         width: SupportsFloat | None = None,
@@ -1111,7 +1139,8 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
             color = DEFAULT_SCENE_CONFIG["color"]
         if cue_at_start is None:
             cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
-        self._init_size(width, height)
+        self._add_attr("width", width)
+        self._add_attr("height", height)
         self._add_attr("fill_color", color)
         self._id_counter = 0
         self._id = 0
@@ -1147,12 +1176,6 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         return self._id_counter
 
     def serialize(self, serializer):
-        # The scene is not an addressable node in the v2 format (no `kind`/id
-        # — api-v2-impl.md §A.1), so this bypasses the generic
-        # `Node`/`NodeWithChildren` serialize pipeline entirely rather than
-        # going through it and overriding the result: width/height/background
-        # are scene-level fields with their own (unrenamed, always-present)
-        # wire keys, not sparse node attributes.
         from .serializer import serialize_expr
 
         result = {
@@ -1180,16 +1203,13 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
 
 @beartype
 class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
-    """A rectangle shape node with animatable position, size, fill, and stroke."""
+    """A rectangle shape node with animatable position, size, fill, and stroke.
+
+    Position/size/style/z all come from their mixins' lazy defaults — an
+    unsized rect resolves to (0, 0) via `layout.rs`'s default-size catch-all
+    for shape kinds, same as the old eager `width(0).height(0)` seed."""
 
     kind = "rect"
-
-    def __init__(self):
-        super().__init__()
-        self._init_size(0, 0)
-        self._init_style()
-        self._init_z()
-        self._init_position()
 
 
 @beartype
@@ -1197,13 +1217,6 @@ class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
     """An ellipse shape node with animatable position, size, fill, and stroke."""
 
     kind = "ellipse"
-
-    def __init__(self):
-        super().__init__()
-        self._init_size(0, 0)
-        self._init_style()
-        self._init_z()
-        self._init_position()
 
 
 @beartype
@@ -1217,12 +1230,10 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
 
     kind = "path"
 
-    def __init__(self):
-        super().__init__()
-        self._init_style()
-        self._init_z()
-        self._add_default_attr("crop_start", 0.0)
-        self._add_default_attr("crop_end", 1.0)
+    _ATTR_DEFAULTS = {
+        "crop_start": 0.0,
+        "crop_end": 1.0,
+    }
 
     def _prev_coords(self):
         if self._children:
@@ -1405,7 +1416,10 @@ class PathMove(Node, PositionMixin):
 
     def __init__(self, parent, x, y):
         super().__init__(put_in_context=False, parent=parent)
-        self._init_position(x, y)
+        # x/y are always required here (never "auto") — set directly rather
+        # than through PositionMixin's lazy default.
+        self._add_attr("x", x)
+        self._add_attr("y", y)
 
 
 class PathLine(Node, PositionMixin):
@@ -1415,7 +1429,8 @@ class PathLine(Node, PositionMixin):
 
     def __init__(self, parent, x, y):
         super().__init__(put_in_context=False, parent=parent)
-        self._init_position(x, y)
+        self._add_attr("x", x)
+        self._add_attr("y", y)
 
 
 class PathClose(Node):
@@ -1433,13 +1448,12 @@ class PathCubic(Node, PositionMixin):
 
     kind = "cubic"
 
+    _ATTR_DEFAULTS = {"c1_x": 0, "c1_y": 0, "c2_x": 0, "c2_y": 0}
+
     def __init__(self, parent, x, y):
         super().__init__(put_in_context=False, parent=parent)
-        self._init_position(x, y)
-        self._add_default_attr("c1_x", 0)
-        self._add_default_attr("c1_y", 0)
-        self._add_default_attr("c2_x", 0)
-        self._add_default_attr("c2_y", 0)
+        self._add_attr("x", x)
+        self._add_attr("y", y)
 
     def c1_x(self, px: FloatLike, tr: Transition = None) -> Self:
         """Set the x coordinate of control point 1, relative to the segment's start point.
@@ -1524,13 +1538,12 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 
     def __init__(self, image_path: str | os.PathLike, keep_aspect: bool = True):
         super().__init__()
-        self._init_size()
-        self._init_z()
-        self._init_position()
-        self._init_alpha()
         self._add_attr("path", None)
         self.file_name(image_path)
-        self._add_default_attr("keep_aspect", keep_aspect)
+        # No setter exists for keep_aspect (it's constructor-only), so it must
+        # always be explicit — there's nothing that would ever clear an
+        # `is_default` marking on it, unlike every lazy-defaulted attribute.
+        self._add_attr("keep_aspect", keep_aspect)
 
     def layer(self, name: str) -> "ImageLayer":
         """Get or create a named layer from the image.
@@ -1583,10 +1596,6 @@ class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaM
     def __init__(self, parent: Image, layer_name: str):
         super().__init__(put_in_context=False, parent=parent)
         self.layer_name = layer_name
-        self._init_size()
-        self._init_z()
-        self._init_position()
-        self._init_alpha()
 
     def serialize(self, serializer):
         result = super().serialize(serializer)

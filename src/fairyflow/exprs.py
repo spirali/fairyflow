@@ -13,10 +13,6 @@ class Expr:
 
 
 class Call(Expr):
-    """An `["op", arg, ...]` s-expr call. `op` is the wire-format op name
-    (renamed from v1's `{"fn": ...}` object shape — see api-v2-impl.md §A.4);
-    `args` are positional, matching the Rust-side arity table exactly."""
-
     def __init__(self, op, *args):
         self.op = op
         self.args = args
@@ -24,7 +20,9 @@ class Call(Expr):
     def serialize_expr(self):
         from .serializer import serialize_expr
 
-        return [self.op] + [serialize_expr(a) for a in self.args]
+        args = [serialize_expr(a) for a in self.args]
+        args.insert(0, self.op)
+        return args
 
     @staticmethod
     def add(a, b):
@@ -84,23 +82,6 @@ class Const(Expr):
 
     def serialize_expr(self):
         return self.value
-
-
-class Inherited(Expr):
-    """Marks a not-yet-set inherited attribute. No longer has its own wire
-    shape — absence *is* the inherited signal now (`api-v2-impl.md` §A.4) — so
-    this only exists as an internal placeholder; `Node.serialize` (nodes.py)
-    omits attributes still marked default before `serialize_expr` ever sees
-    them. Kept as a transparent passthrough purely as a defensive fallback in
-    case one is ever embedded cross-node."""
-
-    def __init__(self, expr):
-        self.expr = expr
-
-    def serialize_expr(self):
-        from .serializer import serialize_expr
-
-        return serialize_expr(self.expr)
 
 
 def to_expr(obj):

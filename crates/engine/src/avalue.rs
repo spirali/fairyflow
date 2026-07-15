@@ -1,70 +1,100 @@
 use crate::basictypes::FrameId;
 use crate::eval::EvalCtx;
-use crate::nodes::Transition;
 use crate::values::{Eval, Expr, Value};
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
-#[derive(Debug, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
+/// Rename of v1's `"S"`/`"L"` — only `Linear` is accepted for now (the fuller
+/// easing-preset/sampled-curve grammar is a later step, not part of this rewrite).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Transition {
+    Step,
+    Linear,
+}
+
+#[derive(Debug)]
 pub struct KeyFrame<T: Value + DeserializeOwned> {
     pub value: Expr<T>,
     pub tr: Transition,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub struct AnimatedValue<T: Value + DeserializeOwned> {
-    #[serde(deserialize_with = "deserialize_keyframes")]
-    values: BTreeMap<FrameId, FrameValue<T>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
+#[derive(Debug)]
 pub enum FrameValue<T: Value + DeserializeOwned> {
     KeyFrame(KeyFrame<T>),
     Hold,
 }
 
-fn deserialize_keyframes<'de, D, T: Value + DeserializeOwned>(
-    d: D,
-) -> Result<BTreeMap<FrameId, FrameValue<T>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
+#[derive(Debug)]
+pub struct AnimatedValue<T: Value + DeserializeOwned> {
+    values: BTreeMap<FrameId, FrameValue<T>>,
+}
 
-    #[derive(Deserialize)]
-    #[serde(bound(deserialize = "T: DeserializeOwned"))]
-    struct RawKeyFrame<T: Value + DeserializeOwned> {
-        frame: FrameId,
-        #[serde(default)]
-        value: Option<Expr<T>>,
-        #[serde(default)]
-        tr: Option<Transition>,
-        #[serde(default)]
-        op: Option<String>,
+impl<T: Value + DeserializeOwned> AnimatedValue<T> {
+    pub(crate) fn from_map(values: BTreeMap<FrameId, FrameValue<T>>) -> Self {
+        AnimatedValue { values }
     }
+}
 
-    let raw: Vec<RawKeyFrame<T>> = Vec::deserialize(d)?;
-    raw.into_iter()
-        .map(|kf| {
-            let fv = if kf.op.as_deref() == Some("hold") {
-                FrameValue::Hold
-            } else {
-                let expr = kf
-                    .value
-                    .ok_or_else(|| D::Error::custom("keyframe missing `value`"))?;
-                let tr = kf
-                    .tr
-                    .ok_or_else(|| D::Error::custom("keyframe missing `tr`"))?;
-                FrameValue::KeyFrame(KeyFrame { value: expr, tr })
-            };
-            Ok((kf.frame, fv))
-        })
-        .collect::<Result<BTreeMap<_, _>, D::Error>>()
+/// One entry of the `"k"` array: `[frame]` (hold), `[frame, value]` (step), or
+/// `[frame, value, ease]` (interpolate). Replaces v1's `RawKeyFrame` all-`Option`
+/// workaround (needed there because a keyframe could be either a `{frame,value,tr}`
+/// or `{frame,op:"hold"}` object) — tuple length now disambiguates directly.
+pub(crate) struct KeyframeTuple<T: Value + DeserializeOwned> {
+    pub frame: FrameId,
+    pub value: FrameValue<T>,
+}
+
+impl<'de, T: Value + DeserializeOwned> Deserialize<'de> for KeyframeTuple<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct TupleVisitor<T>(PhantomData<T>);
+
+        impl<'de, T: Value + DeserializeOwned> de::Visitor<'de> for TupleVisitor<T> {
+            type Value = KeyframeTuple<T>;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(
+                    f,
+                    "a [frame], [frame, value], or [frame, value, ease] keyframe tuple"
+                )
+            }
+
+            fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let frame: FrameId = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let Some(value) = seq.next_element::<Expr<T>>()? else {
+                    return Ok(KeyframeTuple {
+                        frame,
+                        value: FrameValue::Hold,
+                    });
+                };
+                let ease: Option<String> = seq.next_element()?;
+                let tr = match ease.as_deref() {
+                    None => Transition::Step,
+                    Some("linear") => Transition::Linear,
+                    Some(other) => {
+                        return Err(de::Error::custom(format!(
+                            "unsupported ease `{}` (only \"linear\" is supported)",
+                            other
+                        )));
+                    }
+                };
+                if seq.next_element::<de::IgnoredAny>()?.is_some() {
+                    return Err(de::Error::custom("keyframe tuple has too many elements"));
+                }
+                Ok(KeyframeTuple {
+                    frame,
+                    value: FrameValue::KeyFrame(KeyFrame { value, tr }),
+                })
+            }
+        }
+
+        d.deserialize_seq(TupleVisitor(PhantomData))
+    }
 }
 
 impl AnimatedValue<Arc<String>> {

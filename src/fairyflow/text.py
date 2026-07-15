@@ -20,10 +20,10 @@ from .nodes import (
 class TextStyleMixin(StyleMixin):
     def _init_text_style(self):
         self._init_style()
-        self._add_attr("font", "sans-serif")
-        self._add_attr("font_size", 16)
-        self._add_attr("font_weight", 400)
-        self._add_attr("italic", False)
+        self._add_default_attr("font", "sans-serif")
+        self._add_default_attr("font_size", 16)
+        self._add_default_attr("font_weight", 400)
+        self._add_default_attr("italic", False)
 
     def _init_text_style_from_parent(self):
         self._init_style_from_parent()

@@ -31,7 +31,6 @@ pub(crate) struct NodeId(u32);
 
 impl NodeId {
     #[inline]
-    #[cfg(test)]
     pub fn new(id: u32) -> Self {
         NodeId(id)
     }

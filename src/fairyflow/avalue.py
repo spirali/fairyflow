@@ -16,13 +16,22 @@ T = TypeVar("T")
 
 @beartype
 class AnimatedValue(Generic[T], Expr):
-    def __init__(self, init_val: T, init_frame=None):
+    def __init__(self, init_val: T, init_frame=None, is_default: bool = False):
         if init_frame is None:
             init_frame = get_frame()
         self.init_frame = init_frame
         self.values = {init_frame: init_val}
         self.transitions = {}
         self.single_value = True
+        # Marks an eagerly-seeded attribute that was never explicitly set by
+        # the user — `Node.serialize` (nodes.py) omits these from the v2 wire
+        # format entirely (absence = auto-layout default / inherited-from-
+        # parent / literal engine default, api-v2-impl.md §A.4). Cleared
+        # unconditionally by `.set()`, the single choke point every real
+        # mutation goes through — this correctly distinguishes "still at its
+        # construction-time default" from "explicitly set, even at the same
+        # frame" (`single_value` alone can't tell those apart).
+        self.is_default = is_default
 
     def set(
         self,
@@ -30,6 +39,7 @@ class AnimatedValue(Generic[T], Expr):
         *,
         tr: Transition = None,
     ):
+        self.is_default = False
         frame = get_frame()
         if tr is not None:
             new_frame = wait(tr)
@@ -66,11 +76,11 @@ class AnimatedValue(Generic[T], Expr):
         return self.values[self.init_frame]
 
     def serialize(self):
-        values = [
-            serialize_frame_value(f, self.values[f], self.transitions)
-            for f in self.values
+        frames = sorted(self.values)
+        tuples = [
+            serialize_frame_value(f, self.values[f], self.transitions) for f in frames
         ]
-        return {"values": values}
+        return {"k": tuples}
 
     def serialize_expr(self):
         if self.is_single_value():
@@ -88,10 +98,8 @@ def serialize_frame_value(frame, obj, transitions):
     from .serializer import serialize_expr
 
     if obj == HOLD:
-        return {"frame": frame, "op": "hold"}
-    else:
-        return {
-            "frame": frame,
-            "value": serialize_expr(obj),
-            "tr": transitions.get(frame, "S"),
-        }
+        return [frame]
+    tr = transitions.get(frame, "S")
+    if tr == "S":
+        return [frame, serialize_expr(obj)]
+    return [frame, serialize_expr(obj), "linear"]

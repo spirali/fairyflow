@@ -44,28 +44,40 @@ impl Node {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        p.x.eval(ctx)
+        match p.x.get_expr() {
+            Some(e) => e.eval(ctx),
+            None => self.default_x(ctx),
+        }
     }
 
     pub fn get_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        p.y.eval(ctx)
+        match p.y.get_expr() {
+            Some(e) => e.eval(ctx),
+            None => self.default_y(ctx),
+        }
     }
 
     pub fn get_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.default_width(ctx);
         };
-        s.width.eval(ctx)
+        match s.width.get_expr() {
+            Some(e) => e.eval(ctx),
+            None => self.default_width(ctx),
+        }
     }
 
     pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.default_height(ctx);
         };
-        s.height.eval(ctx)
+        match s.height.get_expr() {
+            Some(e) => e.eval(ctx),
+            None => self.default_height(ctx),
+        }
     }
 
     /// Returns the position of the AABB's top-left corner relative to the node's
@@ -74,7 +86,6 @@ impl Node {
     pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<RcPosition> {
         match &self.kind {
             NodeKind::Group {
-                size,
                 scale_x,
                 scale_y,
                 rotation,
@@ -82,13 +93,13 @@ impl Node {
                 pivot_y,
                 ..
             } => {
-                let w = size.width.eval(ctx)?;
-                let h = size.height.eval(ctx)?;
-                let sx = scale_x.eval(ctx)?;
-                let sy = scale_y.eval(ctx)?;
-                let r = rotation.eval(ctx)?.to_radians();
-                let pvx = pivot_x.eval(ctx)? * w;
-                let pvy = pivot_y.eval(ctx)? * h;
+                let w = self.get_width(ctx)?;
+                let h = self.get_height(ctx)?;
+                let sx = scale_x.eval_or(ctx, 1.0)?;
+                let sy = scale_y.eval_or(ctx, 1.0)?;
+                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+                let pvx = pivot_x.eval_or(ctx, 0.5)? * w;
+                let pvy = pivot_y.eval_or(ctx, 0.5)? * h;
 
                 // final_x = pvx + cx*(lx−pvx) + dx*(ly−pvy)  where cx=cos r·sx, dx=−sin r·sy
                 // min over lx ∈ {0,w}: if cx≥0 → cx*(0−pvx) = −cx*pvx, else cx*(w−pvx)
@@ -120,9 +131,9 @@ impl Node {
                 rotation,
                 ..
             } => {
-                let sx = scale_x.eval(ctx)?;
-                let sy = scale_y.eval(ctx)?;
-                let r = rotation.eval(ctx)?.to_radians();
+                let sx = scale_x.eval_or(ctx, 1.0)?;
+                let sy = scale_y.eval_or(ctx, 1.0)?;
+                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
                 let height = self.get_height(ctx)?;
                 r.cos().abs() * sx * width + r.sin().abs() * sy * height
             }
@@ -139,9 +150,9 @@ impl Node {
                 rotation,
                 ..
             } => {
-                let sx = scale_x.eval(ctx)?;
-                let sy = scale_y.eval(ctx)?;
-                let r = rotation.eval(ctx)?.to_radians();
+                let sx = scale_x.eval_or(ctx, 1.0)?;
+                let sy = scale_y.eval_or(ctx, 1.0)?;
+                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
                 let width = self.get_width(ctx)?;
                 r.sin().abs() * sx * width + r.cos().abs() * sy * height
             }
@@ -292,7 +303,7 @@ impl Node {
                 let NodeKind::Image { path, .. } = &parent.kind else {
                     return Ok(0.0);
                 };
-                let path_val = path.eval(ctx)?;
+                let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((nw, _nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
@@ -337,16 +348,20 @@ impl Node {
                 renderer_core::measure_text(&[child]).0 as f64
             }
             NodeKind::Image { path, size, .. } => {
-                let path_val = path.eval(ctx)?;
+                let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
-                if size.height.get_expr().is_default_height_of(self.id) {
+                if size
+                    .height
+                    .get_expr()
+                    .is_none_or(|e| e.is_default_height_of(self.id))
+                {
                     // Both dimensions are defaults → return natural width.
                     nw as f64
                 } else {
                     // Height is explicit → scale width to preserve aspect ratio.
-                    let h = size.height.eval(ctx)?;
+                    let h = size.height.get_expr().unwrap().eval(ctx)?;
                     if nh == 0.0 {
                         0.0
                     } else {
@@ -369,7 +384,7 @@ impl Node {
                 let NodeKind::Image { path, .. } = &parent.kind else {
                     return Ok(0.0);
                 };
-                let path_val = path.eval(ctx)?;
+                let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((_nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
@@ -414,16 +429,20 @@ impl Node {
                 renderer_core::measure_text(&[child]).1 as f64
             }
             NodeKind::Image { path, size, .. } => {
-                let path_val = path.eval(ctx)?;
+                let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
-                if size.width.get_expr().is_default_width_of(self.id) {
+                if size
+                    .width
+                    .get_expr()
+                    .is_none_or(|e| e.is_default_width_of(self.id))
+                {
                     // Both dimensions are defaults → return natural height.
                     nh as f64
                 } else {
                     // Width is explicit → scale height to preserve aspect ratio.
-                    let w = size.width.eval(ctx)?;
+                    let w = size.width.get_expr().unwrap().eval(ctx)?;
                     if nw == 0.0 {
                         0.0
                     } else {

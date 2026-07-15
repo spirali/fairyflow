@@ -6,6 +6,7 @@ from .types import ColorLike, FloatLike
 from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .info import get_info
+from .animtime import Duration, Easing
 from .aobject import INHERITED_VALUE, AnimatedObject, get_frame
 from .avalue import AnimatedValue
 from .color import Color
@@ -16,7 +17,6 @@ from .exprs import (
 from .ctxvars import (
     Par,
     Seq,
-    Transition,
     end_frame,
     get_current_node,
     ROOT_OBJECTS,
@@ -204,52 +204,57 @@ class AlphaMixin:
 
     _ATTR_DEFAULTS = {"alpha": 1}
 
-    def alpha(self, value: FloatLike, tr: Transition = None) -> Self:
+    def alpha(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the opacity of this node and all its children.
 
         Args:
             value: Opacity in the range ``[0.0, 1.0]``, where ``0.0`` is fully
                 transparent and ``1.0`` is fully opaque.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("alpha", value, tr)
+        self._set_attr("alpha", value, dur, ease)
         return self
 
-    def fade_in(self, tr: Transition = 1) -> Self:
+    def fade_in(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate a fade-in effect by transitioning alpha from 0 to 1.
 
         Sets the node alpha to ``0`` at the current frame and animates it to
         ``1`` over the given duration.
 
         Args:
-            time: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Seq():
             self.alpha(0)
-            self.alpha(1, tr)
+            self.alpha(1, dur=dur, ease=ease)
         return self
 
-    def fade_out(self, tr: Transition = 1) -> Self:
+    def fade_out(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate a fade-out effect by transitioning alpha to 0.
 
         Animates the node alpha from ``1`` down to ``0`` over the
         given duration.
 
         Args:
-            time: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Seq():
             self.alpha(1)
-            self.alpha(0, tr)
+            self.alpha(0, dur=dur, ease=ease)
         return self
 
 
@@ -260,19 +265,22 @@ class ZLevelMixin:
 
     _ATTR_DEFAULTS = {"z_level": INHERITED_VALUE}
 
-    def z_level(self, value: FloatLike, tr: Transition = None) -> Self:
+    def z_level(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the z-level (rendering order) of the node.
 
         Nodes with higher z-levels are drawn on top of nodes with lower values.
 
         Args:
             value: The z-level. Higher values appear in front.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("z_level", value, tr)
+        self._set_attr("z_level", value, dur, ease)
         return self
 
 
@@ -289,93 +297,118 @@ class SizeMixin:
         "height": Call.default_height,
     }
 
-    def width(self, value: FloatLike, tr: Transition = None) -> Self:
+    def width(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the width of the node in pixels.
 
         Args:
             value: The new width in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("width", value, tr)
+        self._set_attr("width", value, dur, ease)
         return self
 
-    def height(self, value: FloatLike, tr: Transition = None) -> Self:
+    def height(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the height of the node in pixels.
 
         Args:
             value: The new height in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("height", value, tr)
+        self._set_attr("height", value, dur, ease)
         return self
 
-    def size(self, width, height: FloatLike, tr: Transition = None) -> Self:
+    def size(
+        self, width, height: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the width and height of the node in pixels.
 
         Args:
             width: The new width in pixels.
             height: The new height in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
-            self._set_attr("width", width, tr)
-            self._set_attr("height", height, tr)
+            self._set_attr("width", width, dur, ease)
+            self._set_attr("height", height, dur, ease)
         return self
 
-    def rwidth(self, value: FloatLike, tr: Transition = None) -> Self:
+    def rwidth(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the width relative to the parent's width (1.0 = full parent width).
 
         Args:
             value: Width as a fraction of the parent's width.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         parent = self.parent_group()
-        self._set_attr("width", Call.mul(parent._get_attr("width"), value), tr)
+        self._set_attr("width", Call.mul(parent._get_attr("width"), value), dur, ease)
         return self
 
-    def rheight(self, value: FloatLike, tr: Transition = None) -> Self:
+    def rheight(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the height relative to the parent's height (1.0 = full parent height).
 
         Args:
             value: Height as a fraction of the parent's height.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         parent = self.parent_group()
-        self._set_attr("height", Call.mul(parent._get_attr("height"), value), tr)
+        self._set_attr("height", Call.mul(parent._get_attr("height"), value), dur, ease)
         return self
 
     def rsize(
-        self, width: FloatLike = 1.0, height: FloatLike = 1.0, tr: Transition = None
+        self,
+        width: FloatLike = 1.0,
+        height: FloatLike = 1.0,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
         """Set width and height relative to the parent's dimensions (1.0 = full extent).
 
         Args:
             width: Width as a fraction of the parent's width.
             height: Height as a fraction of the parent's height.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         parent = self.parent_group()
         with Par():
-            self._set_attr("width", Call.mul(parent._get_attr("width"), width), tr)
-            self._set_attr("height", Call.mul(parent._get_attr("height"), height), tr)
+            self._set_attr(
+                "width", Call.mul(parent._get_attr("width"), width), dur, ease
+            )
+            self._set_attr(
+                "height", Call.mul(parent._get_attr("height"), height), dur, ease
+            )
         return self
 
 
@@ -393,93 +426,104 @@ class PositionMixin:
         "y": Call.default_y,
     }
 
-    def x(self, px: FloatLike, tr: Transition = None) -> Self:
+    def x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the x coordinate of the node.
 
         Args:
             px: The x position in pixels, relative to the parent node's origin.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("x", px, tr)
+        self._set_attr("x", px, dur, ease)
         return self
 
-    def y(self, px: FloatLike, tr: Transition = None) -> Self:
+    def y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the y coordinate of the node.
 
         Args:
             px: The y position in pixels, relative to the parent node's origin.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("y", px, tr)
+        self._set_attr("y", px, dur, ease)
         return self
 
-    def x_reset(self, tr: Transition = None) -> Self:
+    def x_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Reset the x coordinate to the layout default.
 
         Args:
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("x", Call.default_x(self), tr)
+        self._set_attr("x", Call.default_x(self), dur, ease)
         return self
 
-    def y_reset(self, tr: Transition = None) -> Self:
+    def y_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Reset the y coordinate to the layout default.
 
         Args:
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("y", Call.default_y(self), tr)
+        self._set_attr("y", Call.default_y(self), dur, ease)
         return self
 
-    def xy_reset(self, tr: Transition = None) -> Self:
+    def xy_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Reset both x and y coordinates to the layout default.
 
         Args:
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
-            self.x_reset(tr)
-            self.y_reset(tr)
+            self.x_reset(dur=dur, ease=ease)
+            self.y_reset(dur=dur, ease=ease)
         return self
 
-    def xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
+    def xy(
+        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set both x and y coordinates of the node.
 
         Args:
             x: The x position in pixels, relative to the parent node's origin.
             y: The y position in pixels, relative to the parent node's origin.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
-            self._set_attr("x", x, tr)
-            self._set_attr("y", y, tr)
+            self._set_attr("x", x, dur, ease)
+            self._set_attr("y", y, dur, ease)
         return self
 
-    def align_x(self, value: FloatLike, tr: Transition = None) -> Self:
+    def align_x(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Horizontally align the node within its parent.
 
         Args:
             value: Alignment factor. ``0.0`` aligns to the left edge, ``0.5``
                 to the center, and ``1.0`` to the right edge.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
@@ -491,16 +535,19 @@ class PositionMixin:
             )
         else:
             new_value = Call.mul(parent._get_attr("width"), value)
-        self._set_attr("x", new_value, tr)
+        self._set_attr("x", new_value, dur, ease)
         return self
 
-    def align_y(self, value: FloatLike, tr: Transition = None) -> Self:
+    def align_y(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Vertically align the node within its parent.
 
         Args:
             value: Alignment factor. ``0.0`` aligns to the top edge, ``0.5``
                 to the center, and ``1.0`` to the bottom edge.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
@@ -512,39 +559,45 @@ class PositionMixin:
             )
         else:
             new_value = Call.mul(parent._get_attr("height"), value)
-        self._set_attr("y", new_value, tr)
+        self._set_attr("y", new_value, dur, ease)
         return self
 
-    def pos(self, position: Position, tr: Transition = None) -> Self:
+    def pos(
+        self, position: Position, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the position of the node using a `Position` object.
 
         Args:
             position: The target position, resolved relative to the parent node.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
             position = position.into_node(self._parent)
-            self._set_attr("x", position.x, tr)
-            self._set_attr("y", position.y, tr)
+            self._set_attr("x", position.x, dur, ease)
+            self._set_attr("y", position.y, dur, ease)
         return self
 
-    def move(self, dx: FloatLike, dy: FloatLike, tr: Transition = None) -> Self:
+    def move(
+        self, dx: FloatLike, dy: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Shift the node's position by a relative offset.
 
         Args:
             dx: Horizontal offset in pixels.
             dy: Vertical offset in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
-            self._move_attr("x", dx, tr)
-            self._move_attr("y", dy, tr)
+            self._move_attr("x", dx, dur, ease)
+            self._move_attr("y", dy, dur, ease)
         return self
 
     def get_pos(self, align_x=0, align_y=0) -> Position:
@@ -572,7 +625,8 @@ class PositionMixin:
         self,
         path: "Path",
         *,
-        tr: Transition = 1,
+        dur: Duration = 1,
+        ease: Easing = None,
         start: FloatLike = 0,
         end: FloatLike = 1,
     ) -> Self:
@@ -580,7 +634,8 @@ class PositionMixin:
 
         Args:
             path: The `Path` to follow.
-            tr: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds.
+            ease: Optional easing curve (``"linear"`` default).
             start: Path parameter at the start of the animation (0 = path start, 1 = path end).
             end: Path parameter at the end of the animation.
 
@@ -601,7 +656,7 @@ class PositionMixin:
             x = x - Call.mul(self._get_attr("width"), 0.5)
             y = y - Call.mul(self._get_attr("height"), 0.5)
             self.xy(x, y)
-        av.set(end, tr=tr)
+        av.set(end, dur=dur, ease=ease)
         return self
 
 
@@ -611,45 +666,54 @@ class StyleMethods:
     `InheritedStyleMixin` (inherited defaults) — the methods themselves don't
     care which default strategy backs the attribute."""
 
-    def color(self, value: ColorLike, tr: Transition = None) -> Self:
+    def color(
+        self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the fill color of the node.
 
         Args:
             value: Any color value accepted by `Color.parse` (e.g. a hex
                 string, an RGB tuple, or a `Color` instance).
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("fill_color", Color.parse(value), tr)
+        self._set_attr("fill_color", Color.parse(value), dur, ease)
         return self
 
-    def stroke_color(self, value: ColorLike, tr: Transition = None) -> Self:
+    def stroke_color(
+        self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the stroke (outline) color of the node.
 
         Args:
             value: Any color value accepted by `Color.parse` (e.g. a hex
                 string, an RGB tuple, or a `Color` instance).
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("stroke_color", Color.parse(value), tr)
+        self._set_attr("stroke_color", Color.parse(value), dur, ease)
         return self
 
-    def stroke_width(self, value: FloatLike, tr: Transition = None):
+    def stroke_width(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ):
         """Set the stroke width of the node in pixels.
 
         Args:
             value: The stroke width in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("stroke_width", value, tr)
+        self._set_attr("stroke_width", value, dur, ease)
         return self
 
 
@@ -776,51 +840,62 @@ class RotAndScaleMixin:
         "scale_y": 1,
     }
 
-    def scale_x(self, value: FloatLike, tr: Transition = None) -> Self:
+    def scale_x(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Scale the node along the x axis.
 
         Args:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the width.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("scale_x", value, tr)
+        self._set_attr("scale_x", value, dur, ease)
         return self
 
-    def scale_y(self, value: FloatLike, tr: Transition = None) -> Self:
+    def scale_y(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Scale the node along the y axis.
 
         Args:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the height.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("scale_y", value, tr)
+        self._set_attr("scale_y", value, dur, ease)
         return self
 
-    def scale(self, value: FloatLike, tr: Transition = None) -> Self:
+    def scale(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Scale the node uniformly along both axes.
 
         Args:
             value: Scale factor applied to both x and y. ``1.0`` is the
                 original size; ``2.0`` doubles both dimensions.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Par():
-            self._set_attr("scale_x", value, tr)
-            self._set_attr("scale_y", value, tr)
+            self._set_attr("scale_x", value, dur, ease)
+            self._set_attr("scale_y", value, dur, ease)
         return self
 
-    def rotate(self, value: FloatLike, tr: Transition = None) -> Self:
+    def rotate(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Rotate the node around its pivot point.
 
         The pivot is controlled by ``pivot_x`` / ``pivot_y`` attributes,
@@ -828,12 +903,13 @@ class RotAndScaleMixin:
 
         Args:
             value: Rotation angle in degrees, clockwise.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("rotation", value, tr)
+        self._set_attr("rotation", value, dur, ease)
         return self
 
 
@@ -922,7 +998,9 @@ class Group(
         result["layout"] = self._layout.serialize(serializer)
         return result
 
-    def clip_x(self, value: FloatLike, tr: Transition = None) -> Self:
+    def clip_x(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the x offset of the clipping window.
 
         Values are relative to the node width: ``0.0`` is the left edge and
@@ -931,15 +1009,18 @@ class Group(
 
         Args:
             value: Relative x start of the clipping window, in ``[0.0, 1.0]``.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_x", value, tr)
+        self._set_attr("clip_x", value, dur, ease)
         return self
 
-    def clip_y(self, value: FloatLike, tr: Transition = None) -> Self:
+    def clip_y(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the y offset of the clipping window.
 
         Values are relative to the node height: ``0.0`` is the top edge and
@@ -947,15 +1028,18 @@ class Group(
 
         Args:
             value: Relative y start of the clipping window, in ``[0.0, 1.0]``.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_y", value, tr)
+        self._set_attr("clip_y", value, dur, ease)
         return self
 
-    def clip_w(self, value: FloatLike, tr: Transition = None) -> Self:
+    def clip_w(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the width of the clipping window.
 
         Values are relative to the node width: ``1.0`` shows the full width
@@ -963,15 +1047,18 @@ class Group(
 
         Args:
             value: Relative width of the clipping window, in ``[0.0, 1.0]``.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_w", value, tr)
+        self._set_attr("clip_w", value, dur, ease)
         return self
 
-    def clip_h(self, value: FloatLike, tr: Transition = None) -> Self:
+    def clip_h(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the height of the clipping window.
 
         Values are relative to the node height: ``1.0`` shows the full height
@@ -979,15 +1066,16 @@ class Group(
 
         Args:
             value: Relative height of the clipping window, in ``[0.0, 1.0]``.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_h", value, tr)
+        self._set_attr("clip_h", value, dur, ease)
         return self
 
-    def hide_right(self, tr: Transition = 1) -> Self:
+    def hide_right(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate hiding the group with a wipe-right effect.
 
         Animates ``clip_x`` from its current value to ``1.0``, causing the
@@ -998,10 +1086,10 @@ class Group(
         """
         with Seq():
             self.clip_x(0)
-            self.clip_x(1, tr=tr)
+            self.clip_x(1, dur=dur, ease=ease)
         return self
 
-    def hide_left(self, tr: Transition = 1) -> Self:
+    def hide_left(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate hiding the group with a wipe-left effect.
 
         Animates ``clip_w`` from its current value to ``0.0``, causing the
@@ -1012,10 +1100,10 @@ class Group(
         """
         with Seq():
             self.clip_w(1)
-            self.clip_w(0, tr=tr)
+            self.clip_w(0, dur=dur, ease=ease)
         return self
 
-    def reveal_right(self, tr: Transition = 1) -> Self:
+    def reveal_right(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate revealing the group with a wipe-right effect.
 
         Sets ``clip_w`` to ``0.0`` at the current frame and animates it to
@@ -1026,10 +1114,10 @@ class Group(
         """
         with Seq():
             self.clip_w(0)
-            self.clip_w(1, tr=tr)
+            self.clip_w(1, dur=dur, ease=ease)
         return self
 
-    def reveal_left(self, tr: Transition = 1) -> Self:
+    def reveal_left(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate revealing the group with a wipe-left effect.
 
         Sets ``clip_x`` to ``1.0`` at the current frame and animates it to
@@ -1040,10 +1128,10 @@ class Group(
         """
         with Seq():
             self.clip_w(1)
-            self.clip_w(0, tr=tr)
+            self.clip_w(0, dur=dur, ease=ease)
         return self
 
-    def hide_down(self, tr: Transition = 1) -> Self:
+    def hide_down(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate hiding the group with a wipe-down effect.
 
         Animates ``clip_y`` from its current value to ``1.0``, causing the
@@ -1054,10 +1142,10 @@ class Group(
         """
         with Seq():
             self.clip_y(0)
-            self.clip_y(1, tr=tr)
+            self.clip_y(1, dur=dur, ease=ease)
         return self
 
-    def hide_up(self, tr: Transition = 1) -> Self:
+    def hide_up(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate hiding the group with a wipe-up effect.
 
         Animates ``clip_h`` from its current value to ``0.0``, causing the
@@ -1068,10 +1156,10 @@ class Group(
         """
         with Seq():
             self.clip_h(1)
-            self.clip_h(0, tr=tr)
+            self.clip_h(0, dur=dur, ease=ease)
         return self
 
-    def reveal_down(self, tr: Transition = 1) -> Self:
+    def reveal_down(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate revealing the group with a wipe-down effect.
 
         Sets ``clip_h`` to ``0.0`` at the current frame and animates it to
@@ -1082,10 +1170,10 @@ class Group(
         """
         with Seq():
             self.clip_h(0)
-            self.clip_h(1, tr=tr)
+            self.clip_h(1, dur=dur, ease=ease)
         return self
 
-    def reveal_up(self, tr: Transition = 1) -> Self:
+    def reveal_up(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
         """Animate revealing the group with a wipe-up effect.
 
         Sets ``clip_y`` to ``1.0`` at the current frame and animates it to
@@ -1096,7 +1184,7 @@ class Group(
         """
         with Seq():
             self.clip_y(1)
-            self.clip_y(0, tr=tr)
+            self.clip_y(0, dur=dur, ease=ease)
         return self
 
 
@@ -1157,18 +1245,21 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
         self.max_frame = end_frame()
         return super().__exit__(*args)
 
-    def color(self, value: ColorLike, tr: Transition = None) -> Self:
+    def color(
+        self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set the background color of the scene.
 
         Args:
             value: Any color value accepted by `Color.parse` (e.g. a hex
                 string, an RGB tuple, or a `Color` instance).
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("fill_color", Color.parse(value), tr)
+        self._set_attr("fill_color", Color.parse(value), dur, ease)
         return self
 
     def _new_id(self):
@@ -1242,26 +1333,32 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         else:
             return (0, 0)
 
-    def crop_start(self, value: FloatLike, tr: Transition = None) -> Self:
+    def crop_start(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Crop the path from its start.
 
         Args:
             value: Relative start offset in ``[0.0, 1.0]``. ``0.0`` keeps the
                 full path; ``1.0`` hides it entirely from the start.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("crop_start", value, tr)
+        self._set_attr("crop_start", value, dur, ease)
         return self
 
-    def crop_end(self, value: FloatLike, tr: Transition = None) -> Self:
+    def crop_end(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Crop the path from its end.
 
         Args:
             value: Relative end offset in ``[0.0, 1.0]``. ``1.0`` keeps the
                 full path; ``0.0`` hides it entirely from the end.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("crop_end", value, tr)
+        self._set_attr("crop_end", value, dur, ease)
         return self
 
     def move_to(self) -> "PathMove":
@@ -1455,74 +1552,84 @@ class PathCubic(Node, PositionMixin):
         self._add_attr("x", x)
         self._add_attr("y", y)
 
-    def c1_x(self, px: FloatLike, tr: Transition = None) -> Self:
+    def c1_x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the x coordinate of control point 1, relative to the segment's start point.
 
         Args:
             px: Relative x offset of control point 1 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("c1_x", px, tr)
+        self._set_attr("c1_x", px, dur, ease)
         return self
 
-    def c1_y(self, px: FloatLike, tr: Transition = None) -> Self:
+    def c1_y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the y coordinate of control point 1, relative to the segment's start point.
 
         Args:
             px: Relative y offset of control point 1 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("c1_y", px, tr)
+        self._set_attr("c1_y", px, dur, ease)
         return self
 
-    def c2_x(self, px: FloatLike, tr: Transition = None) -> Self:
+    def c2_x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the x coordinate of control point 2, relative to the segment's end point.
 
         Args:
             px: Relative x offset of control point 2 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("c2_x", px, tr)
+        self._set_attr("c2_x", px, dur, ease)
         return self
 
-    def c2_y(self, px: FloatLike, tr: Transition = None) -> Self:
+    def c2_y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the y coordinate of control point 2, relative to the segment's end point.
 
         Args:
             px: Relative y offset of control point 2 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("c2_y", px, tr)
+        self._set_attr("c2_y", px, dur, ease)
         return self
 
-    def c1_xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
+    def c1_xy(
+        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set both coordinates of control point 1, relative to the segment's start point.
 
         Args:
             x: Relative x offset of control point 1 in pixels.
             y: Relative y offset of control point 1 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self.c1_x(x, tr)
-        self.c1_y(y, tr)
+        self.c1_x(x, dur=dur, ease=ease)
+        self.c1_y(y, dur=dur, ease=ease)
         return self
 
-    def c2_xy(self, x: FloatLike, y: FloatLike, tr: Transition = None) -> Self:
+    def c2_xy(
+        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
         """Set both coordinates of control point 2, relative to the segment's end point.
 
         Args:
             x: Relative x offset of control point 2 in pixels.
             y: Relative y offset of control point 2 in pixels.
-            tr: Optional transition for animation.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self.c2_x(x, tr)
-        self.c2_y(y, tr)
+        self.c2_x(x, dur=dur, ease=ease)
+        self.c2_y(y, dur=dur, ease=ease)
         return self
 
 

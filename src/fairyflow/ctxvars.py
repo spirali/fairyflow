@@ -1,7 +1,7 @@
 import contextvars
 from beartype import beartype
 
-from .animtime import Transition, tr_to_frames
+from .animtime import Duration, duration_to_frames
 
 ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
@@ -9,11 +9,11 @@ COMPOSER = contextvars.ContextVar("composer", default=None)
 
 
 @beartype
-def wait(tr: Transition) -> int:
+def wait(dur: Duration) -> int:
     """
     Advance the current time by the given duration in seconds.
     """
-    frames = tr_to_frames(tr)
+    frames = duration_to_frames(dur)
     return COMPOSER.get().move_frame(frames)
 
 
@@ -56,11 +56,6 @@ def reset_scene():
 
 
 def move_frame(frames: int):
-    return COMPOSER.get().move_frame(frames)
-
-
-def process_tr(tr: Transition):
-    frames = tr_to_frames(tr)
     return COMPOSER.get().move_frame(frames)
 
 

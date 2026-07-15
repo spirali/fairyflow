@@ -6,6 +6,7 @@ from typing import Union
 from .types import StringLike, BoolLike, FloatLike
 from .exprs import Call
 from .position import Position
+from .animtime import Duration, Easing
 from .aobject import INHERITED_VALUE
 
 from .nodes import (
@@ -24,20 +25,22 @@ class TextStyleMethods:
     `Text`) and `InheritedTextStyleMixin` (cascading defaults — `TextGroup`/
     `TextSpan`); the methods don't care which default strategy backs them."""
 
-    def italic(self, value: BoolLike):
-        self._set_attr("italic", value)
+    def italic(self, value: BoolLike, *, dur: Duration = None, ease: Easing = None):
+        self._set_attr("italic", value, dur, ease)
         return self
 
-    def font(self, value: StringLike):
-        self._set_attr("font", value)
+    def font(self, value: StringLike, *, dur: Duration = None, ease: Easing = None):
+        self._set_attr("font", value, dur, ease)
         return self
 
-    def font_size(self, value: FloatLike, transition=None):
-        self._set_attr("font_size", value, transition)
+    def font_size(self, value: FloatLike, *, dur: Duration = None, ease: Easing = None):
+        self._set_attr("font_size", value, dur, ease)
         return self
 
-    def font_weight(self, value: FloatLike, transition=None):
-        self._set_attr("font_weight", value, transition)
+    def font_weight(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ):
+        self._set_attr("font_weight", value, dur, ease)
         return self
 
     def bold(self):

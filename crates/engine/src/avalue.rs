@@ -8,12 +8,30 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-/// Rename of v1's `"S"`/`"L"` — only `Linear` is accepted for now (the fuller
-/// easing-preset/sampled-curve grammar is a later step, not part of this rewrite).
+/// Rename of v1's `"S"`/`"L"` — `Linear` plus the 4 CSS-equivalent cubic-bezier
+/// presets from api-v2-proposal.md §3.2 (sampled/custom easing is a later step,
+/// not part of this rewrite).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Transition {
     Step,
     Linear,
+    In,
+    Out,
+    InOut,
+    OutBack,
+}
+
+impl Transition {
+    /// Name used by `easing::remap` — matches the wire-format ease string.
+    fn ease_name(&self) -> &'static str {
+        match self {
+            Transition::Step | Transition::Linear => "linear",
+            Transition::In => "in",
+            Transition::Out => "out",
+            Transition::InOut => "in_out",
+            Transition::OutBack => "out_back",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -76,9 +94,13 @@ impl<'de, T: Value + DeserializeOwned> Deserialize<'de> for KeyframeTuple<T> {
                 let tr = match ease.as_deref() {
                     None => Transition::Step,
                     Some("linear") => Transition::Linear,
+                    Some("in") => Transition::In,
+                    Some("out") => Transition::Out,
+                    Some("in_out") => Transition::InOut,
+                    Some("out_back") => Transition::OutBack,
                     Some(other) => {
                         return Err(de::Error::custom(format!(
-                            "unsupported ease `{}` (only \"linear\" is supported)",
+                            "unsupported ease `{}` (expected one of \"linear\", \"in\", \"out\", \"in_out\", \"out_back\")",
                             other
                         )));
                     }
@@ -131,7 +153,7 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
             );
             return Ok(left_v);
         };
-        let right_v = match right_fv {
+        let (right_v, tr) = match right_fv {
             FrameValue::Hold
             | FrameValue::KeyFrame(KeyFrame {
                 tr: Transition::Step,
@@ -140,11 +162,16 @@ impl<T: Value + DeserializeOwned + Clone> AnimatedValue<T> {
                 tracing::trace!(frame = frame.as_u32(), "sharp or hold, no interpolation");
                 return Ok(left_v);
             }
-            FrameValue::KeyFrame(KeyFrame { value, .. }) => value.eval(ctx)?,
+            FrameValue::KeyFrame(KeyFrame { value, tr }) => (value.eval(ctx)?, tr),
         };
         let start_frame = left_f.as_u32();
         let end_frame = right_f.as_u32();
         let t = (frame.as_u32() - start_frame) as f64 / (end_frame - start_frame) as f64;
+        let t = if *tr == Transition::Linear {
+            t
+        } else {
+            crate::easing::remap(tr.ease_name(), t)
+        };
         tracing::trace!(
             frame = frame.as_u32(),
             left_f = start_frame,

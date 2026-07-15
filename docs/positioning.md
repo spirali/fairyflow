@@ -114,7 +114,7 @@ with Scene(width=300, height=160):
     line.move_to().pos(anchor.get_pos(0.5, 0.5))  # fixed end
     line.line_to().pos(box.get_pos(0.5, 0.5))     # tracks box center
 
-    box.xy(180, 55, tr=1.5)   # move the box — the line stretches automatically
+    box.xy(180, 55, dur=1.5)   # move the box — the line stretches automatically
 ```
 
 ### Fine-tuning with `.move()`
@@ -138,7 +138,7 @@ with Scene(width=300, height=160):
 
 ## Following a path — `.follow_path()`
 
-`.follow_path(path, tr=1, start=0, end=1)` animates a node along a `Path` over the given
+`.follow_path(path, dur=1, start=0, end=1)` animates a node along a `Path` over the given
 duration. The node travels from `start` to `end` (both are path parameters in the range
 0–1, where 0 is the path's start and 1 is its end), centered on the curve at every frame.
 The clock advances automatically by `tr` seconds.
@@ -160,7 +160,7 @@ with Scene(width=300, height=200):
 
     # A ball that travels along the arch
     ball = Ellipse().size(22, 22).color("steelblue")
-    ball.follow_path(track, tr=2)
+    ball.follow_path(track, dur=2)
 ```
 
 Pass `start=1, end=0` to travel in the opposite direction — from the end of the path to the
@@ -176,8 +176,8 @@ with Scene(width=300, height=200):
     curve.c2_xy(-60, -130)
 
     with Par():
-        Ellipse().size(22, 22).color("steelblue").follow_path(track, tr=2)
-        Ellipse().size(22, 22).color("coral").follow_path(track, tr=2, start=1, end=0)
+        Ellipse().size(22, 22).color("steelblue").follow_path(track, dur=2)
+        Ellipse().size(22, 22).color("coral").follow_path(track, dur=2, start=1, end=0)
 ```
 
 The same path can be used to animate multiple nodes. Nesting `Seq` inside `Par` creates a
@@ -197,5 +197,5 @@ with Scene(width=300, height=200):
         for i, color in enumerate(colors):
             with Seq():
                 wait(0.4 * i)
-                Ellipse().size(22, 22).color(color).follow_path(track, tr=2)
+                Ellipse().size(22, 22).color(color).follow_path(track, dur=2)
 ```

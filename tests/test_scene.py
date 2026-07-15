@@ -51,12 +51,12 @@ def test_simple_move(test_scene):
         r = Rect().size(10, 20).color("red").xy(5, 5)
         wait(f3)
         with Par():
-            r.xy(15, 5, f3).color("orange", f3)
+            r.xy(15, 5, dur=f3).color("orange", dur=f3)
         wait(Frames(3))
         with Par():
-            r.move(12, 4, f3).color("blue", f3)
+            r.move(12, 4, dur=f3).color("blue", dur=f3)
         wait(Frames(3))
-        r.move(5, 0, f3)
+        r.move(5, 0, dur=f3)
 
 
 def test_fill_color_in_next_frame(test_scene):

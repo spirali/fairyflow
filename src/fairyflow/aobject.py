@@ -53,8 +53,8 @@ class AnimatedObject:
             )
         return self._attrs[name]
 
-    def _set_attr(self, name, value, tr=None):
-        self._ensure_attr(name).set(value, tr=tr)
+    def _set_attr(self, name, value, dur=None, ease=None):
+        self._ensure_attr(name).set(value, dur=dur, ease=ease)
 
     def _get_attr(self, name):
         return self._ensure_attr(name)
@@ -65,5 +65,5 @@ class AnimatedObject:
     def remove(self):
         self._end = get_frame()
 
-    def _move_attr(self, name, delta, tr=None):
-        self._ensure_attr(name).move(delta, tr=tr)
+    def _move_attr(self, name, delta, dur=None, ease=None):
+        self._ensure_attr(name).move(delta, dur=dur, ease=ease)

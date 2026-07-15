@@ -27,7 +27,7 @@ with Scene():
     body = Text()
     body.span("Content appears here").font_size(18).color("darkslateblue")
     body.align_x(0.5).align_y(0.5)
-    body.fade_in(0.4)
+    body.fade_in(dur=0.4)
     cue()                          # player stops here again
 ```
 
@@ -42,7 +42,7 @@ immediately:
 ```python
 with Scene(cue_at_start=False):
     r = Rect().size(80, 80).color("tomato").align_x(0.5).align_y(0.5)
-    r.fade_in(1)
+    r.fade_in(dur=1)
 ```
 
 ---

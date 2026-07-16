@@ -23,6 +23,26 @@ with Scene():
 
 ---
 
+## Relative position — `rel(f)`
+
+`rel(f)` is a value marker accepted anywhere `.xy()` takes a coordinate (and by `.size()`,
+see [Shapes](shapes.md#relative-sizing)): it means *`f` times the parent's corresponding
+dimension* — width in the `x` slot, height in the `y` slot. It resolves against the node's
+parent — the nearest `Group()`, or the `Scene` itself when the node has no intermediate
+group:
+
+```ffpy frame="0"
+with Scene(width=300, height=160):
+    Rect().size(60, 60).color("tomato").xy(x=rel(0.5) - 30, y=rel(0.5) - 30)
+```
+
+`rel(f)` is an `Expr`, so it composes with arithmetic (`rel(1) - 20`, `rel(0.5) + 10`) —
+useful when you need a proportional position offset by a fixed pixel amount. Unlike
+`.align()`, whose `0.0`–`1.0` factor already accounts for the node's own size, `rel(f)`
+is a raw fraction of the parent's box with no such adjustment.
+
+---
+
 ## Proportional alignment — `.align()`
 
 `.align(x=fx, y=fy)` places the node relative to the container size:

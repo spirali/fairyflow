@@ -1,4 +1,4 @@
-from fairyflow import DEFAULT, Group, Rect, Ellipse, next_frame
+from fairyflow import DEFAULT, Group, Rect, Ellipse, next_frame, rel
 
 
 def test_centering_layout1(test_scene):
@@ -54,19 +54,19 @@ def test_column_reserve_false(test_scene):
             Rect().size(40, 10).color("coral")
 
 
-def test_rsize_fills_half_parent(test_scene):
-    """A rect with rsize(0.5, 0.5) fills the top-left quadrant of its parent group."""
+def test_relative_size_half_parent(test_scene):
+    """size(rel(0.5), rel(0.5)) sizes a rect to half its parent's width and height."""
     with test_scene.size(120, 80):
         with Group().size(120, 80):
-            Rect().rsize(1, 1).color("whitesmoke")
-            Rect().rsize(0.5, 0.5).color("steelblue")
+            Rect().expand().color("whitesmoke")
+            Rect().size(rel(0.5), rel(0.5)).color("steelblue")
 
 
-def test_rsize_full_fill(test_scene):
-    """rsize(1, 1) covers the entire parent group."""
+def test_expand_fills_parent(test_scene):
+    """expand() covers the entire parent group."""
     with test_scene.size(120, 80):
         with Group().size(120, 80):
-            Rect().rsize(1, 1).color("coral")
+            Rect().expand().color("coral")
 
 
 def test_xy_default_resets_to_layout(test_scene):
@@ -86,3 +86,17 @@ def test_align_x_and_y(test_scene):
             Rect().size(20, 20).color("tomato").align(0, 0)
             Rect().size(20, 20).color("gold").align(1, 1)
             Rect().size(20, 20).color("mediumseagreen").align(x=1, y=0)
+
+
+def test_rel_in_position_slot(test_scene):
+    """rel() also works in x()/y()/xy(), composed with arithmetic (rel(1) - 30)."""
+    with test_scene.size(120, 80):
+        with Group().size(120, 80):
+            Rect().size(30, 30).color("orchid").xy(x=rel(1) - 30, y=rel(0.5))
+
+
+def test_rel_directly_under_scene(test_scene):
+    """rel() resolves against the Scene itself when a node has no intermediate
+    Group() parent — parent_group() returns the Scene in that case."""
+    with test_scene.size(120, 80):
+        Rect().size(rel(0.5), rel(0.5)).xy(x=rel(0.5)).color("mediumpurple")

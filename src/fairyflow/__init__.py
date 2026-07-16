@@ -1,7 +1,7 @@
 from .nodes import Group, Rect, Path, Ellipse, Scene, Image
 from .ctxvars import wait, next_frame, cue, Par, Seq, get_frame
 from .animtime import time_to_frames, Frames, frames_to_time
-from .sentinels import DEFAULT
+from .sentinels import DEFAULT, rel
 
 from .color import Color
 from .text import stext, Text
@@ -28,4 +28,5 @@ __all__ = [
     "Frames",
     "get_frame",
     "DEFAULT",
+    "rel",
 ]

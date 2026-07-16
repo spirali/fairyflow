@@ -7,7 +7,14 @@ from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .info import get_info
 from .animtime import Duration, Easing
-from .sentinels import DEFAULT, INHERITED_VALUE, DefaultMarker
+from .sentinels import (
+    DEFAULT,
+    INHERITED_VALUE,
+    DefaultMarker,
+    RelValue,
+    rel,
+    resolve_rel,
+)
 from .aobject import AnimatedObject, get_frame
 from .avalue import AnimatedValue
 from .color import Color
@@ -299,118 +306,86 @@ class SizeMixin:
     }
 
     def width(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the width of the node in pixels.
-
-        Args:
-            value: The new width in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("width", value, dur, ease)
-        return self
-
-    def height(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the height of the node in pixels.
-
-        Args:
-            value: The new height in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("height", value, dur, ease)
-        return self
-
-    def size(
-        self, width, height: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the width and height of the node in pixels.
-
-        Args:
-            width: The new width in pixels.
-            height: The new height in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        with Par():
-            self._set_attr("width", width, dur, ease)
-            self._set_attr("height", height, dur, ease)
-        return self
-
-    def rwidth(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the width relative to the parent's width (1.0 = full parent width).
-
-        Args:
-            value: Width as a fraction of the parent's width.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        parent = self.parent_group()
-        self._set_attr("width", Call.mul(parent._get_attr("width"), value), dur, ease)
-        return self
-
-    def rheight(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the height relative to the parent's height (1.0 = full parent height).
-
-        Args:
-            value: Height as a fraction of the parent's height.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        parent = self.parent_group()
-        self._set_attr("height", Call.mul(parent._get_attr("height"), value), dur, ease)
-        return self
-
-    def rsize(
         self,
-        width: FloatLike = 1.0,
-        height: FloatLike = 1.0,
+        value: FloatLike | RelValue,
         *,
         dur: Duration = None,
         ease: Easing = None,
     ) -> Self:
-        """Set width and height relative to the parent's dimensions (1.0 = full extent).
+        """Set the width of the node in pixels.
 
         Args:
-            width: Width as a fraction of the parent's width.
-            height: Height as a fraction of the parent's height.
+            value: The new width in pixels. `rel(f)` sets it to `f` times the
+                parent's width instead.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        parent = self.parent_group()
-        with Par():
-            self._set_attr(
-                "width", Call.mul(parent._get_attr("width"), width), dur, ease
-            )
-            self._set_attr(
-                "height", Call.mul(parent._get_attr("height"), height), dur, ease
-            )
+        self._set_attr("width", resolve_rel(value, self, "width"), dur, ease)
         return self
+
+    def height(
+        self,
+        value: FloatLike | RelValue,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Set the height of the node in pixels.
+
+        Args:
+            value: The new height in pixels. `rel(f)` sets it to `f` times the
+                parent's height instead.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        self._set_attr("height", resolve_rel(value, self, "height"), dur, ease)
+        return self
+
+    def size(
+        self,
+        w: FloatLike | RelValue | None = None,
+        h: FloatLike | RelValue | None = None,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Set the width and/or height of the node in pixels.
+
+        Args:
+            w: The new width in pixels, or `rel(f)`. ``None`` (default)
+                leaves the width untouched.
+            h: The new height in pixels, or `rel(f)`. ``None`` (default)
+                leaves the height untouched.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        with Par():
+            if w is not None:
+                self.width(w, dur=dur, ease=ease)
+            if h is not None:
+                self.height(h, dur=dur, ease=ease)
+        return self
+
+    def expand(self, *, dur: Duration = None, ease: Easing = None) -> Self:
+        """Size the node to fill its parent completely (``rel(1)`` on both axes).
+
+        Args:
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        return self.size(rel(1), rel(1), dur=dur, ease=ease)
 
 
 @beartype
@@ -429,7 +404,7 @@ class PositionMixin:
 
     def x(
         self,
-        px: FloatLike | DefaultMarker,
+        px: FloatLike | RelValue | DefaultMarker,
         *,
         dur: Duration = None,
         ease: Easing = None,
@@ -438,19 +413,23 @@ class PositionMixin:
 
         Args:
             px: The x position in pixels, relative to the parent node's origin.
-                ``DEFAULT`` resets it to the layout-computed position.
+                `rel(f)` sets it to `f` times the parent's width; ``DEFAULT``
+                resets it to the layout-computed position.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("x", Call.default_x(self) if px is DEFAULT else px, dur, ease)
+        value = (
+            Call.default_x(self) if px is DEFAULT else resolve_rel(px, self, "width")
+        )
+        self._set_attr("x", value, dur, ease)
         return self
 
     def y(
         self,
-        px: FloatLike | DefaultMarker,
+        px: FloatLike | RelValue | DefaultMarker,
         *,
         dur: Duration = None,
         ease: Easing = None,
@@ -459,14 +438,18 @@ class PositionMixin:
 
         Args:
             px: The y position in pixels, relative to the parent node's origin.
-                ``DEFAULT`` resets it to the layout-computed position.
+                `rel(f)` sets it to `f` times the parent's height; ``DEFAULT``
+                resets it to the layout-computed position.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("y", Call.default_y(self) if px is DEFAULT else px, dur, ease)
+        value = (
+            Call.default_y(self) if px is DEFAULT else resolve_rel(px, self, "height")
+        )
+        self._set_attr("y", value, dur, ease)
         return self
 
     def xy(

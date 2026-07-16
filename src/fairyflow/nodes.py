@@ -7,7 +7,8 @@ from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
 from .position import Position
 from .info import get_info
 from .animtime import Duration, Easing
-from .aobject import INHERITED_VALUE, AnimatedObject, get_frame
+from .sentinels import DEFAULT, INHERITED_VALUE, DefaultMarker
+from .aobject import AnimatedObject, get_frame
 from .avalue import AnimatedValue
 from .color import Color
 from .exprs import (
@@ -426,83 +427,65 @@ class PositionMixin:
         "y": Call.default_y,
     }
 
-    def x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
+    def x(
+        self,
+        px: FloatLike | DefaultMarker,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
         """Set the x coordinate of the node.
 
         Args:
             px: The x position in pixels, relative to the parent node's origin.
+                ``DEFAULT`` resets it to the layout-computed position.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("x", px, dur, ease)
+        self._set_attr("x", Call.default_x(self) if px is DEFAULT else px, dur, ease)
         return self
 
-    def y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
+    def y(
+        self,
+        px: FloatLike | DefaultMarker,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
         """Set the y coordinate of the node.
 
         Args:
             px: The y position in pixels, relative to the parent node's origin.
+                ``DEFAULT`` resets it to the layout-computed position.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("y", px, dur, ease)
-        return self
-
-    def x_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Reset the x coordinate to the layout default.
-
-        Args:
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("x", Call.default_x(self), dur, ease)
-        return self
-
-    def y_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Reset the y coordinate to the layout default.
-
-        Args:
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("y", Call.default_y(self), dur, ease)
-        return self
-
-    def xy_reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Reset both x and y coordinates to the layout default.
-
-        Args:
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        with Par():
-            self.x_reset(dur=dur, ease=ease)
-            self.y_reset(dur=dur, ease=ease)
+        self._set_attr("y", Call.default_y(self) if px is DEFAULT else px, dur, ease)
         return self
 
     def xy(
-        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+        self,
+        x: FloatLike | DefaultMarker | None = None,
+        y: FloatLike | DefaultMarker | None = None,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
-        """Set both x and y coordinates of the node.
+        """Set the x and/or y coordinate of the node.
 
         Args:
             x: The x position in pixels, relative to the parent node's origin.
+                ``None`` (default) leaves x untouched; ``DEFAULT`` resets it to
+                the layout-computed position.
             y: The y position in pixels, relative to the parent node's origin.
+                ``None`` (default) leaves y untouched; ``DEFAULT`` resets it to
+                the layout-computed position.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
@@ -510,18 +493,29 @@ class PositionMixin:
             self, for method chaining.
         """
         with Par():
-            self._set_attr("x", x, dur, ease)
-            self._set_attr("y", y, dur, ease)
+            if x is not None:
+                self.x(x, dur=dur, ease=ease)
+            if y is not None:
+                self.y(y, dur=dur, ease=ease)
         return self
 
-    def align_x(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def align(
+        self,
+        x: FloatLike | None = None,
+        y: FloatLike | None = None,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
-        """Horizontally align the node within its parent.
+        """Align the node within its parent, horizontally and/or vertically.
 
         Args:
-            value: Alignment factor. ``0.0`` aligns to the left edge, ``0.5``
-                to the center, and ``1.0`` to the right edge.
+            x: Horizontal alignment factor. ``0.0`` aligns to the left edge,
+                ``0.5`` to the center, ``1.0`` to the right edge. ``None``
+                (default) leaves the x axis untouched.
+            y: Vertical alignment factor. ``0.0`` aligns to the top edge,
+                ``0.5`` to the center, ``1.0`` to the bottom edge. ``None``
+                (default) leaves the y axis untouched.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
@@ -529,37 +523,25 @@ class PositionMixin:
             self, for method chaining.
         """
         parent = self.parent_group()
-        if isinstance(self, SizeMixin):
-            new_value = Call.mul(
-                Call.sub(parent._get_attr("width"), self._get_attr("width")), value
-            )
-        else:
-            new_value = Call.mul(parent._get_attr("width"), value)
-        self._set_attr("x", new_value, dur, ease)
-        return self
-
-    def align_y(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Vertically align the node within its parent.
-
-        Args:
-            value: Alignment factor. ``0.0`` aligns to the top edge, ``0.5``
-                to the center, and ``1.0`` to the bottom edge.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        parent = self.parent_group()
-        if isinstance(self, SizeMixin):
-            new_value = Call.mul(
-                Call.sub(parent._get_attr("height"), self._get_attr("height")), value
-            )
-        else:
-            new_value = Call.mul(parent._get_attr("height"), value)
-        self._set_attr("y", new_value, dur, ease)
+        sized = isinstance(self, SizeMixin)
+        with Par():
+            if x is not None:
+                if sized:
+                    new_x = Call.mul(
+                        Call.sub(parent._get_attr("width"), self._get_attr("width")), x
+                    )
+                else:
+                    new_x = Call.mul(parent._get_attr("width"), x)
+                self._set_attr("x", new_x, dur, ease)
+            if y is not None:
+                if sized:
+                    new_y = Call.mul(
+                        Call.sub(parent._get_attr("height"), self._get_attr("height")),
+                        y,
+                    )
+                else:
+                    new_y = Call.mul(parent._get_attr("height"), y)
+                self._set_attr("y", new_y, dur, ease)
         return self
 
     def pos(

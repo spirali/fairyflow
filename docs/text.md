@@ -92,7 +92,7 @@ The target font must be loaded — either from `font_directories` or from system
 
 ## Positioning
 
-`Text` supports `.xy()`, `.align_x()`, `.align_y()`, and `.move()` for placement — see [Positioning](positioning.md) for details.
+`Text` supports `.xy()`, `.align()`, and `.move()` for placement — see [Positioning](positioning.md) for details.
 
 ## stext
 

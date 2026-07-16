@@ -16,7 +16,7 @@ multiples are marked red and then hidden, leaving only the primes at the end.
 
 ```ffpy video="mp4" position="top"
 with Scene(1280, 720):
-    with Group().column(40).align_y(0.6):
+    with Group().column(40).align(y=0.6):
         with Group() as g2:
             t = Text().span("Sieve of Eratosthenes").font_size(40).bold()
         with Group() as g3:
@@ -91,7 +91,7 @@ with Scene(1280, 720):
             with Par():
                 m.alpha(0, dur=0.5)
                 g.scale(1, dur=0.5)
-                g.xy_reset(dur=0.5)
+                g.xy(DEFAULT, DEFAULT, dur=0.5)
 
             wait(0.5)
 
@@ -146,7 +146,7 @@ with Scene(1280, 720):
         
         wait(0.5)
 
-    with Group().column(40).align_y(0.2) as g:
+    with Group().column(40).align(y=0.2) as g:
         with Group() as g2:
             Text().span("Sieve of Eratosthenes").font_size(40).bold()
         with Group() as g3:
@@ -179,7 +179,7 @@ with Scene(1280, 720):
 
 ```python
 with Scene(1280, 720):
-    with Group().column(40).align_y(0.6):
+    with Group().column(40).align(y=0.6):
         with Group() as g2:
             Text().span("Sieve of Eratosthenes").font_size(40).bold()
         with Group() as g3:
@@ -191,7 +191,7 @@ with Scene(1280, 720):
 ```
 
 `Group().column(40)` creates a vertical layout that stacks its children with 40 px of spacing
-between them. `.align_y(0.6)` positions the group 60% of the way down the canvas — just below
+between them. `.align(y=0.6)` positions the group 60% of the way down the canvas — just below
 center.
 
 The `with Group() as g2:` pattern is the core FairyFlow idiom: every node created *inside* the
@@ -409,7 +409,7 @@ use the same column/row formula but shifted 300 px down to keep them within the 
 ### The outro
 
 ```python
-with Group().column(40).align_y(0.2) as g:
+with Group().column(40).align(y=0.2) as g:
     with Group() as g2:
         Text().span("Sieve of Eratosthenes").font_size(40).bold()
     with Group() as g3:
@@ -419,6 +419,6 @@ with Group().column(40).align_y(0.2) as g:
 ```
 
 This outro lives in the *same* `Scene` as the grid — it is a sibling group placed at
-`align_y(0.2)` (top fifth of the canvas). `g.fade_in()` is called on the outer column group
+`align(y=0.2)` (top fifth of the canvas). `g.fade_in()` is called on the outer column group
 rather than on `g2` and `g3` individually, so the title and logo fade in together as one unit.
 `wait(1)` extends the scene for one more second so the final frame is not cut off abruptly.

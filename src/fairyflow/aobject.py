@@ -1,13 +1,6 @@
 from .avalue import AnimatedValue
 from .ctxvars import get_frame
-
-
-class InheritedValue:
-    """`_ATTR_DEFAULTS` sentinel: this attribute defaults to the *parent's*
-    resolved value when unset"""
-
-
-INHERITED_VALUE = InheritedValue()
+from .sentinels import INHERITED_VALUE
 
 
 class AnimatedObject:

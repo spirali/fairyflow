@@ -18,7 +18,7 @@ The default frame rate is **24 fps**. This can be changed in `fairyflow.toml`.
 
 ```ffpy video="mp4"
 with Scene():
-    r = Rect().size(80, 80).color("steelblue").align_x(0.5).align_y(0.5)
+    r = Rect().size(80, 80).color("steelblue").align(0.5, 0.5)
     wait(1)           # pause one second
     r.color("tomato") # instant change at t=1s
     wait(0.5)
@@ -44,7 +44,7 @@ r.color("red")             # instant colour change; clock does not advance
 
 ```ffpy video="mp4"
 with Scene():
-    r = Rect().size(80, 80).color("steelblue").align_x(0.5).align_y(0.5)
+    r = Rect().size(80, 80).color("steelblue").align(0.5, 0.5)
     wait(1)
     r.color("tomato")           # instant — no dur
     wait(1)
@@ -185,7 +185,7 @@ Use `wait()` to insert a pause before starting a transition:
 
 ```ffpy video="mp4"
 with Scene():
-    r = Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
+    r = Rect().size(60, 60).color("gold").align(0.5, 0.5)
     wait(1)
     with Par():
         r.color("tomato", dur=1)
@@ -205,7 +205,7 @@ group's centre (`pivot_x=0.5`, `pivot_y=0.5`).
 
 ```ffpy video="mp4"
 with Scene():
-    with Group().size(80, 80).align_x(0.5).align_y(0.5) as g:
+    with Group().size(80, 80).align(0.5, 0.5) as g:
         Rect().size(80, 80).color("steelblue")
         Rect().size(20, 20).color("white").xy(30, 30)
     g.rotate(360, dur=2)
@@ -213,7 +213,7 @@ with Scene():
 
 ```ffpy video="mp4"
 with Scene():
-    with Group().size(80, 80).align_x(0.5).align_y(0.5) as g:
+    with Group().size(80, 80).align(0.5, 0.5) as g:
         Ellipse().size(80, 80).color("coral")
     g.scale(0.2, dur=1)
     g.scale(1, dur=1)
@@ -229,7 +229,7 @@ like every other transition, both accept an `ease=` too.
 
 ```ffpy video="mp4"
 with Scene():
-    r = Rect().size(120, 80).color("orchid").align_x(0.5).align_y(0.5)
+    r = Rect().size(120, 80).color("orchid").align(0.5, 0.5)
     r.fade_in(dur=0.6)
     wait(0.6)       # hold at full opacity
     r.fade_out(dur=0.6)
@@ -239,7 +239,7 @@ You can also set alpha directly with `dur`:
 
 ```ffpy video="mp4"
 with Scene():
-    r = Rect().size(120, 80).color("steelblue").align_x(0.5).align_y(0.5)
+    r = Rect().size(120, 80).color("steelblue").align(0.5, 0.5)
     r.alpha(0)
     r.alpha(1, dur=1)   # fade in over 1 s
     wait(0.5)
@@ -271,7 +271,7 @@ sweeps it leftward. Each call also advances the clock automatically.
 
 ```ffpy video="mp4"
 with Scene():
-    with Group().size(200, 60).align_x(0.5).align_y(0.5) as g:
+    with Group().size(200, 60).align(0.5, 0.5) as g:
         Rect().size(200, 60).color("cornflowerblue")
         t = Text()
         t.span("reveal_right / hide_left").font_size(14).bold().color("white")

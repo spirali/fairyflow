@@ -1,4 +1,4 @@
-from fairyflow import Group, Rect, Ellipse, next_frame
+from fairyflow import DEFAULT, Group, Rect, Ellipse, next_frame
 
 
 def test_centering_layout1(test_scene):
@@ -67,3 +67,22 @@ def test_rsize_full_fill(test_scene):
     with test_scene.size(120, 80):
         with Group().size(120, 80):
             Rect().rsize(1, 1).color("coral")
+
+
+def test_xy_default_resets_to_layout(test_scene):
+    """xy(DEFAULT, DEFAULT) resets a moved node back to its centering-layout position."""
+    with test_scene:
+        with Group():
+            r = Rect().size(20, 20).color("steelblue")
+            r.xy(10, 10)
+            next_frame()
+            r.xy(DEFAULT, DEFAULT)
+
+
+def test_align_x_and_y(test_scene):
+    """align(x=, y=) places a sized node proportionally within its parent, per axis."""
+    with test_scene.size(60, 60):
+        with Group().size(60, 60):
+            Rect().size(20, 20).color("tomato").align(0, 0)
+            Rect().size(20, 20).color("gold").align(1, 1)
+            Rect().size(20, 20).color("mediumseagreen").align(x=1, y=0)

@@ -7,7 +7,7 @@ from .types import StringLike, BoolLike, FloatLike
 from .exprs import Call
 from .position import Position
 from .animtime import Duration, Easing
-from .aobject import INHERITED_VALUE
+from .sentinels import INHERITED_VALUE
 
 from .nodes import (
     Node,

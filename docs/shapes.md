@@ -47,7 +47,7 @@ with Scene(width=300, height=180):
 
 ### Positioning
 
-See [Positioning](positioning.md) for `.xy()`, `.align_x()`, `.align_y()`, and `.move()`.
+See [Positioning](positioning.md) for `.xy()`, `.align()`, and `.move()`.
 
 ---
 

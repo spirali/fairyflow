@@ -149,7 +149,7 @@ animation moves or transforms the group as a whole.
 
 ```ffpy video="mp4"
 with Scene():
-    with Group().size(220, 70).align_x(0.5).align_y(0.5).row(gap=8, align=0.5) as g:
+    with Group().size(220, 70).align(0.5, 0.5).row(gap=8, align=0.5) as g:
         Rect().size(60, 50).color("steelblue")
         Rect().size(60, 50).color("coral")
         Rect().size(60, 50).color("gold")

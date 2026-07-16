@@ -4,10 +4,9 @@ icon: lucide/crosshair
 
 # Positioning
 
-Every node has an `x` / `y` position relative to its parent container. Four methods cover
-most placement needs: `.xy()` for absolute coordinates, `.align_x()` / `.align_y()` for
-proportional placement within the parent, and `.move()` for small relative offsets on top of
-any of the above.
+Every node has an `x` / `y` position relative to its parent container. Three methods cover
+most placement needs: `.xy()` for absolute coordinates, `.align()` for proportional placement
+within the parent, and `.move()` for small relative offsets on top of any of the above.
 
 ---
 
@@ -24,24 +23,26 @@ with Scene():
 
 ---
 
-## Proportional alignment — `.align_x()` / `.align_y()`
+## Proportional alignment — `.align()`
 
-`.align_x(f)` and `.align_y(f)` place the node relative to the container size:
-`0.0` = left / top edge, `0.5` = center, `1.0` = right / bottom edge.
+`.align(x=fx, y=fy)` places the node relative to the container size:
+`0.0` = left / top edge, `0.5` = center, `1.0` = right / bottom edge. Either axis can be
+omitted to leave it untouched.
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(60, 60).color("tomato").align_x(0).align_y(0)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("mediumseagreen").align_x(1).align_y(1)
+    Rect().size(60, 60).color("tomato").align(0, 0)
+    Rect().size(60, 60).color("gold").align(0.5, 0.5)
+    Rect().size(60, 60).color("mediumseagreen").align(1, 1)
 ```
 
-The two methods compose freely — you can align on one axis and use `.xy()` on the other:
+`.align()` composes freely with `.xy()` — you can align on one axis and set the other
+directly:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(80, 50).color("steelblue").align_x(0.5).xy(0, 30)
-    Rect().size(80, 50).color("coral").align_x(0.5).xy(0, 110)
+    Rect().size(80, 50).color("steelblue").align(x=0.5).xy(0, 30)
+    Rect().size(80, 50).color("coral").align(x=0.5).xy(0, 110)
 ```
 
 ---
@@ -53,9 +54,9 @@ position, regardless of how that position was set:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(60, 60).color("orchid").align_x(0.5).align_y(0.5).move(-80, 0)
-    Rect().size(60, 60).color("steelblue").align_x(0.5).align_y(0.5)
-    Rect().size(60, 60).color("gold").align_x(0.5).align_y(0.5).move(80, 0)
+    Rect().size(60, 60).color("orchid").align(0.5, 0.5).move(-80, 0)
+    Rect().size(60, 60).color("steelblue").align(0.5, 0.5)
+    Rect().size(60, 60).color("gold").align(0.5, 0.5).move(80, 0)
 ```
 
 ---
@@ -124,7 +125,7 @@ fixed offset:
 
 ```ffpy frame="0"
 with Scene(width=300, height=160):
-    with Group().size(60, 60).align_x(0.5).align_y(0.5) as box:
+    with Group().size(60, 60).align(0.5, 0.5) as box:
         Rect().size(60, 60).color("steelblue")
 
     # arrow tip sits 10 px above the top-center of box

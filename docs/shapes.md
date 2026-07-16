@@ -28,21 +28,29 @@ with Scene():
 
 ### Relative sizing
 
-`.rwidth(f)`, `.rheight(f)`, and `.rsize(fw, fh)` size a node as a fraction of its parent's
-dimensions. `1.0` equals the full parent extent on that axis.
+`rel(f)` is a value marker for `size()` (and `xy()`, see [Positioning](positioning.md)):
+`f` times the parent's corresponding dimension. `1.0` equals the full parent extent on
+that axis. The bare "fill the whole parent" case has its own verb, `.expand()`. "Parent"
+here is the node's nearest `Group()`, or the `Scene` itself when there is no intermediate
+group — no wrapping `Group()` is required just to use `rel()`.
 
 ```ffpy frame="0"
 with Scene(width=300, height=180):
     with Group().size(300, 180):
-        Rect().rsize(1, 1).color("whitesmoke")   # full background
-        Rect().rsize(0.5, 0.5).color("steelblue")  # top-left quadrant
+        Rect().expand().color("whitesmoke")   # full background
+        Rect().size(rel(0.5), rel(0.5)).color("steelblue")  # top-left quadrant
 ```
 
 ```ffpy frame="0"
 with Scene(width=300, height=180):
     with Group().size(300, 180):
-        Rect().rsize(1, 1).color("whitesmoke")
-        Rect().rwidth(1).rheight(0.25).color("coral")   # full-width banner
+        Rect().expand().color("whitesmoke")
+        Rect().size(w=rel(1), h=rel(0.25)).color("coral")   # full-width banner
+```
+
+```ffpy frame="0"
+with Scene(width=300, height=180):
+    Rect().size(rel(0.5), rel(0.5)).color("steelblue")   # relative to the Scene directly
 ```
 
 ### Positioning

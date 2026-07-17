@@ -16,17 +16,18 @@ Call `cue()` at any point in your scene to mark the current frame as a cue point
 with Scene():
     title = Text()
     title.span("Slide 1").font_size(32).bold().color("steelblue")
-    title.align_x(0.5).align_y(0.5)
+    title.align(0.5, 0.5)
     cue()                          # player stops here
 
     # advance to the next state
-    linear()
-    adv_time(0.4)
-    title.color("gray").font_size(24).align_y(0.2)
+    title.color("gray", dur=0.4)
+    title.font_size(24, dur=0.4)
+    title.align(y=0.2, dur=0.4)
+    wait(0.4)
 
     body = Text()
     body.span("Content appears here").font_size(18).color("darkslateblue")
-    body.align_x(0.5).align_y(0.5)
+    body.align(0.5, 0.5)
     body.fade_in(dur=0.4)
     cue()                          # player stops here again
 ```
@@ -41,7 +42,7 @@ immediately:
 
 ```python
 with Scene(cue_at_start=False):
-    r = Rect().size(80, 80).color("tomato").align_x(0.5).align_y(0.5)
+    r = Rect().size(80, 80).color("tomato").align(0.5, 0.5)
     r.fade_in(dur=1)
 ```
 
@@ -66,15 +67,15 @@ Combine cues with smooth transitions so content doesn't just pop in:
 
 ```python
 with Scene():
-    r = Rect().size(100, 100).color("steelblue").align_x(0.5).align_y(0.5)
+    r = Rect().size(100, 100).color("steelblue").align(0.5, 0.5)
     cue()
 
-    linear()
-    adv_time(0.5)
-    r.color("tomato").size(60, 60)
+    r.color("tomato", dur=0.5)
+    r.size(60, 60, dur=0.5)
+    wait(0.5)
     cue()
 
-    linear()
-    adv_time(0.5)
-    r.color("gold").size(140, 140)
+    r.color("gold", dur=0.5)
+    r.size(140, 140, dur=0.5)
+    wait(0.5)
 ```

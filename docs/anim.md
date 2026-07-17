@@ -250,8 +250,9 @@ with Scene():
 
 ## Clipping animations
 
-`Group` nodes have an animatable clipping window. `clip_x`/`clip_w` control the horizontal
-extent (as a fraction of the group width), and `clip_y`/`clip_h` control the vertical extent.
+`Group` nodes have an animatable clipping window, set with `.clip(x=, y=, w=, h=)`.
+`x`/`w` control the horizontal extent (as a fraction of the group width), and `y`/`h`
+control the vertical extent. Any axis left out is untouched.
 
 ```ffpy video="mp4"
 with Scene():
@@ -260,23 +261,24 @@ with Scene():
         t = Text()
         t.span("Revealed!").font_size(22).bold().color("white")
         t.xy(40, 18)
-    g.clip_w(0)               # start fully hidden
-    g.clip_w(1, dur=1.2)       # reveal left-to-right over 1.2 s
+    g.clip(w=0)               # start fully hidden
+    g.clip(w=1, dur=1.2)      # reveal left-to-right over 1.2 s
 ```
 
-`.hide_right(dur=t)`, `.hide_left(dur=t)`, `.reveal_right(dur=t)`, and `.reveal_left(dur=t)` are
-convenience helpers that animate the clip to conceal or reveal the group content. The direction
-refers to the sweep direction: `reveal_right` expands the clip window rightward, `reveal_left`
-sweeps it leftward. Each call also advances the clock automatically.
+`.hide(direction, dur=t)` and `.reveal(direction, dur=t)` are convenience helpers that
+animate the clip to conceal or reveal the group content. `direction` is one of `"right"`
+(default), `"left"`, `"up"`, `"down"` and refers to the sweep direction: `reveal("right")`
+expands the clip window rightward, `reveal("left")` sweeps it leftward. Each call also
+advances the clock automatically.
 
 ```ffpy video="mp4"
 with Scene():
     with Group().size(200, 60).align(0.5, 0.5) as g:
         Rect().size(200, 60).color("cornflowerblue")
         t = Text()
-        t.span("reveal_right / hide_left").font_size(14).bold().color("white")
+        t.span("reveal / hide").font_size(14).bold().color("white")
         t.xy(18, 22)
-    g.reveal_right(dur=1)   # expand clip from left to right
+    g.reveal("right", dur=1)   # expand clip from left to right
     wait(0.4)
-    g.hide_left(dur=1)      # shrink clip from right to left
+    g.hide("left", dur=1)      # shrink clip from right to left
 ```

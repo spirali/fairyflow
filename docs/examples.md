@@ -23,7 +23,7 @@ with Scene(1280, 720):
             Image("docs/ff_logo.png").height(200)
         wait(0.2)        
         g2.fade_out(dur=0.5)
-        g3.hide_right(dur=0.5)
+        g3.hide(dur=0.5)
         wait(0.2)
         
 with Scene(1280, 720):
@@ -186,7 +186,7 @@ with Scene(1280, 720):
             Image("../docs/ff_logo.png").height(200)
         wait(0.2)
         g2.fade_out(dur=0.5)
-        g3.hide_right(dur=0.5)
+        g3.hide(dur=0.5)
         wait(0.2)
 ```
 
@@ -199,9 +199,9 @@ The `with Group() as g2:` pattern is the core FairyFlow idiom: every node create
 animate the group as a whole afterward.
 
 Once the children are placed, `wait(0.2)` moves the global clock forward 0.2 seconds, creating
-a brief pause where the title and logo are fully visible. `.fade_out(dur=0.5)` and `.hide_right(dur=0.5)`
+a brief pause where the title and logo are fully visible. `.fade_out(dur=0.5)` and `.hide(dur=0.5)`
 then animate the two groups away. Both helpers advance the clock automatically, so the outro
-takes 0.2 + 0.5 + 0.5 + 0.2 = 1.4 seconds in total. (Note that `fade_out` and `hide_right`
+takes 0.2 + 0.5 + 0.5 + 0.2 = 1.4 seconds in total. (Note that `fade_out` and `hide`
 run sequentially here — use `Par` to run them simultaneously.)
 
 ### Building the number grid

@@ -45,8 +45,8 @@ with Scene():
 
 ### Positioning and alpha
 
-`Image` supports the same `.xy()`, `.align_x()`, `.align_y()`, and `.alpha()` methods as
-shape nodes — see [Positioning](positioning.md) for details.
+`Image` supports the same `.xy()`, `.align()`, and `.alpha()` methods as shape nodes — see
+[Positioning](positioning.md) for details.
 
 ---
 
@@ -79,8 +79,5 @@ with Scene():
 
     overlay = img.layer("overlay")
     overlay.alpha(0)         # hidden at frame 0
-
-    linear()
-    adv_time(1)
-    overlay.alpha(1)         # fades in over 1 second
+    overlay.alpha(1, dur=1)  # fades in over 1 second
 ```

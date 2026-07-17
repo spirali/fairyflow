@@ -963,193 +963,116 @@ class Group(
         result["layout"] = self._layout.serialize(serializer)
         return result
 
-    def clip_x(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def clip(
+        self,
+        x: FloatLike | None = None,
+        y: FloatLike | None = None,
+        w: FloatLike | None = None,
+        h: FloatLike | None = None,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
-        """Set the x offset of the clipping window.
+        """Set the clipping window, in one or more axes at once.
 
-        Values are relative to the node width: ``0.0`` is the left edge and
-        ``1.0`` is the right edge. Combine with `clip_w` to reveal or conceal
-        horizontal portions of the group.
+        `x`/`w` are relative to the node's own width (``0.0`` = left edge,
+        ``1.0`` = right edge); `y`/`h` are relative to its height. Each
+        argument left as `None` is untouched.
 
         Args:
-            value: Relative x start of the clipping window, in ``[0.0, 1.0]``.
+            x: Relative x start of the clipping window, in ``[0.0, 1.0]``.
+            y: Relative y start of the clipping window, in ``[0.0, 1.0]``.
+            w: Relative width of the clipping window, in ``[0.0, 1.0]``.
+            h: Relative height of the clipping window, in ``[0.0, 1.0]``.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_x", value, dur, ease)
+        with Par():
+            if x is not None:
+                self._set_attr("clip_x", x, dur, ease)
+            if y is not None:
+                self._set_attr("clip_y", y, dur, ease)
+            if w is not None:
+                self._set_attr("clip_w", w, dur, ease)
+            if h is not None:
+                self._set_attr("clip_h", h, dur, ease)
         return self
 
-    def clip_y(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def hide(
+        self,
+        direction: Literal["right", "left", "up", "down"] = "right",
+        *,
+        dur: Duration = 1,
+        ease: Easing = None,
     ) -> Self:
-        """Set the y offset of the clipping window.
+        """Animate hiding the group with a wipe effect.
 
-        Values are relative to the node height: ``0.0`` is the top edge and
-        ``1.0`` is the bottom edge.
+        `direction` is the sweep direction the content disappears toward:
+        ``"right"``/``"left"`` sweep or shrink the clip window horizontally,
+        ``"down"``/``"up"`` do the same vertically.
 
         Args:
-            value: Relative y start of the clipping window, in ``[0.0, 1.0]``.
-            dur: Optional duration for animation.
+            direction: Sweep direction, one of ``"right"``, ``"left"``,
+                ``"up"``, ``"down"``.
+            dur: Duration of the animation in seconds.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_y", value, dur, ease)
+        with Seq():
+            if direction == "right":
+                self.clip(x=0)
+                self.clip(x=1, dur=dur, ease=ease)
+            elif direction == "left":
+                self.clip(w=1)
+                self.clip(w=0, dur=dur, ease=ease)
+            elif direction == "down":
+                self.clip(y=0)
+                self.clip(y=1, dur=dur, ease=ease)
+            else:
+                self.clip(h=1)
+                self.clip(h=0, dur=dur, ease=ease)
         return self
 
-    def clip_w(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def reveal(
+        self,
+        direction: Literal["right", "left", "up", "down"] = "right",
+        *,
+        dur: Duration = 1,
+        ease: Easing = None,
     ) -> Self:
-        """Set the width of the clipping window.
+        """Animate revealing the group with a wipe effect.
 
-        Values are relative to the node width: ``1.0`` shows the full width
-        and ``0.0`` hides the node entirely.
+        `direction` is the sweep direction the content appears from:
+        ``"right"``/``"left"`` expand or sweep the clip window horizontally,
+        ``"down"``/``"up"`` do the same vertically.
 
         Args:
-            value: Relative width of the clipping window, in ``[0.0, 1.0]``.
-            dur: Optional duration for animation.
+            direction: Sweep direction, one of ``"right"``, ``"left"``,
+                ``"up"``, ``"down"``.
+            dur: Duration of the animation in seconds.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("clip_w", value, dur, ease)
-        return self
-
-    def clip_h(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Set the height of the clipping window.
-
-        Values are relative to the node height: ``1.0`` shows the full height
-        and ``0.0`` hides the node entirely.
-
-        Args:
-            value: Relative height of the clipping window, in ``[0.0, 1.0]``.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("clip_h", value, dur, ease)
-        return self
-
-    def hide_right(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate hiding the group with a wipe-right effect.
-
-        Animates ``clip_x`` from its current value to ``1.0``, causing the
-        content to disappear by sweeping toward the right.
-
-        Returns:
-            self, for method chaining.
-        """
         with Seq():
-            self.clip_x(0)
-            self.clip_x(1, dur=dur, ease=ease)
-        return self
-
-    def hide_left(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate hiding the group with a wipe-left effect.
-
-        Animates ``clip_w`` from its current value to ``0.0``, causing the
-        content to disappear by shrinking toward the left.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_w(1)
-            self.clip_w(0, dur=dur, ease=ease)
-        return self
-
-    def reveal_right(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate revealing the group with a wipe-right effect.
-
-        Sets ``clip_w`` to ``0.0`` at the current frame and animates it to
-        ``1.0``, causing the content to appear by expanding toward the right.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_w(0)
-            self.clip_w(1, dur=dur, ease=ease)
-        return self
-
-    def reveal_left(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate revealing the group with a wipe-left effect.
-
-        Sets ``clip_x`` to ``1.0`` at the current frame and animates it to
-        ``0.0``, causing the content to appear by sweeping toward the left.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_w(1)
-            self.clip_w(0, dur=dur, ease=ease)
-        return self
-
-    def hide_down(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate hiding the group with a wipe-down effect.
-
-        Animates ``clip_y`` from its current value to ``1.0``, causing the
-        content to disappear by sweeping toward the bottom.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_y(0)
-            self.clip_y(1, dur=dur, ease=ease)
-        return self
-
-    def hide_up(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate hiding the group with a wipe-up effect.
-
-        Animates ``clip_h`` from its current value to ``0.0``, causing the
-        content to disappear by shrinking toward the top.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_h(1)
-            self.clip_h(0, dur=dur, ease=ease)
-        return self
-
-    def reveal_down(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate revealing the group with a wipe-down effect.
-
-        Sets ``clip_h`` to ``0.0`` at the current frame and animates it to
-        ``1.0``, causing the content to appear by expanding toward the bottom.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_h(0)
-            self.clip_h(1, dur=dur, ease=ease)
-        return self
-
-    def reveal_up(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
-        """Animate revealing the group with a wipe-up effect.
-
-        Sets ``clip_y`` to ``1.0`` at the current frame and animates it to
-        ``0.0``, causing the content to appear by sweeping toward the top.
-
-        Returns:
-            self, for method chaining.
-        """
-        with Seq():
-            self.clip_y(1)
-            self.clip_y(0, dur=dur, ease=ease)
+            if direction == "right":
+                self.clip(w=0)
+                self.clip(w=1, dur=dur, ease=ease)
+            elif direction == "left":
+                self.clip(x=1)
+                self.clip(x=0, dur=dur, ease=ease)
+            elif direction == "down":
+                self.clip(h=0)
+                self.clip(h=1, dur=dur, ease=ease)
+            else:
+                self.clip(y=1)
+                self.clip(y=0, dur=dur, ease=ease)
         return self
 
 

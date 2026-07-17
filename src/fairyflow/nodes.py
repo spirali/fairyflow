@@ -23,6 +23,7 @@ from .exprs import (
     to_expr,
 )
 from .ctxvars import (
+    AnimProxy,
     Par,
     Seq,
     end_frame,
@@ -195,6 +196,34 @@ class Node(AnimatedObject):
         """
         return self._parent.get_scene()
 
+    def anim(self, dur: Duration, *, ease: Easing = None) -> AnimProxy:
+        """Return a proxy for animating several attributes of this node at once.
+
+        Every setter called on the returned proxy is pre-filled with `dur`/
+        `ease` and runs in parallel with the others in the chain — starting
+        at the same frame and advancing the clock by `dur` once, not once
+        per call:
+
+        ```python
+        g.anim(0.8).scale(1.9).xy(550, 400)
+        # equivalent to:
+        # with Par():
+        #     g.scale(1.9, dur=0.8)
+        #     g.xy(550, 400, dur=0.8)
+        ```
+
+        A `dur=`/`ease=` passed to an individual chained call still
+        overrides the proxy's.
+
+        Args:
+            dur: Duration applied to every chained setter call.
+            ease: Optional easing curve applied to every chained setter call.
+
+        Returns:
+            An `AnimProxy` wrapping this node.
+        """
+        return AnimProxy(self, dur, ease)
+
     def __repr__(self):
         if self._name:
             return f"<{self.kind} id={self._id} name={self._name}>"
@@ -229,39 +258,43 @@ class AlphaMixin:
         self._set_attr("alpha", value, dur, ease)
         return self
 
-    def fade_in(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
+    def fade_in(self, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Animate a fade-in effect by transitioning alpha from 0 to 1.
 
         Sets the node alpha to ``0`` at the current frame and animates it to
         ``1`` over the given duration.
 
         Args:
-            dur: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Seq():
-            self.alpha(0)
+            self.alpha(0, dur=0)
             self.alpha(1, dur=dur, ease=ease)
         return self
 
-    def fade_out(self, *, dur: Duration = 1, ease: Easing = None) -> Self:
+    def fade_out(self, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Animate a fade-out effect by transitioning alpha to 0.
 
         Animates the node alpha from ``1`` down to ``0`` over the
         given duration.
 
         Args:
-            dur: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
         with Seq():
-            self.alpha(1)
+            self.alpha(1, dur=0)
             self.alpha(0, dur=dur, ease=ease)
         return self
 
@@ -1005,7 +1038,7 @@ class Group(
         self,
         direction: Literal["right", "left", "up", "down"] = "right",
         *,
-        dur: Duration = 1,
+        dur: Duration = None,
         ease: Easing = None,
     ) -> Self:
         """Animate hiding the group with a wipe effect.
@@ -1017,7 +1050,9 @@ class Group(
         Args:
             direction: Sweep direction, one of ``"right"``, ``"left"``,
                 ``"up"``, ``"down"``.
-            dur: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
@@ -1025,16 +1060,16 @@ class Group(
         """
         with Seq():
             if direction == "right":
-                self.clip(x=0)
+                self.clip(x=0, dur=0)
                 self.clip(x=1, dur=dur, ease=ease)
             elif direction == "left":
-                self.clip(w=1)
+                self.clip(w=1, dur=0)
                 self.clip(w=0, dur=dur, ease=ease)
             elif direction == "down":
-                self.clip(y=0)
+                self.clip(y=0, dur=0)
                 self.clip(y=1, dur=dur, ease=ease)
             else:
-                self.clip(h=1)
+                self.clip(h=1, dur=0)
                 self.clip(h=0, dur=dur, ease=ease)
         return self
 
@@ -1042,7 +1077,7 @@ class Group(
         self,
         direction: Literal["right", "left", "up", "down"] = "right",
         *,
-        dur: Duration = 1,
+        dur: Duration = None,
         ease: Easing = None,
     ) -> Self:
         """Animate revealing the group with a wipe effect.
@@ -1054,7 +1089,9 @@ class Group(
         Args:
             direction: Sweep direction, one of ``"right"``, ``"left"``,
                 ``"up"``, ``"down"``.
-            dur: Duration of the animation in seconds.
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
@@ -1062,16 +1099,16 @@ class Group(
         """
         with Seq():
             if direction == "right":
-                self.clip(w=0)
+                self.clip(w=0, dur=0)
                 self.clip(w=1, dur=dur, ease=ease)
             elif direction == "left":
-                self.clip(x=1)
+                self.clip(x=1, dur=0)
                 self.clip(x=0, dur=dur, ease=ease)
             elif direction == "down":
-                self.clip(h=0)
+                self.clip(h=0, dur=0)
                 self.clip(h=1, dur=dur, ease=ease)
             else:
-                self.clip(y=1)
+                self.clip(y=1, dur=0)
                 self.clip(y=0, dur=dur, ease=ease)
         return self
 

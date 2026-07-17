@@ -151,7 +151,7 @@ with Scene(1280, 720):
             Text().span("Sieve of Eratosthenes").font_size(40).bold()
         with Group() as g3:
             Image("docs/ff_logo.png").height(200)    
-        g.fade_in()
+        g.fade_in(dur=1)
         wait(1)
 ```
 
@@ -414,11 +414,11 @@ with Group().column(40).align(y=0.2) as g:
         Text().span("Sieve of Eratosthenes").font_size(40).bold()
     with Group() as g3:
         Image("../docs/ff_logo.png").height(200)
-    g.fade_in()
+    g.fade_in(dur=1)
     wait(1)
 ```
 
 This outro lives in the *same* `Scene` as the grid — it is a sibling group placed at
-`align(y=0.2)` (top fifth of the canvas). `g.fade_in()` is called on the outer column group
+`align(y=0.2)` (top fifth of the canvas). `g.fade_in(dur=1)` is called on the outer column group
 rather than on `g2` and `g3` individually, so the title and logo fade in together as one unit.
 `wait(1)` extends the scene for one more second so the final frame is not cut off abruptly.

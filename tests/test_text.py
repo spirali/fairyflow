@@ -164,9 +164,6 @@ def test_tag_name_is_not_color(sc):
     assert isinstance(span, TextSpan)
     assert _span_text(span) == "INFO"
     assert span._name == "green"
-    # fill_color was never explicitly set on the span, so it stays absent —
-    # the engine resolves it by walking up to the ambient Text/TextGroup
-    # color at eval time (api-v2-impl.md §A.4); Python never materializes it.
     assert not span._has_attr("fill_color")
 
 

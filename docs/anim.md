@@ -224,6 +224,21 @@ with Scene():
                 Rect().size(40, 40).xy(20 + 60 * i, 60).color("orchid").fade_in(dur=0.4)
 ```
 
+`Par(stagger=)` is shorthand for exactly this pattern — each direct child of the block
+(a bare call, or a nested `Seq`/`Par`) starts `i × stagger` seconds later than the
+previous one, without a manual `wait()` offset:
+
+```ffpy video="mp4"
+with Scene():
+    with Par(stagger=0.15), anim(0.4):
+        for i in range(5):
+            Rect().size(40, 40).xy(20 + 60 * i, 60).color("orchid").fade_in()
+```
+
+`stagger` composes with an ambient `anim()` block default just like any other call, and
+is rejected on `Seq` (a sequence's children never start together, so staggering their
+start times has no meaning).
+
 ---
 
 ## Moving and transforming

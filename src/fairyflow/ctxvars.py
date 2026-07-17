@@ -68,10 +68,6 @@ def reset_frame(frame: int):
 
 
 class Composer:
-    """Shared base for `Seq`/`Par`: the composer stack (`.parent`), the
-    optional per-block `dur`/`ease` defaults consulted by `_set_attr` when a
-    call doesn't specify its own (api-v2-proposal.md §3.4), and the
-    enter/exit bookkeeping that pushes/pops `COMPOSER`."""
 
     def __init__(self, dur: Duration = None, ease: Easing = None):
         self.frame = 0
@@ -82,9 +78,14 @@ class Composer:
     def reset_frame(self, frame):
         self.frame = frame
 
+    def _begin_unit(self):
+        """Hook for `Par(stagger=)`."""
+        pass
+
     def __enter__(self):
         assert self.parent is None
         current = COMPOSER.get()
+        current._begin_unit()
         self.frame = current.frame
         self.parent = current
         COMPOSER.set(self)
@@ -121,9 +122,12 @@ class Par(Composer):
     Parallel composition of animations
     """
 
-    def __init__(self):
+    def __init__(self, stagger: Duration = None):
         super().__init__()
         self.max_frame = 0
+        self.stagger = stagger
+        self._stagger_frames = duration_to_frames(stagger)
+        self._unit_started = False
 
     def move_frame(self, frame):
         new_frame = self.frame + frame
@@ -139,21 +143,21 @@ class Par(Composer):
     def end_frame(self):
         return self.max_frame
 
+    def _begin_unit(self):
+        if self._unit_started:
+            self.frame += self._stagger_frames
+        else:
+            self._unit_started = True
+
     def __enter__(self):
         super().__enter__()
         self.max_frame = self.frame
+        self._unit_started = False
         return self
 
 
 class anim(Composer):
-    """Global context manager (api-v2-proposal.md §3.4): block-scoped
-    `dur`/`ease` defaults, consulted by `_set_attr`/`_move_attr` (via
-    `aobject.py::_resolve_dur_ease`) for any setter call inside that doesn't
-    specify its own. Composition-transparent — it carries no frame state of
-    its own and delegates every clock operation to its parent, so nesting it
-    inside/around a `Par`/`Seq` doesn't change that block's composition
-    semantics (`with Par(), anim(0.5):` still runs its children in
-    parallel)."""
+    """block-scoped `dur`/`ease` defaults"""
 
     def __init__(self, dur: Duration, *, ease: Easing = None):
         # Deliberately not calling Composer.__init__: it does `self.frame =
@@ -178,6 +182,9 @@ class anim(Composer):
     def reset_frame(self, frame):
         self.parent.reset_frame(frame)
 
+    def _begin_unit(self):
+        self.parent._begin_unit()
+
     def __enter__(self):
         assert self.parent is None
         self.parent = COMPOSER.get()
@@ -186,14 +193,7 @@ class anim(Composer):
 
 
 class AnimProxy:
-    """Lightweight fluent proxy returned by `Node.anim()` (api-v2-proposal.md
-    §3.3): pre-fills `dur`/`ease` on every chained setter call and runs them
-    in parallel, without opening a real nested `Composer` (which would need
-    an explicit close that a bare fluent chain has no hook for). Instead it
-    remembers the frame the chain started at and rewinds the ambient
-    composer back to it before each call after the first, so every call
-    starts from the same base frame — the same effect `Par` achieves, without
-    the lifecycle."""
+    """Lightweight proxy returned by `Node.anim()`."""
 
     def __init__(self, node, dur: Duration, ease: Easing = None):
         self._node = node

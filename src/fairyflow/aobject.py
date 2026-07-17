@@ -4,12 +4,6 @@ from .sentinels import INHERITED_VALUE
 
 
 def _resolve_dur_ease(dur, ease):
-    """`dur`/`ease` come straight from the calling setter's own parameters,
-    which are non-`None` for an explicit call or a `.anim()`-curried one.
-    Only a bare `None` (nothing specified at the call site) falls back to
-    the nearest enclosing `Par`/`Seq` block default (api-v2-proposal.md
-    §3.4/§3.5) — walking `.parent` so the innermost block that specifies one
-    wins."""
     if dur is not None:
         return dur, ease
     composer = COMPOSER.get()
@@ -64,6 +58,7 @@ class AnimatedObject:
         return self._attrs[name]
 
     def _set_attr(self, name, value, dur=None, ease=None):
+        COMPOSER.get()._begin_unit()
         dur, ease = _resolve_dur_ease(dur, ease)
         self._ensure_attr(name).set(value, dur=dur, ease=ease)
 
@@ -77,5 +72,6 @@ class AnimatedObject:
         self._end = get_frame()
 
     def _move_attr(self, name, delta, dur=None, ease=None):
+        COMPOSER.get()._begin_unit()
         dur, ease = _resolve_dur_ease(dur, ease)
         self._ensure_attr(name).move(delta, dur=dur, ease=ease)

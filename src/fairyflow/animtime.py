@@ -23,9 +23,6 @@ class Frames:
 
 type Duration = SupportsFloat | Frames | None
 
-# The 5 standard CSS-equivalent cubic-bezier presets (api-v2-proposal.md §3.2).
-# Sampled/custom-callable easing (`ease=lambda t: ...`) is deliberately not
-# supported yet — deferred alongside the rest of proposal §9.
 type Easing = Literal["linear", "in", "out", "in_out", "out_back"] | None
 
 

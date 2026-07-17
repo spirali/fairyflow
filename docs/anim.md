@@ -99,6 +99,64 @@ at the end.
 
 ---
 
+## The `.anim()` proxy
+
+`node.anim(dur, ease=None)` returns a proxy that pre-fills `dur`/`ease` on every chained
+setter call and runs them in parallel — a shorthand for animating several attributes of
+one node at once without writing out a `Par()` block:
+
+```python
+# these two are equivalent:
+g.anim(0.8).scale(1.9).xy(550, 400)
+
+with Par():
+    g.scale(1.9, dur=0.8)
+    g.xy(550, 400, dur=0.8)
+```
+
+```ffpy video="mp4"
+with Scene():
+    with Group().size(80, 80).align(0.5, 0.5) as g:
+        Rect().size(80, 80).color("orchid")
+    g.anim(1).scale(1.4).rotate(45)
+```
+
+A `dur=`/`ease=` passed to one call in the chain still overrides the proxy's.
+
+---
+
+## The `anim()` block
+
+`with anim(dur, ease=None):` sets the *default* `dur`/`ease` for any setter call inside
+the block that doesn't specify its own. Plain top-level code is already sequential, so a
+bare `anim()` block needs no extra `Seq()` wrapper:
+
+```ffpy video="mp4"
+with Scene():
+    box = Rect().size(80, 60).color("steelblue").xy(20, 50)
+    title = Rect().size(24, 24).color("gold").xy(230, 20)
+    with anim(0.6):
+        box.xy(180, 55)    # each step takes 0.6 s, one after another
+        title.alpha(0)
+```
+
+`anim()` says nothing about composition, so it combines freely with `Par`/`Seq` — pair it
+with `Par()` to animate several nodes' attributes at once instead of one after another:
+
+```ffpy video="mp4"
+with Scene():
+    box = Rect().size(80, 60).color("steelblue").xy(20, 50)
+    title = Rect().size(24, 24).color("gold").xy(230, 20)
+    with Par(), anim(1.2):
+        box.xy(180, 55)
+        title.alpha(0)
+```
+
+The most specific duration wins: an explicit `dur=` on a call beats `.anim()`'s, which
+beats the innermost enclosing `anim()` block.
+
+---
+
 ## Sequential and parallel composition
 
 Code at the top level is already **sequential** — each line follows the previous one.
@@ -109,8 +167,8 @@ Code at the top level is already **sequential** — each line follows the previo
 ```ffpy video="mp4"
 with Scene(width=300, height=140):
     with Seq():
-        Rect().size(100, 80).xy(15, 30).color("steelblue").fade_out()
-        Rect().size(100, 80).xy(165, 30).color("tomato").fade_in()
+        Rect().size(100, 80).xy(15, 30).color("steelblue").fade_out(dur=1)
+        Rect().size(100, 80).xy(165, 30).color("tomato").fade_in(dur=1)
 ```
 
 **`with Par():`** — all children start at the same time; the clock advances to the
@@ -119,8 +177,8 @@ longest child's end time:
 ```ffpy video="mp4"
 with Scene(width=300, height=140):
     with Par():
-        Rect().size(100, 80).xy(15, 30).color("steelblue").fade_out()
-        Rect().size(100, 80).xy(165, 30).color("tomato").fade_out()
+        Rect().size(100, 80).xy(15, 30).color("steelblue").fade_out(dur=1)
+        Rect().size(100, 80).xy(165, 30).color("tomato").fade_out(dur=1)
 ```
 
 Creating objects before the composition block makes them all visible from the start:
@@ -131,8 +189,8 @@ with Scene(width=300, height=140):
     b = Rect().size(100, 80).xy(165, 30).color("tomato")
 
     with Seq():
-        a.fade_out()   # a fades first …
-        b.fade_out()   # … then b follows
+        a.fade_out(dur=1)   # a fades first …
+        b.fade_out(dur=1)   # … then b follows
 ```
 
 `Par` and `Seq` compose freely. A typical pattern is a **sequence of parallel steps** —
@@ -224,8 +282,9 @@ with Scene():
 ## Fade in and fade out
 
 `.fade_in(dur=t)` animates alpha from 0 to 1. `.fade_out(dur=t)` animates alpha from its
-current value down to 0. Both advance the clock automatically. `dur` defaults to `1` and,
-like every other transition, both accept an `ease=` too.
+current value down to 0. Both advance the clock automatically. `dur` behaves like every
+other setter's — instant if left unset (unless an enclosing `anim()` block supplies a
+default) — and both accept an `ease=` too.
 
 ```ffpy video="mp4"
 with Scene():
@@ -269,7 +328,8 @@ with Scene():
 animate the clip to conceal or reveal the group content. `direction` is one of `"right"`
 (default), `"left"`, `"up"`, `"down"` and refers to the sweep direction: `reveal("right")`
 expands the clip window rightward, `reveal("left")` sweeps it leftward. Each call also
-advances the clock automatically.
+advances the clock automatically. Like `fade_in`/`fade_out`, `dur` is instant if left
+unset, unless an enclosing `anim()` block supplies a default.
 
 ```ffpy video="mp4"
 with Scene():

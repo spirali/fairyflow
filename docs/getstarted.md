@@ -41,7 +41,7 @@ press ++ctrl+enter++ to evaluate.
 
 ```ffpy video="mp4"
 with Scene():
-    stext("Hello world!").fade_out()
+    stext("Hello world!").fade_out(dur=1)
 ```
 
 

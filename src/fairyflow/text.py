@@ -87,7 +87,7 @@ class TextSpan(Node, InheritedTextStyleMixin):
     def text(self, value: str):
         self._set_attr("text", value)
 
-    def get_pos(self):
+    def at(self):
         return Position(self._parent, Call.default_x(self), Call.default_y(self))
 
 

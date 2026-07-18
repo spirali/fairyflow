@@ -81,25 +81,30 @@ with Scene():
 
 ---
 
-## Cross-group positioning — `get_pos()` and `pos()`
+## Cross-group positioning — `at()` and `pos()`
 
 The methods above always work within the coordinate space of a single parent. When you need
 to position a node **relative to another node that lives in a different group**, use
-`.get_pos()` and `.pos()`.
+`.at()` and `.pos()`.
 
-`.get_pos(align_x, align_y)` returns a `Position` object — a live coordinate reference
-attached to the source node's coordinate space:
+`.at(x, y)` returns a `Position` object — a live coordinate reference attached to the
+source node's coordinate space. Fractions must be given in pairs; a bare `at(0.5)` raises
+`TypeError` rather than silently meaning top-center. Nine named anchors cover the common
+cases:
 
 | call | point returned |
 |---|---|
-| `node.get_pos()` | top-left corner of the node |
-| `node.get_pos(0.5, 0.5)` | center of the node |
-| `node.get_pos(1, 0.5)` | right-center edge |
-| `node.get_pos(0.5, 0)` | top-center edge |
+| `node.at()` | center of the node (the default — also the only point for a size-less node) |
+| `node.at("top_left")` | top-left corner |
+| `node.at("right")` | right-center edge |
+| `node.at("top")` | top-center edge |
+| `node.at(0.2, 0.7)` | 20% across, 70% down |
 
-`.pos(position)` sets the node's position to a `Position` returned by `.get_pos()`.
+`.pos(position)` sets the node's position to a `Position` returned by `.at()`.
 FairyFlow automatically converts the coordinates into the target node's local space, so
 group offsets, scales, and rotations are all accounted for — **no manual maths needed**.
+This works between any two nodes, whether they live inside a `Group()` or directly in
+the bare `Scene`.
 
 ### Connecting nodes across groups
 
@@ -113,13 +118,13 @@ with Scene(width=300, height=160):
         Rect().size(60, 60).color("coral")
 
     connector = Path().stroke_color("#555").stroke_width(2)
-    connector.move_to().pos(a.get_pos(1, 0.5))   # right-center of a
-    connector.line_to().pos(b.get_pos(0, 0.5))   # left-center of b
+    connector.move_to().pos(a.at("right"))   # right-center of a
+    connector.line_to().pos(b.at("left"))    # left-center of b
 ```
 
 ### Tracking during animation
 
-Because `.get_pos()` returns a live reference to the node's attribute expressions (not a
+Because `.at()` returns a live reference to the node's attribute expressions (not a
 snapshot of the current value), a node set with `.pos()` **tracks its source at every
 frame**. In the example below, one end of the line is fixed on a static anchor while the
 other end is permanently bound to the moving box's center:
@@ -132,8 +137,8 @@ with Scene(width=300, height=160):
         Rect().size(50, 50).color("steelblue")
 
     line = Path().stroke_color("#888").stroke_width(2)
-    line.move_to().pos(anchor.get_pos(0.5, 0.5))  # fixed end
-    line.line_to().pos(box.get_pos(0.5, 0.5))     # tracks box center
+    line.move_to().pos(anchor.at())  # fixed end
+    line.line_to().pos(box.at())     # tracks box center (the default anchor)
 
     box.xy(180, 55, dur=1.5)   # move the box — the line stretches automatically
 ```
@@ -150,10 +155,47 @@ with Scene(width=300, height=160):
 
     # arrow tip sits 10 px above the top-center of box
     arrow = Path().stroke_color("tomato").stroke_width(3)
-    arrow.move_to().pos(box.get_pos(0.5, 0)).move(0, -30)
-    arrow.line_to().pos(box.get_pos(0.5, 0)).move(0, -4)
+    arrow.move_to().pos(box.at("top")).move(0, -30)
+    arrow.line_to().pos(box.at("top")).move(0, -4)
     arrow.triangle_arrow("end")
 ```
+
+---
+
+## Sibling placement — `.next_to()`
+
+`.at()`/`.pos()` place a node at a *point*; `.next_to(node, direction, gap=0, align=0.5)`
+places it **beside another node**, taking both boxes' size into account — the everyday
+"label next to box" case that would otherwise need manual offset math:
+
+```ffpy frame="0"
+with Scene(width=300, height=120):
+    with Group().size(60, 60).xy(40, 30) as box:
+        Rect().size(60, 60).color("steelblue")
+
+    label = Text()
+    label.span("label").font_size(16)
+    label.next_to(box, "right", gap=12)   # right of box, vertically centered
+```
+
+`direction` is one of `"right"`, `"left"`, `"above"`, `"below"` — which side of the target
+to place on. `gap` is the pixel distance between the facing edges. `align` places the node
+along the perpendicular axis: `0` start-aligned, `0.5` centered (the default), `1`
+end-aligned:
+
+```ffpy frame="0"
+with Scene(width=300, height=120):
+    with Group().size(60, 60).xy(40, 20) as img:
+        Rect().size(60, 60).color("coral")
+
+    caption = Text()
+    caption.span("caption").font_size(14)
+    caption.next_to(img, "below", gap=8, align=0)   # under img, left edges aligned
+```
+
+Like `.pos()`, `next_to()` works **across groups** and is **live** — built on the same
+`node_transform` machinery, so the node keeps tracking its target as it moves. It also
+accepts `dur=`/`ease=` like any other position change.
 
 ---
 

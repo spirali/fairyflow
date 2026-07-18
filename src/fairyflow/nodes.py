@@ -116,10 +116,6 @@ class Node(AnimatedObject):
     def _new_id(self):
         return self._parent._new_id()
 
-    # v1 attribute name -> v2 wire key, for the handful that were renamed
-    # (api-v2-impl.md §A.5); everything else keeps its Python-internal name.
-    # Python method names are unaffected either way — this only changes what
-    # gets written to JSON.
     _WIRE_KEY = {
         "width": "w",
         "height": "h",
@@ -421,6 +417,47 @@ class SizeMixin:
         return self.size(rel(1), rel(1), dur=dur, ease=ease)
 
 
+AnchorName = Literal[
+    "center",
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "top_left",
+    "top_right",
+    "bottom_left",
+    "bottom_right",
+]
+
+_ANCHORS: dict[AnchorName, tuple[float, float]] = {
+    "center": (0.5, 0.5),
+    "top": (0.5, 0.0),
+    "bottom": (0.5, 1.0),
+    "left": (0.0, 0.5),
+    "right": (1.0, 0.5),
+    "top_left": (0.0, 0.0),
+    "top_right": (1.0, 0.0),
+    "bottom_left": (0.0, 1.0),
+    "bottom_right": (1.0, 1.0),
+}
+
+
+def _effective_width(node):
+    if isinstance(node, SizeMixin):
+        return node._get_attr("width")
+    if isinstance(node, (PathMove, PathLine, PathCubic)):
+        return 0
+    return Call.default_width(node)
+
+
+def _effective_height(node):
+    if isinstance(node, SizeMixin):
+        return node._get_attr("height")
+    if isinstance(node, (PathMove, PathLine, PathCubic)):
+        return 0
+    return Call.default_height(node)
+
+
 @beartype
 class PositionMixin:
     """Mixin that adds animatable `x` / `y` position and alignment helpers to
@@ -539,24 +576,16 @@ class PositionMixin:
             self, for method chaining.
         """
         parent = self.parent_group()
-        sized = isinstance(self, SizeMixin)
         with Par():
             if x is not None:
-                if sized:
-                    new_x = Call.mul(
-                        Call.sub(parent._get_attr("width"), self._get_attr("width")), x
-                    )
-                else:
-                    new_x = Call.mul(parent._get_attr("width"), x)
+                new_x = Call.mul(
+                    Call.sub(parent._get_attr("width"), _effective_width(self)), x
+                )
                 self._set_attr("x", new_x, dur, ease)
             if y is not None:
-                if sized:
-                    new_y = Call.mul(
-                        Call.sub(parent._get_attr("height"), self._get_attr("height")),
-                        y,
-                    )
-                else:
-                    new_y = Call.mul(parent._get_attr("height"), y)
+                new_y = Call.mul(
+                    Call.sub(parent._get_attr("height"), _effective_height(self)), y
+                )
                 self._set_attr("y", new_y, dur, ease)
         return self
 
@@ -598,26 +627,118 @@ class PositionMixin:
             self._move_attr("y", dy, dur, ease)
         return self
 
-    def get_pos(self, align_x=0, align_y=0) -> Position:
-        """Return the current position of the node as a `Position`.
+    def at(
+        self,
+        x: FloatLike | AnchorName | None = None,
+        y: FloatLike | None = None,
+    ) -> Position:
+        """Return a point on the node as a live `Position`.
 
         Args:
-            align_x: Horizontal alignment offset within the node. ``0.0``
-                returns the left edge; ``0.5`` the center; ``1.0`` the right edge.
-            align_y: Vertical alignment offset within the node. ``0.0``
-                returns the top edge; ``0.5`` the center; ``1.0`` the bottom edge.
+            x: Horizontal fraction (``0.0`` left edge, ``1.0`` right edge), or
+                a named anchor string (``"center"``, ``"top_left"``, ...).
+                ``None`` with `y` also `None` defaults to the center.
+            y: Vertical fraction (``0.0`` top edge, ``1.0`` bottom edge).
+                Fractions must be given in pairs — a bare `at(0.5)` raises
+                `TypeError` rather than silently meaning top-center.
 
         Returns:
-            A `Position` representing the node's resolved coordinates.
+            A `Position` representing the node's resolved coordinates. For
+            `SizeMixin` nodes this uses the actual (possibly overridden) box;
+            for path command handles (genuinely zero-size) every anchor
+            resolves to the same raw point; for anything else (currently
+            `Text`) it falls back to the engine's measured/computed extent,
+            so e.g. a text node's `at("center")` is its true visual center.
         """
-        x = self._get_attr("x")
-        y = self._get_attr("y")
-        if isinstance(self, SizeMixin):
-            if align_x != 0:
-                x = x + self._get_attr("width") * align_x
-            if align_y != 0:
-                y = y + self._get_attr("height") * align_y
-        return Position(self._parent, x, y)
+        if isinstance(x, str):
+            if y is not None:
+                raise TypeError(
+                    "at(): a named anchor can't be combined with a y fraction"
+                )
+            align_x, align_y = _ANCHORS[x]
+        elif x is None and y is None:
+            align_x = 0.5
+            align_y = 0.5
+        elif x is None or y is None:
+            raise TypeError("at(): fractions must be given in pairs, e.g. at(0.5, 0.5)")
+        else:
+            align_x, align_y = x, y
+
+        px = self._get_attr("x")
+        py = self._get_attr("y")
+        if align_x != 0:
+            w = _effective_width(self)
+            if w != 0:
+                px = px + w * align_x
+        if align_y != 0:
+            h = _effective_height(self)
+            if h != 0:
+                py = py + h * align_y
+        return Position(self._parent, px, py)
+
+    def next_to(
+        self,
+        node: "PositionMixin",
+        direction: Literal["right", "left", "above", "below"] = "right",
+        gap: FloatLike = 0,
+        align: FloatLike = 0.5,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Place this node beside another node, accounting for both boxes' size.
+
+        Args:
+            node: The sibling (or any other) node to place next to.
+            direction: Which side of `node` to place this node on.
+            gap: Pixel gap between the facing edges.
+            align: Placement along the perpendicular axis: ``0.0`` start-aligned,
+                ``0.5`` centered, ``1.0`` end-aligned.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        nx = node._get_attr("x")
+        ny = node._get_attr("y")
+        nw = _effective_width(node)
+        nh = _effective_height(node)
+
+        if direction in ("right", "left"):
+            target_y = Call.add(ny, Call.mul(nh, align))
+            target_x = (
+                Call.add(Call.add(nx, nw), gap)
+                if direction == "right"
+                else Call.sub(nx, gap)
+            )
+        else:
+            target_x = Call.add(nx, Call.mul(nw, align))
+            target_y = (
+                Call.add(Call.add(ny, nh), gap)
+                if direction == "below"
+                else Call.sub(ny, gap)
+            )
+
+        position = Position(node._parent, target_x, target_y).into_node(self._parent)
+        sw = _effective_width(self)
+        sh = _effective_height(self)
+
+        final_x = position.x
+        final_y = position.y
+        if direction in ("right", "left"):
+            final_y = Call.sub(final_y, Call.mul(sh, align))
+            if direction == "left":
+                final_x = Call.sub(final_x, sw)
+        else:
+            final_x = Call.sub(final_x, Call.mul(sw, align))
+            if direction == "above":
+                final_y = Call.sub(final_y, sh)
+
+        with Par():
+            self._set_attr("x", final_x, dur, ease)
+            self._set_attr("y", final_y, dur, ease)
+        return self
 
     def follow_path(
         self,
@@ -1347,7 +1468,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             vx = child1._get_attr("c1_x")
             vy = child1._get_attr("c1_y")
         else:
-            p = child0.get_pos()
+            p = child0.at()
             vx = Call.sub(child1._get_attr("x"), p.x)
             vy = Call.sub(child1._get_attr("y"), p.y)
         return (child0, vx, vy)
@@ -1361,7 +1482,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             vx = child0._get_attr("c2_x")
             vy = child0._get_attr("c2_y")
         else:
-            p = child0.get_pos()
+            p = child0.at()
             vx = Call.sub(child1._get_attr("x"), p.x)
             vy = Call.sub(child1._get_attr("y"), p.y)
         return (child0, vx, vy)
@@ -1370,7 +1491,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         nx = Call.norm(vx, vy)
         ny = Call.norm(vy, vx)
 
-        pos = child.get_pos()
+        pos = child.at()
         px = pos.x + nx * length
         py = pos.y + ny * length
 

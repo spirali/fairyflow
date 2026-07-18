@@ -65,7 +65,14 @@ impl<'a> EvalCtx<'a> {
 
 /// Collect ancestor chain from `node_id` up to (and including) the topmost ancestor.
 /// Result: [node_id, parent, grandparent, ...]
+///
+/// `NodeId::SCENE` (and, defensively, any other id absent from `ctx.nodes`) resolves
+/// to an empty chain: the `Scene` has no position/rotation/scale of its own, so "no
+/// group transforms to apply" is exactly the correct root/identity frame for it.
 fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
+    if node_id == NodeId::SCENE {
+        return Vec::new();
+    }
     let mut chain = Vec::new();
     let mut current = node_id;
     while let Some(node) = ctx.nodes.get(&current) {
@@ -149,7 +156,10 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform>
     }
 }
 
-/// Transform `pt` from source node's local coordinate space into target node's local space.
+/// Transform `pt` from source node's local coordinate space into target node's local
+/// space. Either (or both) of `source`/`target` may be `NodeId::SCENE`, meaning the
+/// top-level scene/root frame — see `ancestor_chain`. When both are `NodeId::SCENE`
+/// the `source == target` fast path below applies (no transform needed).
 fn node_transform(
     source: NodeId,
     target: NodeId,

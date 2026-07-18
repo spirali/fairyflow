@@ -56,8 +56,8 @@ with Scene(1280, 720):
 
             wait(0.5)
             with Par():
-                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
-                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)
+                arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
+                arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)
 
             r = numbers[idx].get_child(kind="rect")
             wait(0.3)
@@ -65,24 +65,24 @@ with Scene(1280, 720):
             wait(0.2)
 
             with Group() as m:
-                m.pos(numbers[idx].get_pos(0.5))
+                m.pos(numbers[idx].at())
                 p = Path().stroke_color("red").stroke_width(2)
                 a = p.move_to()
                 b = p.line_to()
-                p.move_to().pos(a.get_pos()).move(0, -4)
-                p.line_to().pos(a.get_pos()).move(0, 4)
-                p.move_to().pos(b.get_pos()).move(0, -4)
-                p.line_to().pos(b.get_pos()).move(0, 4)        
-                t = Text().pos(numbers[idx].get_child(kind="text").get_pos())
+                p.move_to().pos(a.at()).move(0, -4)
+                p.line_to().pos(a.at()).move(0, 4)
+                p.move_to().pos(b.at()).move(0, -4)
+                p.line_to().pos(b.at()).move(0, 4)        
+                t = Text().pos(numbers[idx].get_child(kind="text").at())
                 t.span(str(step)).color("red")            
                 m.fade_in(dur=0.5)
            
             for i in range(3):
                 with Par():
-                    a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), dur=0.5)            
-                    b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), dur=0.5)
-                    t.pos(numbers[idx + i * step].get_pos().move(70, -30), dur=0.5)
-                #g.pos(numbers[1 + i * 2].get_pos())
+                    a.pos(numbers[idx + i * step].at().move(0, -6), dur=0.5)            
+                    b.pos(numbers[idx + (i + 1) * step].at().move(0, -6), dur=0.5)
+                    t.pos(numbers[idx + i * step].at("top_left").move(70, -30), dur=0.5)
+                #g.pos(numbers[1 + i * 2].at())
                 wait(0.2)
                 r = numbers[idx + (i + 1) * step].get_child(kind="rect")              
                 r.color("red", dur=0.5)
@@ -105,8 +105,8 @@ with Scene(1280, 720):
             idx = step - 1
             wait(0.3)
             with Par():
-                arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
-                arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)                                  
+                arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
+                arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)                                  
             wait(0.2)
             r = numbers[idx].get_child(kind="rect")
             r.color("green", dur=0.4)
@@ -282,14 +282,14 @@ transition. The grid zooms in and shifts in one fluid move.
 
 ```python
     with Par():
-        arrow_start.pos(numbers[idx].get_pos(0.5).move(-5, -5), dur=0.5)
-        arrow_end.pos(numbers[idx].get_pos(0.5).move(-5, -40), dur=0.5)
+        arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
+        arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)
 ```
 
-`get_pos(0.5)` returns the center of a cell as a `Position` object (the argument `0.5` is the
-horizontal alignment — 0.0 is the left edge, 1.0 is the right edge, 0.5 is the center). Passing
-that `Position` to `.pos()` animates the path endpoint to the cell's center. The `.move(-5, -40)`
-call applies a small relative offset, nudging the arrowhead above the cell.
+`.at()` with no arguments returns the center of a cell as a `Position` object (the center is
+`at()`'s default point — see [Positioning](positioning.md#cross-group-positioning-at-and-pos)).
+Passing that `Position` to `.pos()` animates the path endpoint to the cell's center. The
+`.move(-5, -40)` call applies a small relative offset, nudging the arrowhead above the cell.
 
 ```python
     r = numbers[idx].get_child(kind="rect")
@@ -303,15 +303,15 @@ call applies a small relative offset, nudging the arrowhead above the cell.
 
 ```python
 with Group() as m:
-    m.pos(numbers[idx].get_pos(0.5))
+    m.pos(numbers[idx].at())
     p = Path().stroke_color("red").stroke_width(2)
     a = p.move_to()
     b = p.line_to()
-    p.move_to().pos(a.get_pos()).move(0, -4)
-    p.line_to().pos(a.get_pos()).move(0, 4)
-    p.move_to().pos(b.get_pos()).move(0, -4)
-    p.line_to().pos(b.get_pos()).move(0, 4)
-    t = Text().pos(numbers[idx].get_child(kind="text").get_pos())
+    p.move_to().pos(a.at()).move(0, -4)
+    p.line_to().pos(a.at()).move(0, 4)
+    p.move_to().pos(b.at()).move(0, -4)
+    p.line_to().pos(b.at()).move(0, 4)
+    t = Text().pos(numbers[idx].get_child(kind="text").at())
     t.span(str(step)).color("red")
     m.fade_in(dur=0.5)
 ```
@@ -320,12 +320,12 @@ This builds a red bracket: a horizontal line from `a` to `b` with a short vertic
 end. The path has 6 commands in total:
 
 1. The main line: `move_to()` → `a`, `line_to()` → `b`
-2. Left tick: `move_to()` at `a.get_pos()` offset by (0, −4), `line_to()` at `a.get_pos()`
+2. Left tick: `move_to()` at `a.at()` offset by (0, −4), `line_to()` at `a.at()`
    offset by (0, +4)
-3. Right tick: same pattern at `b.get_pos()`
+3. Right tick: same pattern at `b.at()`
 
 The key insight is that the tick endpoints are defined *relative to `a` and `b`* using
-`pos(a.get_pos()).move(0, ±4)`. When `a` and `b` are animated to new positions the ticks move
+`pos(a.at()).move(0, ±4)`. When `a` and `b` are animated to new positions the ticks move
 with them automatically — you never have to update them separately.
 
 The text label `t` sits next to the starting cell and shows the prime value in red.
@@ -333,9 +333,9 @@ The text label `t` sits next to the starting cell and shows the prime value in r
 ```python
 for i in range(3):
     with Par():
-        a.pos(numbers[idx + i * step].get_pos(0.5).move(0, -6), dur=0.5)
-        b.pos(numbers[idx + (i + 1) * step].get_pos(0.5).move(0, -6), dur=0.5)
-        t.pos(numbers[idx + i * step].get_pos().move(70, -30), dur=0.5)
+        a.pos(numbers[idx + i * step].at().move(0, -6), dur=0.5)
+        b.pos(numbers[idx + (i + 1) * step].at().move(0, -6), dur=0.5)
+        t.pos(numbers[idx + i * step].at("top_left").move(70, -30), dur=0.5)
     wait(0.2)
     r = numbers[idx + (i + 1) * step].get_child(kind="rect")
     r.color("red", dur=0.5)

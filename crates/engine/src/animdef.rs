@@ -487,4 +487,56 @@ mod tests {
         anim.build_scene(FrameId::new(0), SceneSelection::Single(1))
             .unwrap();
     }
+
+    /// `map_x`/`map_y` with a `NodeId::SCENE` operand (wire spelling `-1`)
+    /// must resolve like a normal cross-group reference into/out of the
+    /// top-level root frame, with no error — the fix for `next_to()`/`at()`/
+    /// `pos()` between nodes that are direct `Scene` children (no `Group`).
+    const SCENE_SENTINEL_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "SceneSentinel", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 2, 3],
+     "nodes": [
+       {"kind": "group", "x": 100, "y": 100, "w": 50, "h": 50, "layout": {"kind": "center"},
+        "children": [1]},
+       {"kind": "rect", "x": 5, "y": 5, "w": 10, "h": 10, "fill": "green"},
+       {"kind": "rect",
+        "x": ["map_x", 1, -1, 5, 5],
+        "y": ["map_y", 1, -1, 5, 5],
+        "w": 10, "h": 10, "fill": "red"},
+       {"kind": "rect",
+        "x": ["map_x", -1, -1, 42, 99],
+        "y": ["map_y", -1, -1, 42, 99],
+        "w": 10, "h": 10, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    fn rect_xy(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
+        let node = scene.children.iter().find(|n| n.id == id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Rect { position, .. } => (position.x, position.y),
+            other => panic!("expected a rect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn node_transform_resolves_scene_sentinel() {
+        let anim = AnimationDef::from_json(SCENE_SENTINEL_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // node 2: maps (5, 5) from node 1's local frame (nested in a group at
+        // (100, 100)) into the SCENE root frame -> (105, 105).
+        assert_eq!(rect_xy(&scene, 2), (105.0, 105.0));
+        // node 3: source == target == NodeId::SCENE -> identity fast path.
+        assert_eq!(rect_xy(&scene, 3), (42.0, 99.0));
+    }
+
+    #[test]
+    fn node_id_rejects_other_negative_values() {
+        let json = SCENE_SENTINEL_JSON.replace(r#""map_x", 1, -1"#, r#""map_x", 1, -2"#);
+        assert!(AnimationDef::from_json(&json).is_err());
+    }
 }

@@ -68,7 +68,6 @@ def reset_frame(frame: int):
 
 
 class Composer:
-
     def __init__(self, dur: Duration = None, ease: Easing = None):
         self.frame = 0
         self.parent = None

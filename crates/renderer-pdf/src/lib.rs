@@ -12,7 +12,9 @@ use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{AffineTransform, node_z_level, positional_transform};
-use renderer_core::{Color, ImageLayer, Node, NodeKind, Scene, Size, Style, TextChild, TextSpan};
+use renderer_core::{
+    Color, ImageLayer, Node, NodeKind, Position, Scene, Size, Style, TextChild, TextSpan,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -191,17 +193,24 @@ impl PdfRenderer {
                 position,
                 size,
                 style,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 z_level: _,
             } => {
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: *scale_x,
+                        height: *scale_y,
                     },
-                    0.0,
-                    0.0,
-                    0.0,
+                    *rotation,
+                    pivot_x_abs,
+                    pivot_y_abs,
                     parent_transform,
                 );
                 surface.push_transform(&to_krilla_transform(transform));
@@ -221,17 +230,24 @@ impl PdfRenderer {
                 position,
                 size,
                 style,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 z_level: _,
             } => {
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: *scale_x,
+                        height: *scale_y,
                     },
-                    0.0,
-                    0.0,
-                    0.0,
+                    *rotation,
+                    pivot_x_abs,
+                    pivot_y_abs,
                     parent_transform,
                 );
                 surface.push_transform(&to_krilla_transform(transform));
@@ -244,13 +260,28 @@ impl PdfRenderer {
             NodeKind::Path {
                 style,
                 children,
+                scale_x,
+                scale_y,
+                rotation,
                 z_level: _,
                 crop_start,
                 crop_end,
+                ..
             } => {
                 let verbs = build_cropped_path_verbs(children, *crop_start, *crop_end);
                 if let Some(path) = verbs_to_krilla_path(&verbs) {
-                    surface.push_transform(&to_krilla_transform(parent_transform));
+                    let transform = positional_transform(
+                        &Position { x: 0.0, y: 0.0 },
+                        Size {
+                            width: *scale_x,
+                            height: *scale_y,
+                        },
+                        *rotation,
+                        0.0,
+                        0.0,
+                        parent_transform,
+                    );
+                    surface.push_transform(&to_krilla_transform(transform));
                     fill_and_stroke(surface, &path, style, parent_alpha);
                     surface.pop();
                 }
@@ -290,6 +321,11 @@ impl PdfRenderer {
                 position,
                 size,
                 alpha,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 z_level: _,
                 path,
                 keep_aspect,
@@ -298,15 +334,17 @@ impl PdfRenderer {
                 ..
             } => {
                 let effective_alpha = parent_alpha * *alpha as f32;
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let base_transform = positional_transform(
                     position,
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: *scale_x,
+                        height: *scale_y,
                     },
-                    0.0,
-                    0.0,
-                    0.0,
+                    *rotation,
+                    pivot_x_abs,
+                    pivot_y_abs,
                     parent_transform,
                 );
                 self.render_image(
@@ -405,9 +443,6 @@ impl PdfRenderer {
                             if layer_alpha <= 0.0 {
                                 continue;
                             }
-                            let (lx, ly) = override_
-                                .map(|ov| (ov.position.x as f32, ov.position.y as f32))
-                                .unwrap_or((0.0, 0.0));
                             let Some(layer_cached) = image_cache::load_svg_layer(spec.path, label)
                             else {
                                 continue;
@@ -416,8 +451,7 @@ impl PdfRenderer {
                                 CachedImageKind::Svg { raw_data, .. } => raw_data,
                                 _ => continue,
                             };
-                            let layer_transform =
-                                AffineTransform::from_translate(lx, ly).concat(base_transform);
+                            let layer_transform = image_layer_translate(override_, base_transform);
                             self.draw_svg_bytes(
                                 surface,
                                 layer_raw,
@@ -486,23 +520,21 @@ impl PdfRenderer {
                         if layer_alpha <= 0.0 {
                             continue;
                         }
-                        let (lx, ly) = override_
-                            .map(|ov| (ov.position.x as f32, ov.position.y as f32))
-                            .unwrap_or((0.0, 0.0));
                         let layer_key = format!("{}\0ora\0{}", spec.path, layer_data.name);
                         let layer_placement = ImagePlacement {
-                            offset_x: placement.offset_x + layer_data.x as f32 * placement.sx + lx,
-                            offset_y: placement.offset_y + layer_data.y as f32 * placement.sy + ly,
+                            offset_x: placement.offset_x + layer_data.x as f32 * placement.sx,
+                            offset_y: placement.offset_y + layer_data.y as f32 * placement.sy,
                             dest_w: layer_data.pixmap.width as f32 * placement.sx,
                             dest_h: layer_data.pixmap.height as f32 * placement.sy,
                             ..placement
                         };
+                        let layer_transform = image_layer_translate(override_, base_transform);
                         self.draw_raster_pixmap(
                             surface,
                             &layer_key,
                             &layer_data.pixmap,
                             &layer_placement,
-                            base_transform,
+                            layer_transform,
                             layer_alpha,
                         );
                     }
@@ -761,6 +793,24 @@ fn render_text_lines(
 fn to_krilla_transform(t: AffineTransform) -> KTransform {
     // AffineTransform { a=sx, b=ky, c=kx, d=sy, e=tx, f=ty }
     KTransform::from_row(t.a, t.b, t.c, t.d, t.e, t.f)
+}
+
+/// An image layer override's `position` is a translate-only nudge on top of
+/// wherever its content already sits in the source SVG/ORA composite — unlike
+/// Rect/Group/Image, a layer's content is not anchored at its own local
+/// (0, 0), so rotation/scale/pivot (which assume that) are not applied here;
+/// doing so can swing content arbitrarily far from view. Deferred until layer
+/// content has a real local bounding box to rotate/scale/pivot around (same
+/// category of gap as Path's, `api-v2-impl.md` item 2).
+fn image_layer_translate(
+    override_: Option<&ImageLayer>,
+    base_transform: AffineTransform,
+) -> AffineTransform {
+    let Some(ov) = override_ else {
+        return base_transform;
+    };
+    AffineTransform::from_translate(ov.position.x as f32, ov.position.y as f32)
+        .concat(base_transform)
 }
 
 fn verbs_to_krilla_path(verbs: &[PathVerb]) -> Option<Path> {

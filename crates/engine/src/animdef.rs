@@ -488,15 +488,11 @@ mod tests {
             .unwrap();
     }
 
-    /// `map_x`/`map_y` with a `NodeId::SCENE` operand (wire spelling `-1`)
-    /// must resolve like a normal cross-group reference into/out of the
-    /// top-level root frame, with no error — the fix for `next_to()`/`at()`/
-    /// `pos()` between nodes that are direct `Scene` children (no `Group`).
     const SCENE_SENTINEL_JSON: &str = r#"{
   "version": 2,
   "scenes": [
     {"name": "SceneSentinel", "width": 200, "height": 200, "frames": 1,
-     "background": "white", "children": [0, 2, 3],
+     "background": "white", "children": [0, 2, 3, 4],
      "nodes": [
        {"kind": "group", "x": 100, "y": 100, "w": 50, "h": 50, "layout": {"kind": "center"},
         "children": [1]},
@@ -508,7 +504,10 @@ mod tests {
        {"kind": "rect",
         "x": ["map_x", -1, -1, 42, 99],
         "y": ["map_y", -1, -1, 42, 99],
-        "w": 10, "h": 10, "fill": "blue"}
+        "w": 10, "h": 10, "fill": "blue"},
+       {"kind": "rect",
+        "x": ["auto_x", -1], "y": ["auto_y", -1],
+        "w": ["auto_w", -1], "h": ["auto_h", -1], "fill": "gold"}
      ]}
   ]
 }"#;
@@ -517,6 +516,14 @@ mod tests {
         let node = scene.children.iter().find(|n| n.id == id).unwrap();
         match &node.kind {
             renderer_core::NodeKind::Rect { position, .. } => (position.x, position.y),
+            other => panic!("expected a rect, got {other:?}"),
+        }
+    }
+
+    fn rect_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
+        let node = scene.children.iter().find(|n| n.id == id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Rect { size, .. } => (size.width, size.height),
             other => panic!("expected a rect, got {other:?}"),
         }
     }
@@ -532,6 +539,18 @@ mod tests {
         assert_eq!(rect_xy(&scene, 2), (105.0, 105.0));
         // node 3: source == target == NodeId::SCENE -> identity fast path.
         assert_eq!(rect_xy(&scene, 3), (42.0, 99.0));
+    }
+
+    #[test]
+    fn auto_x_y_w_h_resolve_scene_sentinel() {
+        let anim = AnimationDef::from_json(SCENE_SENTINEL_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // node 4: auto_x/auto_y/auto_w/auto_h against the -1 sentinel ->
+        // the Scene's own default position (0, 0) and its dimensions.
+        assert_eq!(rect_xy(&scene, 4), (0.0, 0.0));
+        assert_eq!(rect_wh(&scene, 4), (200.0, 200.0));
     }
 
     #[test]

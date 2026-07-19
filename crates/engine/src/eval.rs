@@ -384,10 +384,34 @@ impl Eval<f64> for FloatCall {
                 let yv = params.y.eval(ctx)?;
                 Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.y)
             }
-            FloatCall::DefaultWidth { node } => ctx.node(*node)?.default_width(ctx),
-            FloatCall::DefaultHeight { node } => ctx.node(*node)?.default_height(ctx),
-            FloatCall::DefaultX { node } => ctx.node(*node)?.default_x(ctx),
-            FloatCall::DefaultY { node } => ctx.node(*node)?.default_y(ctx),
+            FloatCall::DefaultWidth { node } => {
+                if *node == NodeId::SCENE {
+                    ctx.scene_width()
+                } else {
+                    ctx.node(*node)?.default_width(ctx)
+                }
+            }
+            FloatCall::DefaultHeight { node } => {
+                if *node == NodeId::SCENE {
+                    ctx.scene_height()
+                } else {
+                    ctx.node(*node)?.default_height(ctx)
+                }
+            }
+            FloatCall::DefaultX { node } => {
+                if *node == NodeId::SCENE {
+                    Ok(0.0)
+                } else {
+                    ctx.node(*node)?.default_x(ctx)
+                }
+            }
+            FloatCall::DefaultY { node } => {
+                if *node == NodeId::SCENE {
+                    Ok(0.0)
+                } else {
+                    ctx.node(*node)?.default_y(ctx)
+                }
+            }
             FloatCall::PathX(p) => {
                 let t = p.t.eval(ctx)?;
                 Ok(point_in_path(ctx, p.node, t)?.x)

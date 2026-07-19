@@ -458,19 +458,74 @@ def _effective_height(node):
     return Call.default_height(node)
 
 
+def _resolve_anchor(x, y) -> tuple[float, float]:
+    if isinstance(x, str):
+        if y is not None:
+            raise TypeError("at(): a named anchor can't be combined with a y fraction")
+        return _ANCHORS[x]
+    if x is None and y is None:
+        return 0.5, 0.5
+    if x is None or y is None:
+        raise TypeError("at(): fractions must be given in pairs, e.g. at(0.5, 0.5)")
+    return x, y
+
+
 @beartype
-class PositionMixin:
-    """Mixin that adds animatable `x` / `y` position and alignment helpers to
-    a node. Defaults to the layout-computed position when unset. Path
-    commands (move/line/cubic) also mix this in for their `.x()`/`.y()`/
-    `.xy()` setters, but their coordinates are always required constructor
-    arguments — `Path.move_to`/`line_to`/`cubic_to` seed them directly via
-    `_add_attr`, so this lazy default never actually gets consulted there."""
+class PositionQueryMixin:
+    """Allows to read a position"""
 
     _ATTR_DEFAULTS = {
         "x": Call.default_x,
         "y": Call.default_y,
     }
+
+    def at(
+        self,
+        x: FloatLike | AnchorName | None = None,
+        y: FloatLike | None = None,
+    ) -> Position:
+        """Return a point on the node as a live `Position`.
+
+        Args:
+            x: Horizontal fraction (``0.0`` left edge, ``1.0`` right edge), or
+                a named anchor string (``"center"``, ``"top_left"``, ...).
+                ``None`` with `y` also `None` defaults to the center.
+            y: Vertical fraction (``0.0`` top edge, ``1.0`` bottom edge).
+                Fractions must be given in pairs — a bare `at(0.5)` raises
+                `TypeError` rather than silently meaning top-center.
+
+        Returns:
+            A `Position` representing the node's resolved coordinates. For
+            `SizeMixin` nodes this uses the actual (possibly overridden) box;
+            for path command handles (genuinely zero-size) every anchor
+            resolves to the same raw point; for anything else (currently
+            `Text`, `TextSpan`, `TextGroup`) it falls back to the engine's
+            measured/computed extent, so e.g. a text node's `at("center")` is
+            its true visual center.
+        """
+        align_x, align_y = _resolve_anchor(x, y)
+
+        px = self._get_attr("x")
+        py = self._get_attr("y")
+        if align_x != 0:
+            w = _effective_width(self)
+            if w != 0:
+                px = px + w * align_x
+        if align_y != 0:
+            h = _effective_height(self)
+            if h != 0:
+                py = py + h * align_y
+        # A node's own x/y are relative to its parent's frame - except when
+        # there is no parent, i.e. this node is the Scene itself, whose
+        # frame *is* the root frame (Position.into_node()/serialize_expr's
+        # Scene guard both key off this same "self is its own frame" case).
+        frame = self._parent if self._parent is not None else self
+        return Position(frame, px, py)
+
+
+@beartype
+class PositionMixin(PositionQueryMixin):
+    """Allows to set a position"""
 
     def x(
         self,
@@ -626,55 +681,6 @@ class PositionMixin:
             self._move_attr("x", dx, dur, ease)
             self._move_attr("y", dy, dur, ease)
         return self
-
-    def at(
-        self,
-        x: FloatLike | AnchorName | None = None,
-        y: FloatLike | None = None,
-    ) -> Position:
-        """Return a point on the node as a live `Position`.
-
-        Args:
-            x: Horizontal fraction (``0.0`` left edge, ``1.0`` right edge), or
-                a named anchor string (``"center"``, ``"top_left"``, ...).
-                ``None`` with `y` also `None` defaults to the center.
-            y: Vertical fraction (``0.0`` top edge, ``1.0`` bottom edge).
-                Fractions must be given in pairs — a bare `at(0.5)` raises
-                `TypeError` rather than silently meaning top-center.
-
-        Returns:
-            A `Position` representing the node's resolved coordinates. For
-            `SizeMixin` nodes this uses the actual (possibly overridden) box;
-            for path command handles (genuinely zero-size) every anchor
-            resolves to the same raw point; for anything else (currently
-            `Text`) it falls back to the engine's measured/computed extent,
-            so e.g. a text node's `at("center")` is its true visual center.
-        """
-        if isinstance(x, str):
-            if y is not None:
-                raise TypeError(
-                    "at(): a named anchor can't be combined with a y fraction"
-                )
-            align_x, align_y = _ANCHORS[x]
-        elif x is None and y is None:
-            align_x = 0.5
-            align_y = 0.5
-        elif x is None or y is None:
-            raise TypeError("at(): fractions must be given in pairs, e.g. at(0.5, 0.5)")
-        else:
-            align_x, align_y = x, y
-
-        px = self._get_attr("x")
-        py = self._get_attr("y")
-        if align_x != 0:
-            w = _effective_width(self)
-            if w != 0:
-                px = px + w * align_x
-        if align_y != 0:
-            h = _effective_height(self)
-            if h != 0:
-                py = py + h * align_y
-        return Position(self._parent, px, py)
 
     def next_to(
         self,
@@ -1235,7 +1241,7 @@ class Group(
 
 
 @beartype
-class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin):
+class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin):
     """Top-level container for an animation, defining canvas size and background color.
 
     Must be used as a context manager (``with Scene(...) as s:``) before adding

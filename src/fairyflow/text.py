@@ -4,8 +4,6 @@ from beartype import beartype
 from typing import Union
 
 from .types import StringLike, BoolLike, FloatLike
-from .exprs import Call
-from .position import Position
 from .animtime import Duration, Easing
 from .sentinels import INHERITED_VALUE
 
@@ -13,6 +11,7 @@ from .nodes import (
     Node,
     NodeWithChildren,
     PositionMixin,
+    PositionQueryMixin,
     StyleMixin,
     InheritedStyleMixin,
     ZLevelMixin,
@@ -77,7 +76,7 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
 
 
 @beartype
-class TextSpan(Node, InheritedTextStyleMixin):
+class TextSpan(Node, InheritedTextStyleMixin, PositionQueryMixin):
     kind = "t_span"
 
     def __init__(self, parent, text: StringLike):
@@ -87,12 +86,9 @@ class TextSpan(Node, InheritedTextStyleMixin):
     def text(self, value: str):
         self._set_attr("text", value)
 
-    def at(self):
-        return Position(self._parent, Call.default_x(self), Call.default_y(self))
-
 
 @beartype
-class TextGroup(NodeWithChildren, InheritedTextStyleMixin):
+class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
     kind = "t_group"
 
     def __init__(self, parent):

@@ -161,17 +161,24 @@ impl RasterRenderer {
                 position,
                 size,
                 style,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 z_level: _,
             } => {
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: *scale_x,
+                        height: *scale_y,
                     },
-                    0.0,
-                    0.0,
-                    0.0,
+                    *rotation,
+                    pivot_x_abs,
+                    pivot_y_abs,
                     parent_transform,
                 );
                 let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -185,17 +192,24 @@ impl RasterRenderer {
                 position,
                 size,
                 style,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 z_level: _,
             } => {
+                let pivot_x_abs = (pivot_x * size.width) as f32;
+                let pivot_y_abs = (pivot_y * size.height) as f32;
                 let transform = positional_transform(
                     position,
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: *scale_x,
+                        height: *scale_y,
                     },
-                    0.0,
-                    0.0,
-                    0.0,
+                    *rotation,
+                    pivot_x_abs,
+                    pivot_y_abs,
                     parent_transform,
                 );
                 let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
@@ -210,12 +224,27 @@ impl RasterRenderer {
             NodeKind::Path {
                 style,
                 children,
+                scale_x,
+                scale_y,
+                rotation,
                 z_level: _,
                 crop_start,
                 crop_end,
+                ..
             } => {
+                let transform = positional_transform(
+                    &Position { x: 0.0, y: 0.0 },
+                    Size {
+                        width: *scale_x,
+                        height: *scale_y,
+                    },
+                    *rotation,
+                    0.0,
+                    0.0,
+                    parent_transform,
+                );
                 if let Some(path) = build_cropped_path(children, *crop_start, *crop_end) {
-                    fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha);
+                    fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
                 }
             }
             NodeKind::Text {
@@ -250,6 +279,11 @@ impl RasterRenderer {
                 position,
                 size,
                 alpha,
+                scale_x,
+                scale_y,
+                rotation,
+                pivot_x,
+                pivot_y,
                 path,
                 keep_aspect,
                 z_level: _,
@@ -271,6 +305,11 @@ impl RasterRenderer {
                     pixmap,
                     parent_transform,
                     position,
+                    *scale_x,
+                    *scale_y,
+                    *rotation,
+                    *pivot_x,
+                    *pivot_y,
                     effective_alpha,
                 );
             }
@@ -491,6 +530,20 @@ fn skia_from_affine(t: AffineTransform) -> Transform {
     Transform::from_row(t.a, t.b, t.c, t.d, t.e, t.f)
 }
 
+/// An image layer override's `position` is a translate-only nudge on top of
+/// wherever its content already sits in the source SVG/ORA composite — unlike
+/// Rect/Group/Image, a layer's content is not anchored at its own local
+/// (0, 0), so rotation/scale/pivot (which assume that) are not applied here;
+/// doing so can swing content arbitrarily far from view. Deferred until layer
+/// content has a real local bounding box to rotate/scale/pivot around (same
+/// category of gap as Path's, `api-v2-impl.md` item 2).
+fn image_layer_translate(override_: Option<&ImageLayer>, node_transform: Transform) -> Transform {
+    let Some(ov) = override_ else {
+        return node_transform;
+    };
+    node_transform.post_translate(ov.position.x as f32, ov.position.y as f32)
+}
+
 fn fill_and_stroke(
     path: &tiny_skia::Path,
     style: &Style,
@@ -659,11 +712,17 @@ fn render_svg_tree(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_image(
     spec: &ImageSpec<'_>,
     pixmap: &mut Pixmap,
     parent_transform: Transform,
     position: &Position,
+    scale_x: f64,
+    scale_y: f64,
+    rotation: f64,
+    pivot_x: f64,
+    pivot_y: f64,
     effective_alpha: f32,
 ) {
     let Some(cached) = image_cache::load_image(spec.path) else {
@@ -698,15 +757,17 @@ fn render_image(
         }
     };
 
+    let pivot_x_abs = (pivot_x * dest_w as f64) as f32;
+    let pivot_y_abs = (pivot_y * dest_h as f64) as f32;
     let node_transform = positional_transform(
         position,
         Size {
-            width: 1.0,
-            height: 1.0,
+            width: scale_x,
+            height: scale_y,
         },
-        0.0,
-        0.0,
-        0.0,
+        rotation,
+        pivot_x_abs,
+        pivot_y_abs,
         parent_transform,
     );
 
@@ -733,9 +794,6 @@ fn render_image(
                         if layer_alpha <= 0.0 {
                             continue;
                         }
-                        let (lx, ly) = override_
-                            .map(|ov| (ov.position.x as f32, ov.position.y as f32))
-                            .unwrap_or((0.0, 0.0));
                         let Some(layer_cached) = image_cache::load_svg_layer(spec.path, label)
                         else {
                             continue;
@@ -744,7 +802,7 @@ fn render_image(
                             CachedImageKind::Svg { tree, .. } => tree,
                             _ => continue,
                         };
-                        let layer_transform = node_transform.post_translate(lx, ly);
+                        let layer_transform = image_layer_translate(override_, node_transform);
                         render_svg_tree(
                             layer_tree,
                             &placement,
@@ -795,18 +853,16 @@ fn render_image(
                     if layer_alpha <= 0.0 {
                         continue;
                     }
-                    let (lx, ly) = override_
-                        .map(|ov| (ov.position.x as f32, ov.position.y as f32))
-                        .unwrap_or((0.0, 0.0));
                     let layer_placement = ImagePlacement {
-                        offset_x: placement.offset_x + layer_data.x as f32 * placement.sx + lx,
-                        offset_y: placement.offset_y + layer_data.y as f32 * placement.sy + ly,
+                        offset_x: placement.offset_x + layer_data.x as f32 * placement.sx,
+                        offset_y: placement.offset_y + layer_data.y as f32 * placement.sy,
                         ..placement
                     };
+                    let layer_transform = image_layer_translate(override_, node_transform);
                     render_raster_pixmap(
                         &layer_data.pixmap,
                         &layer_placement,
-                        node_transform,
+                        layer_transform,
                         pixmap,
                         layer_alpha,
                     );

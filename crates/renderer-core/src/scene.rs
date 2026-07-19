@@ -172,7 +172,7 @@ pub enum NodeKind {
         z_level: Inheritable<f64>,
         children: Vec<Node>,
     },
-    /// Python: Rect(PositionMixin, SizeMixin, StyleMixin)
+    /// Python: Rect(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
     Rect {
         #[serde(flatten)]
         position: Position,
@@ -180,10 +180,15 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        scale_x: f64,
+        scale_y: f64,
+        rotation: f64,
+        pivot_x: f64,
+        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
-    /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin)
+    /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
     Ellipse {
         #[serde(flatten)]
         position: Position,
@@ -191,13 +196,26 @@ pub enum NodeKind {
         size: Size,
         #[serde(flatten)]
         style: Style,
+        scale_x: f64,
+        scale_y: f64,
+        rotation: f64,
+        pivot_x: f64,
+        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
     },
-    /// Python: Path(StyleMixin)
+    /// Python: Path(StyleMixin) + rotation + scale.
+    /// No position/size: a path has no bounds of its own (points are absolute
+    /// path-command coordinates), so pivot_x/pivot_y are always inert (rotation
+    /// happens around the local origin) until path bounds computation lands.
     Path {
         #[serde(flatten)]
         style: Style,
+        scale_x: f64,
+        scale_y: f64,
+        rotation: f64,
+        pivot_x: f64,
+        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         crop_start: f64,
@@ -227,6 +245,11 @@ pub enum NodeKind {
         #[serde(flatten)]
         size: Size,
         alpha: f64,
+        scale_x: f64,
+        scale_y: f64,
+        rotation: f64,
+        pivot_x: f64,
+        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         path: Arc<String>,
@@ -256,6 +279,11 @@ pub struct ImageLayer {
     #[serde(flatten)]
     pub size: Size,
     pub alpha: f64,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub rotation: f64,
+    pub pivot_x: f64,
+    pub pivot_y: f64,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub z_level: Inheritable<f64>,
 }

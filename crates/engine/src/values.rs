@@ -152,15 +152,15 @@ impl Expr<Arc<String>> {
 }
 
 impl Expr<f64> {
-    pub fn is_default_width_of(&self, node: NodeId) -> bool {
+    pub fn is_auto_width_of(&self, node: NodeId) -> bool {
         match self {
-            Expr::Call(FloatCall::DefaultWidth { node: n }) => node == *n,
+            Expr::Call(FloatCall::AutoWidth { node: n }) => node == *n,
             _ => false,
         }
     }
-    pub fn is_default_height_of(&self, node: NodeId) -> bool {
+    pub fn is_auto_height_of(&self, node: NodeId) -> bool {
         match self {
-            Expr::Call(FloatCall::DefaultHeight { node: n }) => node == *n,
+            Expr::Call(FloatCall::AutoHeight { node: n }) => node == *n,
             _ => false,
         }
     }
@@ -173,7 +173,7 @@ pub struct FloatParamsPair {
 }
 
 #[derive(Debug)]
-pub struct CallParamsNodeTransform {
+pub struct CallParamsMap {
     pub source: NodeId,
     pub target: NodeId,
     pub x: Expr<f64>,
@@ -188,17 +188,17 @@ pub struct CallParamsPathPoint {
 
 #[derive(Debug)]
 pub enum FloatCall {
-    NodeTransformX(Box<CallParamsNodeTransform>),
-    NodeTransformY(Box<CallParamsNodeTransform>),
+    MapX(Box<CallParamsMap>),
+    MapY(Box<CallParamsMap>),
     Add(Box<FloatParamsPair>),
     Sub(Box<FloatParamsPair>),
     Mul(Box<FloatParamsPair>),
     Div(Box<FloatParamsPair>),
     Norm(Box<FloatParamsPair>),
-    DefaultWidth { node: NodeId },
-    DefaultHeight { node: NodeId },
-    DefaultX { node: NodeId },
-    DefaultY { node: NodeId },
+    AutoWidth { node: NodeId },
+    AutoHeight { node: NodeId },
+    AutoX { node: NodeId },
+    AutoY { node: NodeId },
     PathLength { node: NodeId },
     PathX(Box<CallParamsPathPoint>),
     PathY(Box<CallParamsPathPoint>),
@@ -234,22 +234,22 @@ impl CallParse for FloatCall {
                 a: next!(),
                 b: next!(),
             })),
-            "map_x" => FloatCall::NodeTransformX(Box::new(CallParamsNodeTransform {
+            "map_x" => FloatCall::MapX(Box::new(CallParamsMap {
                 source: next!(),
                 target: next!(),
                 x: next!(),
                 y: next!(),
             })),
-            "map_y" => FloatCall::NodeTransformY(Box::new(CallParamsNodeTransform {
+            "map_y" => FloatCall::MapY(Box::new(CallParamsMap {
                 source: next!(),
                 target: next!(),
                 x: next!(),
                 y: next!(),
             })),
-            "auto_x" => FloatCall::DefaultX { node: next!() },
-            "auto_y" => FloatCall::DefaultY { node: next!() },
-            "auto_w" => FloatCall::DefaultWidth { node: next!() },
-            "auto_h" => FloatCall::DefaultHeight { node: next!() },
+            "auto_x" => FloatCall::AutoX { node: next!() },
+            "auto_y" => FloatCall::AutoY { node: next!() },
+            "auto_w" => FloatCall::AutoWidth { node: next!() },
+            "auto_h" => FloatCall::AutoHeight { node: next!() },
             "path_len" => FloatCall::PathLength { node: next!() },
             "path_x" => FloatCall::PathX(Box::new(CallParamsPathPoint {
                 node: next!(),

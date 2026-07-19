@@ -46,7 +46,7 @@ impl Node {
         };
         match p.x.get_expr() {
             Some(e) => e.eval(ctx),
-            None => self.default_x(ctx),
+            None => self.auto_x(ctx),
         }
     }
 
@@ -56,27 +56,27 @@ impl Node {
         };
         match p.y.get_expr() {
             Some(e) => e.eval(ctx),
-            None => self.default_y(ctx),
+            None => self.auto_y(ctx),
         }
     }
 
     pub fn get_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
-            return self.default_width(ctx);
+            return self.auto_width(ctx);
         };
         match s.width.get_expr() {
             Some(e) => e.eval(ctx),
-            None => self.default_width(ctx),
+            None => self.auto_width(ctx),
         }
     }
 
     pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
-            return self.default_height(ctx);
+            return self.auto_height(ctx);
         };
         match s.height.get_expr() {
             Some(e) => e.eval(ctx),
-            None => self.default_height(ctx),
+            None => self.auto_height(ctx),
         }
     }
 
@@ -190,7 +190,7 @@ impl Node {
         }
     }
 
-    pub fn default_x(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+    pub fn auto_x(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
             // Layers live inside an Image, not a Group, so layout doesn't apply.
             NodeKind::Layer { .. } | NodeKind::Close => 0.0,
@@ -241,7 +241,7 @@ impl Node {
         })
     }
 
-    pub fn default_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+    pub fn auto_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
             // Layers live inside an Image, not a Group, so layout doesn't apply.
             NodeKind::Layer { .. } | NodeKind::Close => 0.0,
@@ -292,7 +292,7 @@ impl Node {
         })
     }
 
-    pub fn default_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+    pub fn auto_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
             NodeKind::Layer { .. } => {
                 // Return the natural SVG width from the parent Image.
@@ -355,7 +355,7 @@ impl Node {
                 if size
                     .height
                     .get_expr()
-                    .is_none_or(|e| e.is_default_height_of(self.id))
+                    .is_none_or(|e| e.is_auto_height_of(self.id))
                 {
                     // Both dimensions are defaults → return natural width.
                     nw as f64
@@ -373,7 +373,7 @@ impl Node {
         })
     }
 
-    pub fn default_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
+    pub fn auto_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match &self.kind {
             NodeKind::Layer { .. } => {
                 // Return the natural SVG height from the parent Image.
@@ -436,7 +436,7 @@ impl Node {
                 if size
                     .width
                     .get_expr()
-                    .is_none_or(|e| e.is_default_width_of(self.id))
+                    .is_none_or(|e| e.is_auto_width_of(self.id))
                 {
                     // Both dimensions are defaults → return natural height.
                     nh as f64

@@ -41,19 +41,19 @@ class Call(Expr):
         return Call("/", a, b)
 
     @staticmethod
-    def default_x(node):
+    def auto_x(node):
         return Call("auto_x", node)
 
     @staticmethod
-    def default_y(node):
+    def auto_y(node):
         return Call("auto_y", node)
 
     @staticmethod
-    def default_width(node):
+    def auto_width(node):
         return Call("auto_w", node)
 
     @staticmethod
-    def default_height(node):
+    def auto_height(node):
         return Call("auto_h", node)
 
     @staticmethod

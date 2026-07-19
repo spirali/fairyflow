@@ -410,42 +410,42 @@ impl Eval<f64> for FloatCall {
                 let d = va * va + vb * vb;
                 Ok(if d < 0.0001 { 0.0 } else { va / d.sqrt() })
             }
-            FloatCall::NodeTransformX(params) => {
+            FloatCall::MapX(params) => {
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
                 Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.x)
             }
-            FloatCall::NodeTransformY(params) => {
+            FloatCall::MapY(params) => {
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;
                 Ok(node_transform(params.source, params.target, RcPosition::new(xv, yv), ctx)?.y)
             }
-            FloatCall::DefaultWidth { node } => {
+            FloatCall::AutoWidth { node } => {
                 if *node == NodeId::SCENE {
                     ctx.scene_width()
                 } else {
-                    ctx.node(*node)?.default_width(ctx)
+                    ctx.node(*node)?.auto_width(ctx)
                 }
             }
-            FloatCall::DefaultHeight { node } => {
+            FloatCall::AutoHeight { node } => {
                 if *node == NodeId::SCENE {
                     ctx.scene_height()
                 } else {
-                    ctx.node(*node)?.default_height(ctx)
+                    ctx.node(*node)?.auto_height(ctx)
                 }
             }
-            FloatCall::DefaultX { node } => {
+            FloatCall::AutoX { node } => {
                 if *node == NodeId::SCENE {
                     Ok(0.0)
                 } else {
-                    ctx.node(*node)?.default_x(ctx)
+                    ctx.node(*node)?.auto_x(ctx)
                 }
             }
-            FloatCall::DefaultY { node } => {
+            FloatCall::AutoY { node } => {
                 if *node == NodeId::SCENE {
                     Ok(0.0)
                 } else {
-                    ctx.node(*node)?.default_y(ctx)
+                    ctx.node(*node)?.auto_y(ctx)
                 }
             }
             FloatCall::PathX(p) => {
@@ -465,16 +465,16 @@ impl Eval<f64> for FloatCall {
 
 impl Position {
     /// `owner` is the node this `Position` belongs to — needed to resolve the
-    /// auto-layout default (`Node::default_x/default_y`) when an axis is absent.
+    /// auto-layout default (`Node::auto_x/auto_y`) when an axis is absent.
     pub fn eval(&self, ctx: &EvalCtx, owner: &Node) -> anyhow::Result<renderer_core::Position> {
         Ok(renderer_core::Position {
             x: match self.x.get_expr() {
                 Some(e) => e.eval(ctx)?,
-                None => owner.default_x(ctx)?,
+                None => owner.auto_x(ctx)?,
             },
             y: match self.y.get_expr() {
                 Some(e) => e.eval(ctx)?,
-                None => owner.default_y(ctx)?,
+                None => owner.auto_y(ctx)?,
             },
         })
     }
@@ -482,16 +482,16 @@ impl Position {
 
 impl Size {
     /// `owner` is the node this `Size` belongs to — needed to resolve the
-    /// auto-layout default (`Node::default_width/default_height`) when absent.
+    /// auto-layout default (`Node::auto_width/auto_height`) when absent.
     pub fn eval(&self, ctx: &EvalCtx, owner: &Node) -> anyhow::Result<renderer_core::Size> {
         Ok(renderer_core::Size {
             width: match self.width.get_expr() {
                 Some(e) => e.eval(ctx)?,
-                None => owner.default_width(ctx)?,
+                None => owner.auto_width(ctx)?,
             },
             height: match self.height.get_expr() {
                 Some(e) => e.eval(ctx)?,
-                None => owner.default_height(ctx)?,
+                None => owner.auto_height(ctx)?,
             },
         })
     }

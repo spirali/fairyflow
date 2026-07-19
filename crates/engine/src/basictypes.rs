@@ -30,16 +30,6 @@ impl Display for FrameId {
 pub(crate) struct NodeId(u32);
 
 impl NodeId {
-    /// Reserved id representing the (deliberately id-less) `Scene` root frame
-    /// — the wire format's per-scene `nodes` array uses implicit ids = array
-    /// index (`api-v2-impl.md` §A.1), and the `Scene` itself is excluded from
-    /// that array. On the wire this is spelled `-1` (see `Deserialize` below,
-    /// which maps it to this constant); internally it's `u32::MAX`, which can
-    /// never collide with a real (dense `0..n`) node id. Used exclusively as
-    /// a `map_x`/`map_y` operand (`node_transform`, `eval.rs`), emitted by
-    /// the Python side's `Position.into_node()`
-    /// (`position.py::SCENE_NODE_ID`) whenever an endpoint is a node with no
-    /// parent (i.e. the `Scene`).
     pub const SCENE: NodeId = NodeId(u32::MAX);
 
     #[inline]

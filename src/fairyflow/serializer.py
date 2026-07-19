@@ -1,6 +1,7 @@
 from .exprs import Expr
 from .color import Color
 from .nodes import Node
+from .position import SCENE_NODE_ID
 
 import json as json
 
@@ -19,7 +20,10 @@ def serialize_expr(obj):
     if isinstance(obj, Expr):
         return obj.serialize_expr()
     if isinstance(obj, Node):
-        return _active.add_node(obj)
+        # A node with no parent is the Scene (position.py::SCENE_NODE_ID) -
+        # it has no wire id of its own, and re-serializing it here would
+        # recurse into its own top-level {"nodes": [...], ...} output.
+        return SCENE_NODE_ID if obj._parent is None else _active.add_node(obj)
     if isinstance(obj, Color):
         return obj.value
     return obj

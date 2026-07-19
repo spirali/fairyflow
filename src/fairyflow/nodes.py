@@ -326,12 +326,12 @@ class SizeMixin:
     """Mixin that adds animatable `width` and `height` attributes to a node.
     Defaults to the layout-computed size when unset — for shape kinds with no
     layout concept of their own (rect/ellipse) the engine's fallback already
-    resolves this to 0 either way (`layout.rs::default_width/height`'s
+    resolves this to 0 either way (`layout.rs::auto_width/height`'s
     catch-all), so there's no need for those kinds to special-case it."""
 
     _ATTR_DEFAULTS = {
-        "width": Call.default_width,
-        "height": Call.default_height,
+        "width": Call.auto_width,
+        "height": Call.auto_height,
     }
 
     def width(
@@ -447,7 +447,7 @@ def _effective_width(node):
         return node._get_attr("width")
     if isinstance(node, (PathMove, PathLine, PathCubic)):
         return 0
-    return Call.default_width(node)
+    return Call.auto_width(node)
 
 
 def _effective_height(node):
@@ -455,7 +455,7 @@ def _effective_height(node):
         return node._get_attr("height")
     if isinstance(node, (PathMove, PathLine, PathCubic)):
         return 0
-    return Call.default_height(node)
+    return Call.auto_height(node)
 
 
 def _resolve_anchor(x, y) -> tuple[float, float]:
@@ -475,8 +475,8 @@ class PositionQueryMixin:
     """Allows to read a position"""
 
     _ATTR_DEFAULTS = {
-        "x": Call.default_x,
-        "y": Call.default_y,
+        "x": Call.auto_x,
+        "y": Call.auto_y,
     }
 
     def at(
@@ -546,9 +546,7 @@ class PositionMixin(PositionQueryMixin):
         Returns:
             self, for method chaining.
         """
-        value = (
-            Call.default_x(self) if px is DEFAULT else resolve_rel(px, self, "width")
-        )
+        value = Call.auto_x(self) if px is DEFAULT else resolve_rel(px, self, "width")
         self._set_attr("x", value, dur, ease)
         return self
 
@@ -571,9 +569,7 @@ class PositionMixin(PositionQueryMixin):
         Returns:
             self, for method chaining.
         """
-        value = (
-            Call.default_y(self) if px is DEFAULT else resolve_rel(px, self, "height")
-        )
+        value = Call.auto_y(self) if px is DEFAULT else resolve_rel(px, self, "height")
         self._set_attr("y", value, dur, ease)
         return self
 

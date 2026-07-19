@@ -65,8 +65,8 @@ def test_at_center_on_text_uses_measured_extent(sc):
     t = Text()
     t.span("hello")
     p = t.at()
-    expected_x = t._get_attr("x") + Call.default_width(t) * 0.5
-    expected_y = t._get_attr("y") + Call.default_height(t) * 0.5
+    expected_x = t._get_attr("x") + Call.auto_width(t) * 0.5
+    expected_y = t._get_attr("y") + Call.auto_height(t) * 0.5
     assert repr(p.x) == repr(expected_x)
     assert repr(p.y) == repr(expected_y)
 
@@ -82,8 +82,8 @@ def test_at_top_left_on_text_is_unchanged(sc):
 def test_at_center_on_span_uses_measured_extent(sc):
     span = Text().span("hello")
     p = span.at()
-    expected_x = span._get_attr("x") + Call.default_width(span) * 0.5
-    expected_y = span._get_attr("y") + Call.default_height(span) * 0.5
+    expected_x = span._get_attr("x") + Call.auto_width(span) * 0.5
+    expected_y = span._get_attr("y") + Call.auto_height(span) * 0.5
     assert repr(p.x) == repr(expected_x)
     assert repr(p.y) == repr(expected_y)
 
@@ -111,8 +111,8 @@ def test_at_center_on_group_uses_measured_extent(sc):
     group = Text().group()
     group.span("hello")
     p = group.at()
-    expected_x = group._get_attr("x") + Call.default_width(group) * 0.5
-    expected_y = group._get_attr("y") + Call.default_height(group) * 0.5
+    expected_x = group._get_attr("x") + Call.auto_width(group) * 0.5
+    expected_y = group._get_attr("y") + Call.auto_height(group) * 0.5
     assert repr(p.x) == repr(expected_x)
     assert repr(p.y) == repr(expected_y)
 
@@ -127,7 +127,7 @@ def test_at_top_left_on_group_is_unchanged(sc):
 
 def test_at_center_on_scene_uses_dimensions(sc):
     # Scene is SizeMixin, so _effective_width/_height read its real (always
-    # explicitly seeded) width/height, not Call.default_width - unlike
+    # explicitly seeded) width/height, not Call.auto_width - unlike
     # TextSpan/TextGroup above, which have no SizeMixin of their own.
     p = sc.at()
     expected_x = sc._get_attr("x") + sc._get_attr("width") * 0.5

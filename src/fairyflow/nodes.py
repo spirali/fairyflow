@@ -1349,7 +1349,7 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin
 
 
 @beartype
-class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
+class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin, RotAndScaleMixin):
     """A rectangle shape node with animatable position, size, fill, and stroke.
 
     Position/size/style/z all come from their mixins' lazy defaults — an
@@ -1360,14 +1360,16 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
 
 
 @beartype
-class Ellipse(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin):
+class Ellipse(
+    Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin, RotAndScaleMixin
+):
     """An ellipse shape node with animatable position, size, fill, and stroke."""
 
     kind = "ellipse"
 
 
 @beartype
-class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
+class Path(NodeWithChildren, StyleMixin, ZLevelMixin, RotAndScaleMixin):
     """A vector path composed of move, line, cubic, and close command nodes.
 
     Build the shape by calling `move_to`, `line_to`, `cubic_to`, and `close` in
@@ -1690,7 +1692,14 @@ class PathCubic(Node, PositionMixin):
 
 
 @beartype
-class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
+class Image(
+    NodeWithChildren,
+    PositionMixin,
+    SizeMixin,
+    ZLevelMixin,
+    AlphaMixin,
+    RotAndScaleMixin,
+):
     """An image node that loads and displays a raster image file.
 
     Supports optional aspect-ratio preservation and per-layer visibility control
@@ -1751,7 +1760,14 @@ class Image(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin)
 
 
 @beartype
-class ImageLayer(NodeWithChildren, PositionMixin, SizeMixin, ZLevelMixin, AlphaMixin):
+class ImageLayer(
+    NodeWithChildren,
+    PositionMixin,
+    SizeMixin,
+    ZLevelMixin,
+    AlphaMixin,
+    RotAndScaleMixin,
+):
     """A named layer within an ORA image, rendered as a child of an `Image` node."""
 
     kind = "layer"

@@ -528,6 +528,15 @@ mod tests {
         }
     }
 
+    /// Rotation math routes through `f64::cos`/`sin`, so e.g. `cos(90°)` lands at
+    /// `~6e-17`, not exactly `0.0` - assertions on rotated points need an epsilon.
+    fn assert_close(actual: (f64, f64), expected: (f64, f64)) {
+        assert!(
+            (actual.0 - expected.0).abs() < 1e-9 && (actual.1 - expected.1).abs() < 1e-9,
+            "expected {expected:?}, got {actual:?}"
+        );
+    }
+
     #[test]
     fn node_transform_resolves_scene_sentinel() {
         let anim = AnimationDef::from_json(SCENE_SENTINEL_JSON).unwrap();
@@ -557,5 +566,104 @@ mod tests {
     fn node_id_rejects_other_negative_values() {
         let json = SCENE_SENTINEL_JSON.replace(r#""map_x", 1, -1"#, r#""map_x", 1, -2"#);
         assert!(AnimationDef::from_json(&json).is_err());
+    }
+
+    /// A `path` node is a legitimate transform-contributing frame (it has children,
+    /// unlike a leaf `Rect`/`Ellipse`): rotating it must correctly rotate points read
+    /// out of its local frame via `map_x`/`map_y` (e.g. a path command handle's
+    /// `.at()`, Python side). `Path` has no position/size of its own (`get_position`/
+    /// `get_size` return `None`, `layout.rs`), so its own `pos`/`pivot` contribution is
+    /// always `(0, 0)` regardless of `pivot_x`/`pivot_y` - only `rotation` has any
+    /// effect here, which is exactly what this exercises.
+    const PATH_ROTATION_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PathRotation", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 2],
+     "nodes": [
+       {"kind": "path", "rotation": 90, "children": [1]},
+       {"kind": "move", "x": 10, "y": 0},
+       {"kind": "rect",
+        "x": ["map_x", 0, -1, 10, 0],
+        "y": ["map_y", 0, -1, 10, 0],
+        "w": 10, "h": 10, "fill": "purple"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn path_rotation_composes_into_map_x_map_y() {
+        let anim = AnimationDef::from_json(PATH_ROTATION_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Point (10, 0) rotated 90 degrees around the path's local origin (0, 0),
+        // then mapped straight into the scene frame (path itself is a direct
+        // scene child, so no further ancestor transform applies).
+        assert_close(rect_xy(&scene, 2), (0.0, 10.0));
+    }
+
+    /// Same shape as `path_rotation_composes_into_map_x_map_y`, but for `image`/
+    /// `layer` - both have real position/size (unlike `Path`), so this also
+    /// exercises a non-degenerate pivot, matching `Group`'s existing (never
+    /// directly rotation-tested before this) transform formula.
+    const IMAGE_ROTATION_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "ImageRotation", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 2],
+     "nodes": [
+       {"kind": "image", "x": 100, "y": 50, "w": 50, "h": 30, "rotation": 90,
+        "children": [1]},
+       {"kind": "layer", "layer_name": "l1"},
+       {"kind": "rect",
+        "x": ["map_x", 0, -1, 40, 10],
+        "y": ["map_y", 0, -1, 40, 10],
+        "w": 10, "h": 10, "fill": "purple"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn image_rotation_composes_into_map_x_map_y() {
+        let anim = AnimationDef::from_json(IMAGE_ROTATION_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // image at (100, 50), 50x30, rotated 90 degrees around its center pivot
+        // (25, 15): point (40, 10) -> offset from pivot (15, -5) -> rotated ->
+        // (5, 15) offset from pivot -> + pivot + pos = (130, 80).
+        assert_close(rect_xy(&scene, 2), (130.0, 80.0));
+    }
+
+    /// `Rect`/`Ellipse` now carry rotation/scale/pivot wire fields (for a later
+    /// renderer step to consume) but deliberately never contribute a transform via
+    /// `ancestor_chain`/`node_own_transform` (see their doc comments) - this is a
+    /// parse-only smoke test proving the fields round-trip without error, and that
+    /// the evaluated `renderer_core::NodeKind::Rect` position/size are completely
+    /// unaffected by them today (the deliberate "visual no-op until the renderer
+    /// step lands" boundary this implementation step draws).
+    const LEAF_TRANSFORM_FIELDS_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "LeafTransformFields", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "rect", "x": 0, "y": 0, "w": 10, "h": 10, "fill": "green",
+        "rotation": 45, "scale_x": 2, "scale_y": 0.5, "pivot_x": 0.25, "pivot_y": 0.75},
+       {"kind": "ellipse", "x": 20, "y": 0, "w": 10, "h": 10, "fill": "blue",
+        "rotation": 30, "scale_x": 1.5}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn leaf_rotation_scale_pivot_fields_parse_and_do_not_affect_output() {
+        let anim = AnimationDef::from_json(LEAF_TRANSFORM_FIELDS_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        assert_eq!(rect_xy(&scene, 0), (0.0, 0.0));
+        assert_eq!(rect_wh(&scene, 0), (10.0, 10.0));
     }
 }

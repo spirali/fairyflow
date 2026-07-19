@@ -66,9 +66,12 @@ impl<'a> EvalCtx<'a> {
 /// Collect ancestor chain from `node_id` up to (and including) the topmost ancestor.
 /// Result: [node_id, parent, grandparent, ...]
 ///
+/// Only kinds that can actually contain children (`Group`/`Path`/`Image`/`Layer`)
+/// contribute a transform.
+///
 /// `NodeId::SCENE` (and, defensively, any other id absent from `ctx.nodes`) resolves
 /// to an empty chain: the `Scene` has no position/rotation/scale of its own, so "no
-/// group transforms to apply" is exactly the correct root/identity frame for it.
+/// transforms to apply" is exactly the correct root/identity frame for it.
 fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     if node_id == NodeId::SCENE {
         return Vec::new();
@@ -76,7 +79,13 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     let mut chain = Vec::new();
     let mut current = node_id;
     while let Some(node) = ctx.nodes.get(&current) {
-        if matches!(node.kind, NodeKind::Group { .. }) {
+        if matches!(
+            node.kind,
+            NodeKind::Group { .. }
+                | NodeKind::Path { .. }
+                | NodeKind::Image { .. }
+                | NodeKind::Layer { .. }
+        ) {
             chain.push(current);
         }
         match node.parent {
@@ -87,7 +96,7 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     chain
 }
 
-struct GroupTransform {
+struct NodeTransform {
     pos: RcPosition,
     scale: RcSize,
     cos_r: f64,
@@ -95,8 +104,8 @@ struct GroupTransform {
     pivot: RcPosition,
 }
 
-impl GroupTransform {
-    /// Transform `local` from this group's local space into its parent space.
+impl NodeTransform {
+    /// Transform `local` from this node's local space into its parent space.
     fn to_parent(&self, local: RcPosition) -> RcPosition {
         let qx = local.x - self.pivot.x;
         let qy = local.y - self.pivot.y;
@@ -111,7 +120,7 @@ impl GroupTransform {
         )
     }
 
-    /// Transform `parent_pt` from the parent space into this group's local space.
+    /// Transform `parent_pt` from the parent space into this node's local space.
     fn to_local(&self, parent_pt: RcPosition) -> RcPosition {
         let qx = parent_pt.x - self.pivot.x - self.pos.x;
         let qy = parent_pt.y - self.pivot.y - self.pos.y;
@@ -122,8 +131,12 @@ impl GroupTransform {
     }
 }
 
-fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform> {
-    match &node.kind {
+/// Extract the rotation/scale/pivot transform a node applies to its own children.
+/// Only `Group`/`Path`/`Image`/`Layer` can be reached here (see `ancestor_chain`'s
+/// doc comment for why leaves like `Rect`/`Ellipse` are deliberately excluded, even
+/// though they carry the same wire fields for the renderer's own use later).
+fn node_own_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<NodeTransform> {
+    let (scale_x, scale_y, rotation, pivot_x, pivot_y) = match &node.kind {
         NodeKind::Group {
             scale_x,
             scale_y,
@@ -131,29 +144,52 @@ fn group_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<GroupTransform>
             pivot_x,
             pivot_y,
             ..
-        } => {
-            let pos = RcPosition::new(node.get_x(ctx)?, node.get_y(ctx)?);
-            let scale = RcSize {
-                width: scale_x.eval_or(ctx, 1.0)?,
-                height: scale_y.eval_or(ctx, 1.0)?,
-            };
-            let r = rotation.eval_or(ctx, 0.0)?.to_radians();
-            let w = node.get_width(ctx)?;
-            let h = node.get_height(ctx)?;
-            let pivot = RcPosition::new(
-                pivot_x.eval_or(ctx, 0.5)? * w,
-                pivot_y.eval_or(ctx, 0.5)? * h,
-            );
-            Ok(GroupTransform {
-                pos,
-                scale,
-                cos_r: r.cos(),
-                sin_r: r.sin(),
-                pivot,
-            })
         }
-        _ => anyhow::bail!("node {:?} has no group transform (not a group)", node.id),
-    }
+        | NodeKind::Path {
+            scale_x,
+            scale_y,
+            rotation,
+            pivot_x,
+            pivot_y,
+            ..
+        }
+        | NodeKind::Image {
+            scale_x,
+            scale_y,
+            rotation,
+            pivot_x,
+            pivot_y,
+            ..
+        }
+        | NodeKind::Layer {
+            scale_x,
+            scale_y,
+            rotation,
+            pivot_x,
+            pivot_y,
+            ..
+        } => (scale_x, scale_y, rotation, pivot_x, pivot_y),
+        _ => anyhow::bail!("node {:?} has no rotation/scale/pivot", node.id),
+    };
+    let pos = RcPosition::new(node.get_x(ctx)?, node.get_y(ctx)?);
+    let scale = RcSize {
+        width: scale_x.eval_or(ctx, 1.0)?,
+        height: scale_y.eval_or(ctx, 1.0)?,
+    };
+    let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+    let w = node.get_width(ctx)?;
+    let h = node.get_height(ctx)?;
+    let pivot = RcPosition::new(
+        pivot_x.eval_or(ctx, 0.5)? * w,
+        pivot_y.eval_or(ctx, 0.5)? * h,
+    );
+    Ok(NodeTransform {
+        pos,
+        scale,
+        cos_r: r.cos(),
+        sin_r: r.sin(),
+        pivot,
+    })
 }
 
 /// Transform `pt` from source node's local coordinate space into target node's local
@@ -193,13 +229,13 @@ fn node_transform(
     // Go up: each node transforms from its local space to its parent's space
     for node_id in cs {
         let node = ctx.node(node_id)?;
-        pt = group_transform(node, ctx)?.to_parent(pt);
+        pt = node_own_transform(node, ctx)?.to_parent(pt);
     }
 
     // Go down: each node transforms from parent space into its local space
     for node_id in ct {
         let node = ctx.node(node_id)?;
-        pt = group_transform(node, ctx)?.to_local(pt);
+        pt = node_own_transform(node, ctx)?.to_local(pt);
     }
 
     Ok(pt)

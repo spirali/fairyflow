@@ -107,26 +107,41 @@ pub enum NodeKind {
         layout: Layout,
         children: Vec<NodeId>,
     },
-    /// Python: `Rect(PositionMixin, SizeMixin, StyleMixin)`
+    /// Python: `Rect(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
     Rect {
         position: Position,
         size: Size,
         z_level: AttrExpr<f64>,
         style: Style,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
     },
-    /// Python: `Ellipse(PositionMixin, SizeMixin, StyleMixin)`
+    /// Python: `Ellipse(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
     Ellipse {
         position: Position,
         size: Size,
         z_level: AttrExpr<f64>,
         style: Style,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
     },
-    /// Python: `Path(StyleMixin)`
+    /// Python: `Path(StyleMixin)` + rotation + scale
     Path {
         style: Style,
         z_level: AttrExpr<f64>,
         crop_start: AttrExpr<f64>,
         crop_end: AttrExpr<f64>,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
         children: Vec<NodeId>,
     },
 
@@ -167,6 +182,7 @@ pub enum NodeKind {
     Close,
 
     /// An image (SVG for now).  `path` is resolved relative to the project directory.
+    /// + rotation + scale
     Image {
         position: Position,
         size: Size,
@@ -176,11 +192,16 @@ pub enum NodeKind {
         /// When true, scale the image to fit inside the node box while
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
         keep_aspect: AttrExpr<bool>,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
         /// Optional child layer nodes (kind = "layer").
         children: Vec<NodeId>,
     },
 
-    /// A layer within an SVG image.  Always a child of an Image node.
+    /// A layer within an SVG image.  Always a child of an Image node. + rotation + scale
     Layer {
         position: Position,
         size: Size,
@@ -188,6 +209,11 @@ pub enum NodeKind {
         alpha: AttrExpr<f64>,
         /// Matches the SVG group `id` attribute.
         layer_name: Arc<String>,
+        rotation: AttrExpr<f64>,
+        pivot_x: AttrExpr<f64>,
+        pivot_y: AttrExpr<f64>,
+        scale_x: AttrExpr<f64>,
+        scale_y: AttrExpr<f64>,
         children: Vec<NodeId>,
     },
 }
@@ -434,6 +460,11 @@ impl Node {
                     size,
                     z_level,
                     style: def.style(),
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
                 }
             }
             Kind::Ellipse => {
@@ -445,6 +476,11 @@ impl Node {
                     size,
                     z_level,
                     style: def.style(),
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
                 }
             }
             Kind::Path => {
@@ -454,6 +490,11 @@ impl Node {
                     z_level,
                     crop_start: AttrExpr(def.crop_start.take()),
                     crop_end: AttrExpr(def.crop_end.take()),
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
                     children,
                 }
             }
@@ -505,6 +546,11 @@ impl Node {
                     alpha: AttrExpr(def.alpha.take()),
                     path: AttrExpr(def.file.take()),
                     keep_aspect: AttrExpr(def.keep_aspect.take()),
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
                     children,
                 }
             }
@@ -520,6 +566,11 @@ impl Node {
                     layer_name: def.layer_name.take().ok_or_else(|| {
                         anyhow::anyhow!("layer node {} missing `layer_name`", idx)
                     })?,
+                    rotation: AttrExpr(def.rotation.take()),
+                    pivot_x: AttrExpr(def.pivot_x.take()),
+                    pivot_y: AttrExpr(def.pivot_y.take()),
+                    scale_x: AttrExpr(def.scale_x.take()),
+                    scale_y: AttrExpr(def.scale_y.take()),
                     children,
                 }
             }

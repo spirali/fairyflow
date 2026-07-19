@@ -684,7 +684,7 @@ class PositionMixin(PositionQueryMixin):
 
     def next_to(
         self,
-        node: "PositionMixin",
+        node: "PositionQueryMixin",
         direction: Literal["right", "left", "above", "below"] = "right",
         gap: FloatLike = 0,
         align: FloatLike = 0.5,
@@ -726,7 +726,11 @@ class PositionMixin(PositionQueryMixin):
                 else Call.sub(ny, gap)
             )
 
-        position = Position(node._parent, target_x, target_y).into_node(self._parent)
+        # node's own x/y are relative to its parent's frame - except when node
+        # is the Scene itself, whose frame IS the root frame (same fix as
+        # PositionQueryMixin.at()).
+        node_frame = node._parent if node._parent is not None else node
+        position = Position(node_frame, target_x, target_y).into_node(self._parent)
         sw = _effective_width(self)
         sh = _effective_height(self)
 

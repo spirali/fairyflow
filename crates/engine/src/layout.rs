@@ -6,14 +6,14 @@ use renderer_core::Position as RcPosition;
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
         match &self.kind {
-            NodeKind::Group { position, .. }
-            | NodeKind::Rect { position, .. }
-            | NodeKind::Ellipse { position, .. }
-            | NodeKind::Move { position, .. }
+            NodeKind::Group { node_box, .. }
+            | NodeKind::Rect { node_box, .. }
+            | NodeKind::Ellipse { node_box, .. }
+            | NodeKind::Image { node_box, .. }
+            | NodeKind::Layer { node_box, .. } => Some(&node_box.position),
+            NodeKind::Move { position, .. }
             | NodeKind::Line { position, .. }
             | NodeKind::Text { position, .. }
-            | NodeKind::Image { position, .. }
-            | NodeKind::Layer { position, .. }
             | NodeKind::Cubic { position, .. } => Some(position),
             NodeKind::TextGroup { .. }
             | NodeKind::TextSpan { .. }
@@ -24,11 +24,11 @@ impl Node {
 
     pub fn get_size(&self) -> Option<&Size> {
         match &self.kind {
-            NodeKind::Group { size, .. }
-            | NodeKind::Rect { size, .. }
-            | NodeKind::Ellipse { size, .. }
-            | NodeKind::Image { size, .. }
-            | NodeKind::Layer { size, .. } => Some(size),
+            NodeKind::Group { node_box, .. }
+            | NodeKind::Rect { node_box, .. }
+            | NodeKind::Ellipse { node_box, .. }
+            | NodeKind::Image { node_box, .. }
+            | NodeKind::Layer { node_box, .. } => Some(&node_box.size),
             NodeKind::Text { .. }
             | NodeKind::Move { .. }
             | NodeKind::Line { .. }
@@ -85,25 +85,14 @@ impl Node {
     /// For non-group nodes (no rotation/scale) this is always (0, 0).
     pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<RcPosition> {
         match &self.kind {
-            NodeKind::Group {
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                ..
-            } => {
+            NodeKind::Group { node_box, .. } => {
                 let w = self.get_width(ctx)?;
                 let h = self.get_height(ctx)?;
-                let sx = scale_x.eval_or(ctx, 1.0)?;
-                let sy = scale_y.eval_or(ctx, 1.0)?;
-                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
-                let pvx = pivot_x.eval_or(ctx, 0.5)? * w;
-                let pvy = pivot_y.eval_or(ctx, 0.5)? * h;
-
-                // final_x = pvx + cx*(lx−pvx) + dx*(ly−pvy)  where cx=cos r·sx, dx=−sin r·sy
-                // min over lx ∈ {0,w}: if cx≥0 → cx*(0−pvx) = −cx*pvx, else cx*(w−pvx)
-                // min over ly ∈ {0,h}: if dx≥0 → dx*(0−pvy) = −dx*pvy, else dx*(h−pvy)
+                let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
+                let sy = node_box.scale_y.eval_or(ctx, 1.0)?;
+                let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
+                let pvx = node_box.pivot_x.eval_or(ctx, w * 0.5)?;
+                let pvy = node_box.pivot_y.eval_or(ctx, h * 0.5)?;
                 let cx = r.cos() * sx;
                 let dx = -r.sin() * sy;
                 let min_x = pvx
@@ -125,15 +114,10 @@ impl Node {
     pub fn get_outer_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let width = self.get_width(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group {
-                scale_x,
-                scale_y,
-                rotation,
-                ..
-            } => {
-                let sx = scale_x.eval_or(ctx, 1.0)?;
-                let sy = scale_y.eval_or(ctx, 1.0)?;
-                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+            NodeKind::Group { node_box, .. } => {
+                let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
+                let sy = node_box.scale_y.eval_or(ctx, 1.0)?;
+                let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
                 let height = self.get_height(ctx)?;
                 r.cos().abs() * sx * width + r.sin().abs() * sy * height
             }
@@ -144,15 +128,10 @@ impl Node {
     pub fn get_outer_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let height = self.get_height(ctx)?;
         Ok(match &self.kind {
-            NodeKind::Group {
-                scale_x,
-                scale_y,
-                rotation,
-                ..
-            } => {
-                let sx = scale_x.eval_or(ctx, 1.0)?;
-                let sy = scale_y.eval_or(ctx, 1.0)?;
-                let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+            NodeKind::Group { node_box, .. } => {
+                let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
+                let sy = node_box.scale_y.eval_or(ctx, 1.0)?;
+                let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
                 let width = self.get_width(ctx)?;
                 r.sin().abs() * sx * width + r.cos().abs() * sy * height
             }
@@ -347,12 +326,13 @@ impl Node {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer_core::measure_text(&[child]).0 as f64
             }
-            NodeKind::Image { path, size, .. } => {
+            NodeKind::Image { path, node_box, .. } => {
                 let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
-                if size
+                if node_box
+                    .size
                     .height
                     .get_expr()
                     .is_none_or(|e| e.is_auto_height_of(self.id))
@@ -361,7 +341,7 @@ impl Node {
                     nw as f64
                 } else {
                     // Height is explicit → scale width to preserve aspect ratio.
-                    let h = size.height.get_expr().unwrap().eval(ctx)?;
+                    let h = node_box.size.height.get_expr().unwrap().eval(ctx)?;
                     if nh == 0.0 {
                         0.0
                     } else {
@@ -428,12 +408,13 @@ impl Node {
                 let child = self.eval_as_text_child(ctx)?;
                 renderer_core::measure_text(&[child]).1 as f64
             }
-            NodeKind::Image { path, size, .. } => {
+            NodeKind::Image { path, node_box, .. } => {
                 let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
                 let Some((nw, nh)) = renderer_core::measure_image(path_val.as_str()) else {
                     return Ok(0.0);
                 };
-                if size
+                if node_box
+                    .size
                     .width
                     .get_expr()
                     .is_none_or(|e| e.is_auto_width_of(self.id))
@@ -442,7 +423,7 @@ impl Node {
                     nh as f64
                 } else {
                     // Width is explicit → scale height to preserve aspect ratio.
-                    let w = size.width.get_expr().unwrap().eval(ctx)?;
+                    let w = node_box.size.width.get_expr().unwrap().eval(ctx)?;
                     if nw == 0.0 {
                         0.0
                     } else {

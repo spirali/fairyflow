@@ -1,4 +1,4 @@
-use crate::{Node, NodeKind, Position, Size};
+use crate::{Node, NodeBox, NodeKind, Position, Size};
 
 /// Portable 2D affine transform.
 ///
@@ -75,12 +75,30 @@ impl AffineTransform {
     }
 }
 
+pub fn transform_node_box(node_box: &NodeBox, parent: AffineTransform) -> AffineTransform {
+    let pivot_x = node_box.pivot_x as f32;
+    let pivot_y = node_box.pivot_y as f32;
+    AffineTransform::from_translate(-pivot_x, -pivot_y)
+        .concat(AffineTransform::from_scale(
+            node_box.scale_x as f32,
+            node_box.scale_y as f32,
+        ))
+        .concat(AffineTransform::from_rotate_degrees(
+            node_box.rotation as f32,
+        ))
+        .concat(AffineTransform::from_translate(
+            node_box.position.x as f32 + pivot_x,
+            node_box.position.y as f32 + pivot_y,
+        ))
+        .concat(parent)
+}
+
 /// Build the local-to-parent transform for a positioned node, then compose with `parent`.
 ///
 /// Equivalent to tiny-skia chain:
 /// `translate(-pivot) · scale · rotate · translate(pos + pivot) · parent`
 pub fn positional_transform(
-    position: &Position,
+    position: Position,
     scale: Size,
     rotation: f64,
     pivot_x: f32,
@@ -103,11 +121,10 @@ pub fn positional_transform(
 /// Extract the z-level value from any node kind.
 pub fn node_z_level(node: &Node) -> f64 {
     match &node.kind {
-        NodeKind::Group { z_level, .. }
-        | NodeKind::Rect { z_level, .. }
-        | NodeKind::Ellipse { z_level, .. }
-        | NodeKind::Path { z_level, .. }
-        | NodeKind::Text { z_level, .. }
-        | NodeKind::Image { z_level, .. } => *z_level.value(),
+        NodeKind::Group { node_box, .. }
+        | NodeKind::Rect { node_box, .. }
+        | NodeKind::Ellipse { node_box, .. }
+        | NodeKind::Image { node_box, .. } => *node_box.z_level.value(),
+        NodeKind::Path { z_level, .. } | NodeKind::Text { z_level, .. } => *z_level.value(),
     }
 }

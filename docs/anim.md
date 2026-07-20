@@ -274,7 +274,9 @@ with Scene():
 ## Rotation and scale
 
 `Group` nodes support `.rotate()` and `.scale()` animations. The pivot defaults to the
-group's centre (`pivot_x=0.5`, `pivot_y=0.5`).
+group's centre — `pivot_x`/`pivot_y` hold an absolute pixel offset from the group's own
+top-left, unset defaulting to `width * 0.5`/`height * 0.5`. Set it with `.pivot()`, e.g.
+`g.pivot("top_left")` or `g.pivot(x=rel(0.3), y=rel(0.7))` for an own-box fraction.
 
 ```ffpy video="mp4"
 with Scene():

@@ -1,6 +1,6 @@
 use crate::basictypes::{FrameId, NodeId};
 use crate::eval::EvalCtx;
-use crate::values::{Color, Expr, Value};
+use crate::values::{Color, Eval, Expr, Value};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
@@ -38,6 +38,19 @@ impl<T: Value + DeserializeOwned> From<Option<Expr<T>>> for AttrExpr<T> {
 pub struct Position {
     pub x: AttrExpr<f64>,
     pub y: AttrExpr<f64>,
+}
+
+/// Mirrors `PositionMixin` in Python.
+#[derive(Debug)]
+pub struct NodeBox {
+    pub position: Position,
+    pub size: Size,
+    pub z_level: AttrExpr<f64>,
+    pub rotation: AttrExpr<f64>,
+    pub pivot_x: AttrExpr<f64>,
+    pub pivot_y: AttrExpr<f64>,
+    pub scale_x: AttrExpr<f64>,
+    pub scale_y: AttrExpr<f64>,
 }
 
 /// Mirrors `SizeMixin` in Python.
@@ -91,15 +104,8 @@ pub enum Layout {
 pub enum NodeKind {
     /// Python: `Group(PositionMixin, SizeMixin, AlphaMixin)` + rotation + scale
     Group {
-        position: Position,
-        size: Size,
+        node_box: NodeBox,
         alpha: AttrExpr<f64>,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
-        z_level: AttrExpr<f64>,
         clip_x: AttrExpr<f64>,
         clip_y: AttrExpr<f64>,
         clip_w: AttrExpr<f64>,
@@ -109,27 +115,13 @@ pub enum NodeKind {
     },
     /// Python: `Rect(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
     Rect {
-        position: Position,
-        size: Size,
-        z_level: AttrExpr<f64>,
+        node_box: NodeBox,
         style: Style,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
     },
     /// Python: `Ellipse(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
     Ellipse {
-        position: Position,
-        size: Size,
-        z_level: AttrExpr<f64>,
+        node_box: NodeBox,
         style: Style,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
     },
     /// Python: `Path(StyleMixin)` + rotation + scale
     Path {
@@ -137,11 +129,6 @@ pub enum NodeKind {
         z_level: AttrExpr<f64>,
         crop_start: AttrExpr<f64>,
         crop_end: AttrExpr<f64>,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
         children: Vec<NodeId>,
     },
 
@@ -184,36 +171,22 @@ pub enum NodeKind {
     /// An image (SVG for now).  `path` is resolved relative to the project directory.
     /// + rotation + scale
     Image {
-        position: Position,
-        size: Size,
-        z_level: AttrExpr<f64>,
+        node_box: NodeBox,
         alpha: AttrExpr<f64>,
         path: AttrExpr<Arc<String>>,
         /// When true, scale the image to fit inside the node box while
         /// preserving the SVG's intrinsic aspect ratio (letterbox/pillarbox).
         keep_aspect: AttrExpr<bool>,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
         /// Optional child layer nodes (kind = "layer").
         children: Vec<NodeId>,
     },
 
     /// A layer within an SVG image.  Always a child of an Image node. + rotation + scale
     Layer {
-        position: Position,
-        size: Size,
-        z_level: AttrExpr<f64>,
+        node_box: NodeBox,
         alpha: AttrExpr<f64>,
         /// Matches the SVG group `id` attribute.
         layer_name: Arc<String>,
-        rotation: AttrExpr<f64>,
-        pivot_x: AttrExpr<f64>,
-        pivot_y: AttrExpr<f64>,
-        scale_x: AttrExpr<f64>,
-        scale_y: AttrExpr<f64>,
         children: Vec<NodeId>,
     },
 }
@@ -228,6 +201,17 @@ impl NodeKind {
             | NodeKind::Image { children, .. }
             | NodeKind::Layer { children, .. } => children,
             _ => &[],
+        }
+    }
+
+    pub fn node_box(&self) -> Option<&NodeBox> {
+        match self {
+            NodeKind::Group { node_box, .. }
+            | NodeKind::Rect { node_box, .. }
+            | NodeKind::Ellipse { node_box, .. }
+            | NodeKind::Image { node_box, .. }
+            | NodeKind::Layer { node_box, .. } => Some(node_box),
+            _ => None,
         }
     }
 }
@@ -383,6 +367,19 @@ impl NodeDef {
         }
     }
 
+    fn node_box(&mut self) -> NodeBox {
+        NodeBox {
+            position: self.position(),
+            size: self.size(),
+            z_level: self.z_level(),
+            rotation: AttrExpr(self.rotation.take()),
+            pivot_x: AttrExpr(self.pivot_x.take()),
+            pivot_y: AttrExpr(self.pivot_y.take()),
+            scale_x: AttrExpr(self.scale_x.take()),
+            scale_y: AttrExpr(self.scale_y.take()),
+        }
+    }
+
     fn size(&mut self) -> Size {
         Size {
             width: AttrExpr(self.w.take()),
@@ -426,63 +423,27 @@ impl Node {
         let id = NodeId::new(idx);
         let children = std::mem::take(&mut def.children);
         let kind = match def.kind {
-            Kind::Group => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Group {
-                    position,
-                    size,
-                    alpha: AttrExpr(def.alpha.take()),
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
-                    z_level,
-                    clip_x: AttrExpr(def.clip_x.take()),
-                    clip_y: AttrExpr(def.clip_y.take()),
-                    clip_w: AttrExpr(def.clip_w.take()),
-                    clip_h: AttrExpr(def.clip_h.take()),
-                    layout: def
-                        .layout
-                        .take()
-                        .ok_or_else(|| anyhow::anyhow!("group node {} missing `layout`", idx))?,
-                    children,
-                }
-            }
-            Kind::Rect => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Rect {
-                    position,
-                    size,
-                    z_level,
-                    style: def.style(),
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
-                }
-            }
-            Kind::Ellipse => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Ellipse {
-                    position,
-                    size,
-                    z_level,
-                    style: def.style(),
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
-                }
-            }
+            Kind::Group => NodeKind::Group {
+                node_box: def.node_box(),
+                alpha: AttrExpr(def.alpha.take()),
+                clip_x: AttrExpr(def.clip_x.take()),
+                clip_y: AttrExpr(def.clip_y.take()),
+                clip_w: AttrExpr(def.clip_w.take()),
+                clip_h: AttrExpr(def.clip_h.take()),
+                layout: def
+                    .layout
+                    .take()
+                    .ok_or_else(|| anyhow::anyhow!("group node {} missing `layout`", idx))?,
+                children,
+            },
+            Kind::Rect => NodeKind::Rect {
+                node_box: def.node_box(),
+                style: def.style(),
+            },
+            Kind::Ellipse => NodeKind::Ellipse {
+                node_box: def.node_box(),
+                style: def.style(),
+            },
             Kind::Path => {
                 let z_level = def.z_level();
                 NodeKind::Path {
@@ -490,11 +451,6 @@ impl Node {
                     z_level,
                     crop_start: AttrExpr(def.crop_start.take()),
                     crop_end: AttrExpr(def.crop_end.take()),
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
                     children,
                 }
             }
@@ -535,45 +491,22 @@ impl Node {
                 }
             }
             Kind::Close => NodeKind::Close,
-            Kind::Image => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Image {
-                    position,
-                    size,
-                    z_level,
-                    alpha: AttrExpr(def.alpha.take()),
-                    path: AttrExpr(def.file.take()),
-                    keep_aspect: AttrExpr(def.keep_aspect.take()),
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
-                    children,
-                }
-            }
-            Kind::Layer => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Layer {
-                    position,
-                    size,
-                    z_level,
-                    alpha: AttrExpr(def.alpha.take()),
-                    layer_name: def.layer_name.take().ok_or_else(|| {
-                        anyhow::anyhow!("layer node {} missing `layer_name`", idx)
-                    })?,
-                    rotation: AttrExpr(def.rotation.take()),
-                    pivot_x: AttrExpr(def.pivot_x.take()),
-                    pivot_y: AttrExpr(def.pivot_y.take()),
-                    scale_x: AttrExpr(def.scale_x.take()),
-                    scale_y: AttrExpr(def.scale_y.take()),
-                    children,
-                }
-            }
+            Kind::Image => NodeKind::Image {
+                node_box: def.node_box(),
+                alpha: AttrExpr(def.alpha.take()),
+                path: AttrExpr(def.file.take()),
+                keep_aspect: AttrExpr(def.keep_aspect.take()),
+                children,
+            },
+            Kind::Layer => NodeKind::Layer {
+                node_box: def.node_box(),
+                alpha: AttrExpr(def.alpha.take()),
+                layer_name: def
+                    .layer_name
+                    .take()
+                    .ok_or_else(|| anyhow::anyhow!("layer node {} missing `layer_name`", idx))?,
+                children,
+            },
         };
         Ok(Node {
             id,

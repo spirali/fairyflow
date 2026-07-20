@@ -1,5 +1,4 @@
 use renderer_core::glyph_cache::{PathVerb, VectorPath};
-use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
@@ -11,6 +10,7 @@ use renderer_core::{
     Color, ImageLayer, Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild,
     TextSpan,
 };
+use renderer_core::{NodeBox, highlight};
 use resvg::usvg;
 use std::sync::Arc;
 use tiny_skia::{
@@ -78,34 +78,15 @@ impl RasterRenderer {
     ) {
         match &node.kind {
             NodeKind::Group {
-                position,
-                size,
+                node_box,
                 alpha,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
                 clip_x,
                 clip_y,
                 clip_w,
                 clip_h,
-                z_level: _,
                 children,
             } => {
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
+                let transform = transform_nodebox(node_box, parent_transform);
                 let alpha = parent_alpha * *alpha as f32;
                 let children = children.clone();
 
@@ -118,8 +99,8 @@ impl RasterRenderer {
                     let mut offscreen = Pixmap::new(w, h).expect("offscreen pixmap");
                     self.render_children(&children, &mut offscreen, transform, alpha);
 
-                    let lw = size.width as f32;
-                    let lh = size.height as f32;
+                    let lw = node_box.size.width as f32;
+                    let lh = node_box.size.height as f32;
                     if let Some(clip_rect) = Rect::from_xywh(
                         *clip_x as f32 * lw,
                         *clip_y as f32 * lh,
@@ -157,63 +138,27 @@ impl RasterRenderer {
                     }
                 }
             }
-            NodeKind::Rect {
-                position,
-                size,
-                style,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                z_level: _,
-            } => {
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
-                let Some(rect) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
-                else {
+            NodeKind::Rect { node_box, style } => {
+                let transform = transform_nodebox(node_box, parent_transform);
+                let Some(rect) = Rect::from_xywh(
+                    0.0,
+                    0.0,
+                    node_box.size.width as f32,
+                    node_box.size.height as f32,
+                ) else {
                     return;
                 };
                 let path = PathBuilder::from_rect(rect);
                 fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
             }
-            NodeKind::Ellipse {
-                position,
-                size,
-                style,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                z_level: _,
-            } => {
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
-                let Some(oval) = Rect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
-                else {
+            NodeKind::Ellipse { node_box, style } => {
+                let transform = transform_nodebox(node_box, parent_transform);
+                let Some(oval) = Rect::from_xywh(
+                    0.0,
+                    0.0,
+                    node_box.size.width as f32,
+                    node_box.size.height as f32,
+                ) else {
                     return;
                 };
                 let Some(path) = PathBuilder::from_oval(oval) else {
@@ -224,27 +169,13 @@ impl RasterRenderer {
             NodeKind::Path {
                 style,
                 children,
-                scale_x,
-                scale_y,
-                rotation,
                 z_level: _,
                 crop_start,
                 crop_end,
                 ..
             } => {
-                let transform = positional_transform(
-                    &Position { x: 0.0, y: 0.0 },
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    0.0,
-                    0.0,
-                    parent_transform,
-                );
                 if let Some(path) = build_cropped_path(children, *crop_start, *crop_end) {
-                    fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
+                    fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha);
                 }
             }
             NodeKind::Text {
@@ -255,7 +186,7 @@ impl RasterRenderer {
                 ..
             } => {
                 let transform = positional_transform(
-                    position,
+                    *position,
                     Size {
                         width: 1.0,
                         height: 1.0,
@@ -276,17 +207,10 @@ impl RasterRenderer {
                 self.render_text_lines(&lines, pixmap, transform, parent_alpha, sh);
             }
             NodeKind::Image {
-                position,
-                size,
+                node_box,
                 alpha,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
                 path,
                 keep_aspect,
-                z_level: _,
                 layers,
                 hidden_layers,
                 ..
@@ -297,19 +221,14 @@ impl RasterRenderer {
                 render_image(
                     &ImageSpec {
                         path,
-                        size,
+                        size: node_box.size,
                         keep_aspect: *keep_aspect,
                         layers: &layers,
                         hidden_layers: &hidden_layers,
                     },
                     pixmap,
                     parent_transform,
-                    position,
-                    *scale_x,
-                    *scale_y,
-                    *rotation,
-                    *pivot_x,
-                    *pivot_y,
+                    node_box,
                     effective_alpha,
                 );
             }
@@ -496,8 +415,22 @@ pub fn render_scene_to_buffer(scene: &Scene, width: u32, height: u32, buffer: &m
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
 
+fn transform_nodebox(node_box: &NodeBox, parent: Transform) -> Transform {
+    positional_transform(
+        node_box.position,
+        Size {
+            width: node_box.scale_x,
+            height: node_box.scale_y,
+        },
+        node_box.rotation,
+        node_box.pivot_x as f32,
+        node_box.pivot_y as f32,
+        parent,
+    )
+}
+
 fn positional_transform(
-    position: &Position,
+    position: Position,
     scale: Size,
     rotation: f64,
     pivot_x: f32,
@@ -541,7 +474,7 @@ fn image_layer_translate(override_: Option<&ImageLayer>, node_transform: Transfo
     let Some(ov) = override_ else {
         return node_transform;
     };
-    node_transform.post_translate(ov.position.x as f32, ov.position.y as f32)
+    node_transform.post_translate(ov.node_box.position.x as f32, ov.node_box.position.y as f32)
 }
 
 fn fill_and_stroke(
@@ -624,7 +557,7 @@ fn build_cropped_path(
 
 struct ImageSpec<'a> {
     path: &'a str,
-    size: &'a Size,
+    size: Size,
     keep_aspect: bool,
     layers: &'a [ImageLayer],
     hidden_layers: &'a [Arc<String>],
@@ -717,12 +650,7 @@ fn render_image(
     spec: &ImageSpec<'_>,
     pixmap: &mut Pixmap,
     parent_transform: Transform,
-    position: &Position,
-    scale_x: f64,
-    scale_y: f64,
-    rotation: f64,
-    pivot_x: f64,
-    pivot_y: f64,
+    node_box: &NodeBox,
     effective_alpha: f32,
 ) {
     let Some(cached) = image_cache::load_image(spec.path) else {
@@ -757,19 +685,7 @@ fn render_image(
         }
     };
 
-    let pivot_x_abs = (pivot_x * dest_w as f64) as f32;
-    let pivot_y_abs = (pivot_y * dest_h as f64) as f32;
-    let node_transform = positional_transform(
-        position,
-        Size {
-            width: scale_x,
-            height: scale_y,
-        },
-        rotation,
-        pivot_x_abs,
-        pivot_y_abs,
-        parent_transform,
-    );
+    let node_transform = transform_nodebox(node_box, parent_transform);
 
     match &cached.kind {
         CachedImageKind::Svg { tree, .. } => {

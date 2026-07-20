@@ -5,14 +5,6 @@ from .position import SCENE_NODE_ID
 
 import json as json
 
-# The `Serializer` actively building the current scene's flat `nodes` array —
-# needed so `serialize_expr`'s `Node` branch can resolve a cross-referenced
-# node to its v2 wire-format id (its position in that array), which is no
-# longer the same as the node's own internal construction-order `_id`
-# (serialization now emits nodes pre-order, node before its own subtree,
-# while ids used to be assigned in strict construction order — see
-# `Serializer.add_node` below). Single active serializer at a time: one
-# synchronous top-to-bottom walk per scene, no concurrency.
 _active: "Serializer | None" = None
 
 

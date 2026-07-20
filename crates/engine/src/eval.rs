@@ -1,6 +1,6 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
-use crate::nodes::{AttrExpr, Node, NodeKind, Position, SceneDef, Size, Style, TextStyle};
+use crate::nodes::{AttrExpr, Node, NodeBox, NodeKind, Position, SceneDef, Size, Style, TextStyle};
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Value};
 use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
@@ -66,8 +66,10 @@ impl<'a> EvalCtx<'a> {
 /// Collect ancestor chain from `node_id` up to (and including) the topmost ancestor.
 /// Result: [node_id, parent, grandparent, ...]
 ///
-/// Only kinds that can actually contain children (`Group`/`Path`/`Image`/`Layer`)
-/// contribute a transform.
+/// Only kinds that carry a `NodeBox` (`Group`/`Image`/`Layer`) contribute a
+/// transform. `Path` has no box of its own — path-command coordinates are
+/// already in its parent's frame (put a `Path` in a `Group` if it needs its
+/// own local origin to transform).
 ///
 /// `NodeId::SCENE` (and, defensively, any other id absent from `ctx.nodes`) resolves
 /// to an empty chain: the `Scene` has no position/rotation/scale of its own, so "no
@@ -81,10 +83,7 @@ fn ancestor_chain(ctx: &EvalCtx, node_id: NodeId) -> Vec<NodeId> {
     while let Some(node) = ctx.nodes.get(&current) {
         if matches!(
             node.kind,
-            NodeKind::Group { .. }
-                | NodeKind::Path { .. }
-                | NodeKind::Image { .. }
-                | NodeKind::Layer { .. }
+            NodeKind::Group { .. } | NodeKind::Image { .. } | NodeKind::Layer { .. }
         ) {
             chain.push(current);
         }
@@ -132,56 +131,26 @@ impl NodeTransform {
 }
 
 /// Extract the rotation/scale/pivot transform a node applies to its own children.
-/// Only `Group`/`Path`/`Image`/`Layer` can be reached here (see `ancestor_chain`'s
+/// Only `Group`/`Image`/`Layer` can be reached here (see `ancestor_chain`'s
 /// doc comment for why leaves like `Rect`/`Ellipse` are deliberately excluded, even
-/// though they carry the same wire fields for the renderer's own use later).
+/// though they carry the same `NodeBox` fields for the renderer's own use later;
+/// `Path` has no `NodeBox` at all and is never a transform frame).
 fn node_own_transform(node: &Node, ctx: &EvalCtx) -> anyhow::Result<NodeTransform> {
-    let (scale_x, scale_y, rotation, pivot_x, pivot_y) = match &node.kind {
-        NodeKind::Group {
-            scale_x,
-            scale_y,
-            rotation,
-            pivot_x,
-            pivot_y,
-            ..
-        }
-        | NodeKind::Path {
-            scale_x,
-            scale_y,
-            rotation,
-            pivot_x,
-            pivot_y,
-            ..
-        }
-        | NodeKind::Image {
-            scale_x,
-            scale_y,
-            rotation,
-            pivot_x,
-            pivot_y,
-            ..
-        }
-        | NodeKind::Layer {
-            scale_x,
-            scale_y,
-            rotation,
-            pivot_x,
-            pivot_y,
-            ..
-        } => (scale_x, scale_y, rotation, pivot_x, pivot_y),
-        _ => anyhow::bail!("node {:?} has no rotation/scale/pivot", node.id),
-    };
+    let node_box = node
+        .kind
+        .node_box()
+        .ok_or_else(|| anyhow::anyhow!("node {:?} is not box", node.kind))?;
     let pos = RcPosition::new(node.get_x(ctx)?, node.get_y(ctx)?);
     let scale = RcSize {
-        width: scale_x.eval_or(ctx, 1.0)?,
-        height: scale_y.eval_or(ctx, 1.0)?,
+        width: node_box.scale_x.eval_or(ctx, 1.0)?,
+        height: node_box.scale_y.eval_or(ctx, 1.0)?,
     };
-    let r = rotation.eval_or(ctx, 0.0)?.to_radians();
+    let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
     let w = node.get_width(ctx)?;
     let h = node.get_height(ctx)?;
     let pivot = RcPosition::new(
-        pivot_x.eval_or(ctx, 0.5)? * w,
-        pivot_y.eval_or(ctx, 0.5)? * h,
+        node_box.pivot_x.eval_or(ctx, w * 0.5)?,
+        node_box.pivot_y.eval_or(ctx, h * 0.5)?,
     );
     Ok(NodeTransform {
         pos,
@@ -244,11 +213,6 @@ fn node_transform(
 // ───────────────────────────── Expr / Call ──────────────────────────────────
 
 impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
-    /// Evaluate this attribute, falling back to `default` when absent. For
-    /// literal-default fields only (alpha, rotation, scale, pivot, clip,
-    /// crop, c1/c2, keep_aspect, ...) — position/size use `Node::get_x` etc.
-    /// (auto-layout fallback) and inheritable style/z fields use
-    /// `eval_inherited` (parent-chain fallback) instead.
     pub fn eval_or<'a>(&'a self, ctx: &'a EvalCtx<'a>, default: T) -> anyhow::Result<T> {
         match self.get_expr() {
             None => Ok(default),
@@ -260,6 +224,24 @@ impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
                 ctx.end_eval(expr);
                 result
             }
+        }
+    }
+
+    pub fn eval_or_else(
+        &self,
+        ctx: &EvalCtx,
+        default_fn: impl Fn(&EvalCtx) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        match self.get_expr() {
+            Some(expr) => {
+                if !ctx.begin_eval(expr) {
+                    return Ok(T::recursive_value());
+                }
+                let result = expr.eval(ctx);
+                ctx.end_eval(expr);
+                result
+            }
+            None => default_fn(ctx),
         }
     }
 }
@@ -305,13 +287,12 @@ where
 
 fn z_level_of(kind: &NodeKind) -> Option<&AttrExpr<f64>> {
     match kind {
-        NodeKind::Group { z_level, .. }
-        | NodeKind::Rect { z_level, .. }
-        | NodeKind::Ellipse { z_level, .. }
-        | NodeKind::Path { z_level, .. }
-        | NodeKind::Text { z_level, .. }
-        | NodeKind::Image { z_level, .. }
-        | NodeKind::Layer { z_level, .. } => Some(z_level),
+        NodeKind::Group { node_box, .. }
+        | NodeKind::Rect { node_box, .. }
+        | NodeKind::Ellipse { node_box, .. }
+        | NodeKind::Image { node_box, .. }
+        | NodeKind::Layer { node_box, .. } => Some(&node_box.z_level),
+        NodeKind::Path { z_level, .. } | NodeKind::Text { z_level, .. } => Some(z_level),
         _ => None,
     }
 }
@@ -555,16 +536,48 @@ impl TextStyle {
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
+    pub fn eval_node_box(
+        &self,
+        node_box: &NodeBox,
+        ctx: &EvalCtx,
+    ) -> anyhow::Result<renderer_core::NodeBox> {
+        let x = node_box
+            .position
+            .x
+            .eval_or_else(ctx, |ctx| self.auto_x(ctx))?;
+        let y = node_box
+            .position
+            .y
+            .eval_or_else(ctx, |ctx| self.auto_y(ctx))?;
+        let w = node_box
+            .size
+            .width
+            .eval_or_else(ctx, |ctx| self.auto_width(ctx))?;
+        let h = node_box
+            .size
+            .height
+            .eval_or_else(ctx, |ctx| self.auto_height(ctx))?;
+        Ok(renderer_core::NodeBox {
+            position: RcPosition { x, y },
+            size: RcSize {
+                width: w,
+                height: h,
+            },
+            z_level: eval_z(ctx, self)?,
+            scale_x: node_box.scale_x.eval_or(ctx, 1.0)?,
+            scale_y: node_box.scale_y.eval_or(ctx, 1.0)?,
+            rotation: node_box.rotation.eval_or(ctx, 0.0)?,
+            pivot_x: node_box.pivot_x.eval_or_else(ctx, |_ctx| Ok(w * 0.5))?,
+            pivot_y: node_box.pivot_y.eval_or_else(ctx, |_ctx| Ok(h * 0.5))?,
+        })
+    }
+
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Node> {
         let _span = tracing::trace_span!("node.eval", node_id = self.id.as_u64()).entered();
         let kind = match &self.kind {
             NodeKind::Group {
+                node_box,
                 alpha,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
                 clip_x,
                 clip_y,
                 clip_w,
@@ -573,22 +586,12 @@ impl Node {
                 children,
                 ..
             } => renderer_core::NodeKind::Group {
-                position: RcPosition::new(self.get_x(ctx)?, self.get_y(ctx)?),
-                size: RcSize {
-                    width: self.get_width(ctx)?,
-                    height: self.get_height(ctx)?,
-                },
+                node_box: self.eval_node_box(node_box, ctx)?,
                 alpha: alpha.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
                 clip_x: clip_x.eval_or(ctx, 0.0)?,
                 clip_y: clip_y.eval_or(ctx, 0.0)?,
                 clip_w: clip_w.eval_or(ctx, 1.0)?,
                 clip_h: clip_h.eval_or(ctx, 1.0)?,
-                z_level: eval_z(ctx, self)?,
                 children: {
                     let mut result = Vec::new();
                     for &id in children {
@@ -601,65 +604,25 @@ impl Node {
                 },
             },
             NodeKind::Rect {
-                position,
-                size,
-                style,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
-                ..
+                node_box, style, ..
             } => renderer_core::NodeKind::Rect {
-                position: position.eval(ctx, self)?,
-                size: size.eval(ctx, self)?,
+                node_box: self.eval_node_box(node_box, ctx)?,
                 style: style.eval(ctx)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
-                z_level: eval_z(ctx, self)?,
             },
             NodeKind::Ellipse {
-                position,
-                size,
-                style,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
-                ..
+                node_box, style, ..
             } => renderer_core::NodeKind::Ellipse {
-                position: position.eval(ctx, self)?,
-                size: size.eval(ctx, self)?,
+                node_box: self.eval_node_box(node_box, ctx)?,
                 style: style.eval(ctx)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
-                z_level: eval_z(ctx, self)?,
             },
             NodeKind::Path {
                 style,
                 children,
                 crop_start,
                 crop_end,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
                 ..
             } => renderer_core::NodeKind::Path {
                 style: style.eval(ctx)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
                 z_level: eval_z(ctx, self)?,
                 crop_start: crop_start.eval_or(ctx, 0.0)?,
                 crop_end: crop_end.eval_or(ctx, 1.0)?,
@@ -687,28 +650,15 @@ impl Node {
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
             NodeKind::Image {
-                position,
-                size,
+                node_box,
                 alpha,
                 path,
                 keep_aspect,
                 children,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
                 ..
             } => renderer_core::NodeKind::Image {
-                position: position.eval(ctx, self)?,
-                size: size.eval(ctx, self)?,
-                z_level: eval_z(ctx, self)?,
+                node_box: self.eval_node_box(node_box, ctx)?,
                 alpha: alpha.eval_or(ctx, 1.0)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
                 path: path.eval_or(ctx, std::sync::Arc::new(String::new()))?,
                 keep_aspect: keep_aspect.eval_or(ctx, true)?,
                 layers: {
@@ -810,28 +760,16 @@ impl Node {
     pub fn eval_as_image_layer(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::ImageLayer> {
         match &self.kind {
             NodeKind::Layer {
-                position,
-                size,
+                node_box,
                 alpha,
                 layer_name,
-                rotation,
-                pivot_x,
-                pivot_y,
-                scale_x,
-                scale_y,
                 ..
             } => Ok(renderer_core::ImageLayer {
+                node_box: self.eval_node_box(node_box, ctx)?,
                 id: self.id.as_u64(),
                 layer_name: layer_name.clone(),
-                position: position.eval(ctx, self)?,
-                size: size.eval(ctx, self)?,
                 z_level: eval_z(ctx, self)?,
                 alpha: alpha.eval_or(ctx, 1.0)?,
-                scale_x: scale_x.eval_or(ctx, 1.0)?,
-                scale_y: scale_y.eval_or(ctx, 1.0)?,
-                rotation: rotation.eval_or(ctx, 0.0)?,
-                pivot_x: pivot_x.eval_or(ctx, 0.5)?,
-                pivot_y: pivot_y.eval_or(ctx, 0.5)?,
             }),
             _ => anyhow::bail!("expected layer node, got {:?}", self.id),
         }

@@ -350,25 +350,19 @@ fn collect_world_bounds(
     let h = node.get_height(ctx).unwrap_or(0.0);
 
     if let NodeKind::Group {
-        scale_x,
-        scale_y,
-        rotation,
-        pivot_x,
-        pivot_y,
-        children,
-        ..
+        node_box, children, ..
     } = &node.kind
     {
-        let sx = scale_x.eval_or(ctx, 1.0).unwrap_or(1.0);
-        let sy = scale_y.eval_or(ctx, 1.0).unwrap_or(1.0);
-        let rot = rotation.eval_or(ctx, 0.0).unwrap_or(0.0);
-        let pvx = (pivot_x.eval_or(ctx, 0.5).unwrap_or(0.5) * w) as f32;
-        let pvy = (pivot_y.eval_or(ctx, 0.5).unwrap_or(0.5) * h) as f32;
+        let sx = node_box.scale_x.eval_or(ctx, 1.0).unwrap_or(1.0);
+        let sy = node_box.scale_y.eval_or(ctx, 1.0).unwrap_or(1.0);
+        let rot = node_box.rotation.eval_or(ctx, 0.0).unwrap_or(0.0);
+        let pvx = node_box.pivot_x.eval_or(ctx, w * 0.5).unwrap_or(w * 0.5) as f32;
+        let pvy = node_box.pivot_y.eval_or(ctx, h * 0.5).unwrap_or(h * 0.5) as f32;
         let pos = RcPosition { x, y };
 
         // Maps group-local coordinates → world coordinates
         let child_transform = positional_transform(
-            &pos,
+            pos,
             RcSize {
                 width: sx,
                 height: sy,

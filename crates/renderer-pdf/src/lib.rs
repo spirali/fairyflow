@@ -11,7 +11,9 @@ use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
-use renderer_core::transform::{AffineTransform, node_z_level, positional_transform};
+use renderer_core::transform::{
+    AffineTransform, node_z_level, positional_transform, transform_node_box,
+};
 use renderer_core::{
     Color, ImageLayer, Node, NodeKind, Position, Scene, Size, Style, TextChild, TextSpan,
 };
@@ -115,43 +117,23 @@ impl PdfRenderer {
     ) {
         match &node.kind {
             NodeKind::Group {
-                position,
-                size,
+                node_box,
                 alpha,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
                 clip_x,
                 clip_y,
                 clip_w,
                 clip_h,
-                z_level: _,
                 children,
             } => {
-                let pivot_x_abs = (*pivot_x * size.width) as f32;
-                let pivot_y_abs = (*pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
+                let transform = transform_node_box(&node_box, parent_transform);
                 let effective_alpha = parent_alpha * *alpha as f32;
                 let needs_clip = *clip_x > 0.0 || *clip_y > 0.0 || *clip_w < 1.0 || *clip_h < 1.0;
-
                 surface.push_transform(&to_krilla_transform(transform));
                 let mut extra_pops = 0u32;
 
                 if needs_clip {
-                    let lw = size.width as f32;
-                    let lh = size.height as f32;
+                    let lw = node_box.size.width as f32;
+                    let lh = node_box.size.height as f32;
                     if let Some(clip_rect) = KRect::from_xywh(
                         *clip_x as f32 * lw,
                         *clip_y as f32 * lh,
@@ -189,34 +171,15 @@ impl PdfRenderer {
                 surface.pop(); // transform
             }
 
-            NodeKind::Rect {
-                position,
-                size,
-                style,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                z_level: _,
-            } => {
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
+            NodeKind::Rect { node_box, style } => {
+                let transform = transform_node_box(&node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
-                if let Some(rect) =
-                    KRect::from_xywh(0.0, 0.0, size.width as f32, size.height as f32)
-                {
+                if let Some(rect) = KRect::from_xywh(
+                    0.0,
+                    0.0,
+                    node_box.size.width as f32,
+                    node_box.size.height as f32,
+                ) {
                     let mut pb = PathBuilder::new();
                     pb.push_rect(rect);
                     if let Some(path) = pb.finish() {
@@ -226,32 +189,12 @@ impl PdfRenderer {
                 surface.pop();
             }
 
-            NodeKind::Ellipse {
-                position,
-                size,
-                style,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                z_level: _,
-            } => {
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
+            NodeKind::Ellipse { node_box, style } => {
+                let transform = transform_node_box(&node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
-                if let Some(path) = build_ellipse_path(size.width as f32, size.height as f32) {
+                if let Some(path) =
+                    build_ellipse_path(node_box.size.width as f32, node_box.size.height as f32)
+                {
                     fill_and_stroke(surface, &path, style, parent_alpha);
                 }
                 surface.pop();
@@ -260,9 +203,6 @@ impl PdfRenderer {
             NodeKind::Path {
                 style,
                 children,
-                scale_x,
-                scale_y,
-                rotation,
                 z_level: _,
                 crop_start,
                 crop_end,
@@ -270,20 +210,7 @@ impl PdfRenderer {
             } => {
                 let verbs = build_cropped_path_verbs(children, *crop_start, *crop_end);
                 if let Some(path) = verbs_to_krilla_path(&verbs) {
-                    let transform = positional_transform(
-                        &Position { x: 0.0, y: 0.0 },
-                        Size {
-                            width: *scale_x,
-                            height: *scale_y,
-                        },
-                        *rotation,
-                        0.0,
-                        0.0,
-                        parent_transform,
-                    );
-                    surface.push_transform(&to_krilla_transform(transform));
                     fill_and_stroke(surface, &path, style, parent_alpha);
-                    surface.pop();
                 }
             }
 
@@ -296,7 +223,7 @@ impl PdfRenderer {
                 z_level: _,
             } => {
                 let transform = positional_transform(
-                    position,
+                    *position,
                     Size {
                         width: 1.0,
                         height: 1.0,
@@ -318,15 +245,8 @@ impl PdfRenderer {
             }
 
             NodeKind::Image {
-                position,
-                size,
+                node_box,
                 alpha,
-                scale_x,
-                scale_y,
-                rotation,
-                pivot_x,
-                pivot_y,
-                z_level: _,
                 path,
                 keep_aspect,
                 layers,
@@ -334,25 +254,13 @@ impl PdfRenderer {
                 ..
             } => {
                 let effective_alpha = parent_alpha * *alpha as f32;
-                let pivot_x_abs = (pivot_x * size.width) as f32;
-                let pivot_y_abs = (pivot_y * size.height) as f32;
-                let base_transform = positional_transform(
-                    position,
-                    Size {
-                        width: *scale_x,
-                        height: *scale_y,
-                    },
-                    *rotation,
-                    pivot_x_abs,
-                    pivot_y_abs,
-                    parent_transform,
-                );
+                let base_transform = transform_node_box(node_box, parent_transform);
                 self.render_image(
                     surface,
                     &ImageSpec {
                         path,
-                        dest_w: size.width as f32,
-                        dest_h: size.height as f32,
+                        dest_w: node_box.size.width as f32,
+                        dest_h: node_box.size.height as f32,
                         keep_aspect: *keep_aspect,
                         layers,
                         hidden_layers,
@@ -809,7 +717,7 @@ fn image_layer_translate(
     let Some(ov) = override_ else {
         return base_transform;
     };
-    AffineTransform::from_translate(ov.position.x as f32, ov.position.y as f32)
+    AffineTransform::from_translate(ov.node_box.position.x as f32, ov.node_box.position.y as f32)
         .concat(base_transform)
 }
 

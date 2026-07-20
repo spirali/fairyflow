@@ -10,8 +10,8 @@ pub mod transform;
 
 pub use color::Color;
 pub use scene::{
-    ImageLayer, Inheritable, Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild,
-    TextGroup, TextSpan, TextStyle,
+    ImageLayer, Inheritable, Node, NodeBox, NodeKind, PathCommand, Position, Scene, Size, Style,
+    TextChild, TextGroup, TextSpan, TextStyle,
 };
 
 pub use glyph_cache::prune_text_cache;

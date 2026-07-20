@@ -59,6 +59,21 @@ pub struct Size {
     pub height: f64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct NodeBox {
+    #[serde(flatten)]
+    pub position: Position,
+    #[serde(flatten)]
+    pub size: Size,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub z_level: Inheritable<f64>,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub rotation: f64,
+    pub pivot_x: f64,
+    pub pivot_y: f64,
+}
+
 /// Mirrors StyleMixin (which extends AlphaMixin) in Python.
 #[derive(Debug, Clone, Serialize)]
 pub struct Style {
@@ -154,55 +169,28 @@ pub enum NodeKind {
     /// Python: Group(PositionMixin, SizeMixin, AlphaMixin) + explicit scale and rotation
     Group {
         #[serde(flatten)]
-        position: Position,
-        #[serde(flatten)]
-        size: Size,
+        node_box: NodeBox,
         alpha: f64,
-        scale_x: f64,
-        scale_y: f64,
-        rotation: f64,
-        pivot_x: f64,
-        pivot_y: f64,
         /// Relative clip region. Values outside [0,1] mean no clipping on that axis.
         clip_x: f64,
         clip_y: f64,
         clip_w: f64,
         clip_h: f64,
-        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-        z_level: Inheritable<f64>,
         children: Vec<Node>,
     },
     /// Python: Rect(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
     Rect {
         #[serde(flatten)]
-        position: Position,
-        #[serde(flatten)]
-        size: Size,
+        node_box: NodeBox,
         #[serde(flatten)]
         style: Style,
-        scale_x: f64,
-        scale_y: f64,
-        rotation: f64,
-        pivot_x: f64,
-        pivot_y: f64,
-        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-        z_level: Inheritable<f64>,
     },
     /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
     Ellipse {
         #[serde(flatten)]
-        position: Position,
-        #[serde(flatten)]
-        size: Size,
+        node_box: NodeBox,
         #[serde(flatten)]
         style: Style,
-        scale_x: f64,
-        scale_y: f64,
-        rotation: f64,
-        pivot_x: f64,
-        pivot_y: f64,
-        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-        z_level: Inheritable<f64>,
     },
     /// Python: Path(StyleMixin) + rotation + scale.
     /// No position/size: a path has no bounds of its own (points are absolute
@@ -211,11 +199,6 @@ pub enum NodeKind {
     Path {
         #[serde(flatten)]
         style: Style,
-        scale_x: f64,
-        scale_y: f64,
-        rotation: f64,
-        pivot_x: f64,
-        pivot_y: f64,
         #[serde(skip_serializing_if = "Inheritable::is_inherited")]
         z_level: Inheritable<f64>,
         crop_start: f64,
@@ -241,17 +224,8 @@ pub enum NodeKind {
     /// An image node (SVG for now).
     Image {
         #[serde(flatten)]
-        position: Position,
-        #[serde(flatten)]
-        size: Size,
+        node_box: NodeBox,
         alpha: f64,
-        scale_x: f64,
-        scale_y: f64,
-        rotation: f64,
-        pivot_x: f64,
-        pivot_y: f64,
-        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-        z_level: Inheritable<f64>,
         path: Arc<String>,
         keep_aspect: bool,
         /// Active per-layer overrides.  Empty when no layers are specified.
@@ -275,15 +249,8 @@ pub struct ImageLayer {
     /// Identifies the SVG group by its `id` attribute.
     pub layer_name: Arc<String>,
     #[serde(flatten)]
-    pub position: Position,
-    #[serde(flatten)]
-    pub size: Size,
+    pub node_box: NodeBox,
     pub alpha: f64,
-    pub scale_x: f64,
-    pub scale_y: f64,
-    pub rotation: f64,
-    pub pivot_x: f64,
-    pub pivot_y: f64,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub z_level: Inheritable<f64>,
 }

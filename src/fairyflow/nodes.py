@@ -959,6 +959,11 @@ class RotAndScaleMixin:
 
     _ATTR_DEFAULTS = {
         "rotation": 0,
+        # Wire-inert placeholders: AnimatedValue.is_default entries are never
+        # serialized (Node.serialize() skips them), so these values never
+        # reach the wire. The engine's own w*0.5/h*0.5 default is what
+        # actually governs an unset pivot; kept at 0.5 rather than churned
+        # since there's no single static value that would be more "correct".
         "pivot_x": 0.5,
         "pivot_y": 0.5,
         "scale_x": 1,
@@ -1023,8 +1028,8 @@ class RotAndScaleMixin:
     ) -> Self:
         """Rotate the node around its pivot point.
 
-        The pivot is controlled by ``pivot_x`` / ``pivot_y`` attributes,
-        which default to the node's center (``0.5``, ``0.5``).
+        The pivot defaults to the node's center (``0.5``, ``0.5``) and is
+        set with ``pivot()``.
 
         Args:
             value: Rotation angle in degrees, clockwise.
@@ -1035,6 +1040,95 @@ class RotAndScaleMixin:
             self, for method chaining.
         """
         self._set_attr("rotation", value, dur, ease)
+        return self
+
+    def pivot(
+        self,
+        point: AnchorName | Position | float | int | None = None,
+        /,
+        *,
+        x: FloatLike | None = None,
+        y: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Set the transform origin used by ``rotate()`` and ``scale()``.
+
+        Args:
+            point: A named anchor (``"center"``, ``"top_left"``, ...) or a
+                live ``Position`` — e.g. ``planet.pivot(sun.at("center"))``
+                for a tidally-locked orbit. Mutually exclusive with
+                ``x=``/``y=``.
+            x: Absolute pixels from the node's own top-left corner. Negative
+                or out-of-box values are allowed — pivoting around an
+                external point is a real technique. Wrap in ``rel(f)`` for
+                an own-box-relative fraction instead (``rel(0.5)`` is the
+                default center, equivalent to ``pivot("center")``).
+                Mutually exclusive with ``point``.
+            y: Same as ``x``, for the vertical axis.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+
+        Own-box fractions are spelled ``node.pivot(x=rel(0.3), y=rel(0.7))``
+        — unlike every other setter accepting ``rel()``, which is always
+        *parent*-relative, a pivot's ``rel()`` is relative to the node's own
+        box (there's no useful parent-relative reading for a transform
+        origin). ``node.pivot(node.at(0.3, 0.7))`` remains an equivalent,
+        more verbose spelling via a live ``Position``.
+        """
+        if point is not None and not isinstance(point, (str, Position)):
+            raise TypeError(
+                "pivot(): a bare number isn't accepted here — use a named "
+                "anchor, x=rel(f)/y=rel(f) for an own-box fraction, or a "
+                "Position, e.g. node.pivot(x=rel(0.3), y=rel(0.7))"
+            )
+        if point is not None and (x is not None or y is not None):
+            raise TypeError("pivot(): pass either a point or x=/y=, not both")
+
+        fx = fy = None
+        if isinstance(point, str):
+            afx, afy = _ANCHORS[point]
+            fx = Call.mul(afx, _effective_width(self))
+            fy = Call.mul(afy, _effective_height(self))
+        elif isinstance(point, Position):
+            if isinstance(self, Path):
+                raise TypeError(
+                    "pivot(): Path has no measurable box yet — use a named "
+                    "anchor instead of a Position"
+                )
+            mapped = point.into_node(self)
+            px, py = mapped.x, mapped.y
+            if isinstance(self, (Rect, Ellipse)):
+                px = Call.sub(px, self._get_attr("x"))
+                py = Call.sub(py, self._get_attr("y"))
+            fx, fy = px, py
+        elif x is not None or y is not None:
+            if isinstance(self, Path):
+                raise TypeError(
+                    "pivot(): Path has no measurable box yet — use a named "
+                    "anchor instead of x=/y="
+                )
+            fx = (
+                Call.mul(x.factor, _effective_width(self))
+                if isinstance(x, RelValue)
+                else x
+            )
+            fy = (
+                Call.mul(y.factor, _effective_height(self))
+                if isinstance(y, RelValue)
+                else y
+            )
+        else:
+            return self
+
+        with Par():
+            if fx is not None:
+                self._set_attr("pivot_x", fx, dur, ease)
+            if fy is not None:
+                self._set_attr("pivot_y", fy, dur, ease)
         return self
 
 
@@ -1365,7 +1459,7 @@ class Ellipse(
 
 
 @beartype
-class Path(NodeWithChildren, StyleMixin, ZLevelMixin, RotAndScaleMixin):
+class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     """A vector path composed of move, line, cubic, and close command nodes.
 
     Build the shape by calling `move_to`, `line_to`, `cubic_to`, and `close` in

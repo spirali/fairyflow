@@ -349,9 +349,14 @@ fn collect_world_bounds(
     let w = node.get_width(ctx).unwrap_or(0.0);
     let h = node.get_height(ctx).unwrap_or(0.0);
 
-    if let NodeKind::Group {
-        node_box, children, ..
-    } = &node.kind
+    // `Layer` carries a `NodeBox` (rotation/scale/pivot are wired at the data
+    // layer), but the renderer deliberately does not paint them yet - a
+    // layer's position is a translate-only nudge, not a real local origin
+    // (see api-v2-impl.md). World bounds must match what's actually painted,
+    // so `Layer` stays on the flat/translate-only path below rather than
+    // joining the generic `node_box()` branch.
+    let child_transform = if !matches!(node.kind, NodeKind::Layer { .. })
+        && let Some(node_box) = node.kind.node_box()
     {
         let sx = node_box.scale_x.eval_or(ctx, 1.0).unwrap_or(1.0);
         let sy = node_box.scale_y.eval_or(ctx, 1.0).unwrap_or(1.0);
@@ -360,8 +365,8 @@ fn collect_world_bounds(
         let pvy = node_box.pivot_y.eval_or(ctx, h * 0.5).unwrap_or(h * 0.5) as f32;
         let pos = RcPosition { x, y };
 
-        // Maps group-local coordinates → world coordinates
-        let child_transform = positional_transform(
+        // Maps this node's local coordinates → world coordinates
+        let t = positional_transform(
             pos,
             RcSize {
                 width: sx,
@@ -373,25 +378,24 @@ fn collect_world_bounds(
             parent_transform,
         );
 
-        // Group's own AABB: corners (0,0)-(w,h) in group-local space
+        // This node's own AABB: corners (0,0)-(w,h) in its own local space
         map.insert(
             node_id.as_u64(),
-            corners_aabb(0.0, 0.0, w as f32, h as f32, child_transform),
+            corners_aabb(0.0, 0.0, w as f32, h as f32, t),
         );
-
-        for &c in children {
-            collect_world_bounds(nodes, c, ctx, child_transform, map);
-        }
+        t
     } else {
-        // Non-group: position is in parent-local space; apply parent_transform to corners
+        // No box (or a Layer): position is in parent-local space; apply
+        // parent_transform to corners as-is.
         map.insert(
             node_id.as_u64(),
             corners_aabb(x as f32, y as f32, w as f32, h as f32, parent_transform),
         );
+        parent_transform
+    };
 
-        for &c in node.kind.children() {
-            collect_world_bounds(nodes, c, ctx, parent_transform, map);
-        }
+    for &c in node.kind.children() {
+        collect_world_bounds(nodes, c, ctx, child_transform, map);
     }
 }
 
@@ -506,18 +510,40 @@ mod tests {
   ]
 }"#;
 
+    /// Finds a node by id anywhere in the tree (not just direct scene
+    /// children) - needed for nodes nested inside a `Group` (e.g. `Row`/
+    /// `Column` layout children), unlike the flat probe rects used by most
+    /// fixtures in this module.
+    fn find_node(nodes: &[renderer_core::Node], id: u64) -> Option<&renderer_core::Node> {
+        for node in nodes {
+            if node.id == id {
+                return Some(node);
+            }
+            if let renderer_core::NodeKind::Group { children, .. } = &node.kind
+                && let Some(found) = find_node(children, id)
+            {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     fn rect_xy(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
-        let node = scene.children.iter().find(|n| n.id == id).unwrap();
+        let node = find_node(&scene.children, id).unwrap();
         match &node.kind {
-            renderer_core::NodeKind::Rect { position, .. } => (position.x, position.y),
+            renderer_core::NodeKind::Rect { node_box, .. } => {
+                (node_box.position.x, node_box.position.y)
+            }
             other => panic!("expected a rect, got {other:?}"),
         }
     }
 
     fn rect_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
-        let node = scene.children.iter().find(|n| n.id == id).unwrap();
+        let node = find_node(&scene.children, id).unwrap();
         match &node.kind {
-            renderer_core::NodeKind::Rect { size, .. } => (size.width, size.height),
+            renderer_core::NodeKind::Rect { node_box, .. } => {
+                (node_box.size.width, node_box.size.height)
+            }
             other => panic!("expected a rect, got {other:?}"),
         }
     }
@@ -562,45 +588,9 @@ mod tests {
         assert!(AnimationDef::from_json(&json).is_err());
     }
 
-    /// A `path` node is a legitimate transform-contributing frame (it has children,
-    /// unlike a leaf `Rect`/`Ellipse`): rotating it must correctly rotate points read
-    /// out of its local frame via `map_x`/`map_y` (e.g. a path command handle's
-    /// `.at()`, Python side). `Path` has no position/size of its own (`get_position`/
-    /// `get_size` return `None`, `layout.rs`), so its own `pos`/`pivot` contribution is
-    /// always `(0, 0)` regardless of `pivot_x`/`pivot_y` - only `rotation` has any
-    /// effect here, which is exactly what this exercises.
-    const PATH_ROTATION_JSON: &str = r#"{
-  "version": 2,
-  "scenes": [
-    {"name": "PathRotation", "width": 200, "height": 200, "frames": 1,
-     "background": "white", "children": [0, 2],
-     "nodes": [
-       {"kind": "path", "rotation": 90, "children": [1]},
-       {"kind": "move", "x": 10, "y": 0},
-       {"kind": "rect",
-        "x": ["map_x", 0, -1, 10, 0],
-        "y": ["map_y", 0, -1, 10, 0],
-        "w": 10, "h": 10, "fill": "purple"}
-     ]}
-  ]
-}"#;
-
-    #[test]
-    fn path_rotation_composes_into_map_x_map_y() {
-        let anim = AnimationDef::from_json(PATH_ROTATION_JSON).unwrap();
-        let scene = anim
-            .build_scene(FrameId::new(0), SceneSelection::All)
-            .unwrap();
-        // Point (10, 0) rotated 90 degrees around the path's local origin (0, 0),
-        // then mapped straight into the scene frame (path itself is a direct
-        // scene child, so no further ancestor transform applies).
-        assert_close(rect_xy(&scene, 2), (0.0, 10.0));
-    }
-
-    /// Same shape as `path_rotation_composes_into_map_x_map_y`, but for `image`/
-    /// `layer` - both have real position/size (unlike `Path`), so this also
-    /// exercises a non-degenerate pivot, matching `Group`'s existing (never
-    /// directly rotation-tested before this) transform formula.
+    /// `image`/`layer` have real position/size, so this exercises a
+    /// non-degenerate pivot, matching `Group`'s existing (never directly
+    /// rotation-tested before this) transform formula.
     const IMAGE_ROTATION_JSON: &str = r#"{
   "version": 2,
   "scenes": [
@@ -659,5 +649,104 @@ mod tests {
             .unwrap();
         assert_eq!(rect_xy(&scene, 0), (0.0, 0.0));
         assert_eq!(rect_wh(&scene, 0), (10.0, 10.0));
+    }
+
+    /// `aabb_offset`/`get_outer_width`/`get_outer_height` (`layout.rs`) used to
+    /// only special-case `Group`; a rotated `Rect` (now a real, painted rotation
+    /// since leaf rotation/scale shipped) was laid out by its Row siblings as if
+    /// it were never rotated. This regression-tests the generalization to any
+    /// `node_box()`-bearing kind.
+    const ROTATED_ROW_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "RotatedRow", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "x": 0, "y": 0, "w": 40, "h": 30,
+        "layout": {"kind": "row", "gap": 0, "align": 0.5, "reserve": true},
+        "children": [1, 2]},
+       {"kind": "rect", "w": 30, "h": 10, "rotation": 90, "fill": "green"},
+       {"kind": "rect", "w": 10, "h": 10, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn rotated_rect_in_row_offsets_next_sibling_by_outer_width() {
+        let anim = AnimationDef::from_json(ROTATED_ROW_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // node 1: 30x10 rect rotated 90 degrees about its default center pivot
+        // (15, 5) - its *outer* (rotated) footprint is 10 wide x 30 tall, not
+        // its raw 30x10. Its own reported (unrotated) top-left is offset so
+        // that footprint starts flush at the row's origin: (-10, 10).
+        assert_close(rect_xy(&scene, 1), (-10.0, 10.0));
+        // node 2: unrotated 10x10 rect - sits right after node 1's *outer*
+        // width (10, gap=0), vertically centered in the row's own 30-tall box.
+        assert_close(rect_xy(&scene, 2), (10.0, 10.0));
+    }
+
+    /// `collect_world_bounds` used to only build a rotation/scale-aware
+    /// `child_transform` for `Group`; an `Image` (which now really rotates) got
+    /// an axis-aligned world-bounds entry, and its rotation never propagated to
+    /// its `Layer` children. `Layer` itself is deliberately excluded from the
+    /// generalization - its own rotation/scale/pivot are wired but not yet
+    /// painted (see api-v2-impl.md), so its own AABB must stay on the flat
+    /// path to match what's actually rendered; only its *position* (inherited
+    /// from the parent's transform) should move.
+    const ROTATED_IMAGE_WORLD_BOUNDS_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "RotatedImageBounds", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "image", "x": 100, "y": 50, "w": 50, "h": 30, "rotation": 90,
+        "children": [1]},
+       {"kind": "layer", "layer_name": "l1", "x": 0, "y": 0, "w": 10, "h": 10}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn image_world_bounds_reflect_own_rotation_layer_stays_flat() {
+        let anim = AnimationDef::from_json(ROTATED_IMAGE_WORLD_BOUNDS_JSON).unwrap();
+        let bounds = anim
+            .all_node_bounds(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+
+        // image: 50x30 rotated 90 degrees about its center pivot (25, 15),
+        // positioned at (100, 50) -> world AABB is 30 wide x 50 tall (swapped
+        // from its raw 50x30), at (110, 40).
+        let image = bounds.get(&0).unwrap();
+        assert!((image.x - 110.0).abs() < 1e-3, "image.x = {}", image.x);
+        assert!((image.y - 40.0).abs() < 1e-3, "image.y = {}", image.y);
+        assert!(
+            (image.width - 30.0).abs() < 1e-3,
+            "image.width = {}",
+            image.width
+        );
+        assert!(
+            (image.height - 50.0).abs() < 1e-3,
+            "image.height = {}",
+            image.height
+        );
+
+        // layer: 10x10, no rotation of its own - its *dimensions* stay 10x10
+        // (unswapped) even though its *position* is carried by the image's
+        // rotated transform.
+        let layer = bounds.get(&1).unwrap();
+        assert!(
+            (layer.width - 10.0).abs() < 1e-3,
+            "layer.width = {}",
+            layer.width
+        );
+        assert!(
+            (layer.height - 10.0).abs() < 1e-3,
+            "layer.height = {}",
+            layer.height
+        );
+        assert!((layer.x - 130.0).abs() < 1e-3, "layer.x = {}", layer.x);
+        assert!((layer.y - 40.0).abs() < 1e-3, "layer.y = {}", layer.y);
     }
 }

@@ -36,6 +36,16 @@ def test_row_layout(test_scene):
             Ellipse().size(10, 5).color("green")
 
 
+def test_row_layout_with_rotated_rect(test_scene):
+    """A rotated rect in a Row is laid out using its rotated (outer) bounding
+    box, not its raw width - regression test for aabb_offset/get_outer_width
+    generalizing from Group-only to any node with rotation/scale."""
+    with test_scene.size(80, 50):
+        with Group().row(gap=5, align=0.5):
+            Rect().size(30, 10).color("steelblue").rotate(90)
+            Rect().size(10, 10).color("coral")
+
+
 def test_column_reserve_true(test_scene):
     """With reserve=True, the first item stays in place when the second appears."""
     with test_scene.size(60, 60):

@@ -82,10 +82,11 @@ impl Node {
 
     /// Returns the position of the AABB's top-left corner relative to the node's
     /// own (x, y) position in the parent space.
-    /// For non-group nodes (no rotation/scale) this is always (0, 0).
+    /// For nodes without a `NodeBox` (`Path`, `Text`, path commands, text runs)
+    /// this is always (0, 0), since they carry no rotation/scale/pivot.
     pub fn aabb_offset(&self, ctx: &EvalCtx) -> anyhow::Result<RcPosition> {
-        match &self.kind {
-            NodeKind::Group { node_box, .. } => {
+        match self.kind.node_box() {
+            Some(node_box) => {
                 let w = self.get_width(ctx)?;
                 let h = self.get_height(ctx)?;
                 let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
@@ -107,35 +108,35 @@ impl Node {
 
                 Ok(RcPosition::new(min_x, min_y))
             }
-            _ => Ok(RcPosition::new(0.0, 0.0)),
+            None => Ok(RcPosition::new(0.0, 0.0)),
         }
     }
 
     pub fn get_outer_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let width = self.get_width(ctx)?;
-        Ok(match &self.kind {
-            NodeKind::Group { node_box, .. } => {
+        Ok(match self.kind.node_box() {
+            Some(node_box) => {
                 let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
                 let sy = node_box.scale_y.eval_or(ctx, 1.0)?;
                 let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
                 let height = self.get_height(ctx)?;
                 r.cos().abs() * sx * width + r.sin().abs() * sy * height
             }
-            _ => width,
+            None => width,
         })
     }
 
     pub fn get_outer_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let height = self.get_height(ctx)?;
-        Ok(match &self.kind {
-            NodeKind::Group { node_box, .. } => {
+        Ok(match self.kind.node_box() {
+            Some(node_box) => {
                 let sx = node_box.scale_x.eval_or(ctx, 1.0)?;
                 let sy = node_box.scale_y.eval_or(ctx, 1.0)?;
                 let r = node_box.rotation.eval_or(ctx, 0.0)?.to_radians();
                 let width = self.get_width(ctx)?;
                 r.sin().abs() * sx * width + r.cos().abs() * sy * height
             }
-            _ => height,
+            None => height,
         })
     }
 

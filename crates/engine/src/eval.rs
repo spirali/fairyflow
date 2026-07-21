@@ -592,6 +592,10 @@ impl Node {
                 clip_y: clip_y.eval_or(ctx, 0.0)?,
                 clip_w: clip_w.eval_or(ctx, 1.0)?,
                 clip_h: clip_h.eval_or(ctx, 1.0)?,
+                clip_enabled: clip_x.get_expr().is_some()
+                    || clip_y.get_expr().is_some()
+                    || clip_w.get_expr().is_some()
+                    || clip_h.get_expr().is_some(),
                 children: {
                     let mut result = Vec::new();
                     for &id in children {

@@ -84,13 +84,18 @@ impl RasterRenderer {
                 clip_y,
                 clip_w,
                 clip_h,
+                clip_enabled,
                 children,
             } => {
                 let transform = transform_nodebox(node_box, parent_transform);
                 let alpha = parent_alpha * *alpha as f32;
                 let children = children.clone();
 
-                let needs_clip = *clip_x > 0.0 || *clip_y > 0.0 || *clip_w < 1.0 || *clip_h < 1.0;
+                let needs_clip = *clip_enabled
+                    || *clip_x > 0.0
+                    || *clip_y > 0.0
+                    || *clip_w < 1.0
+                    || *clip_h < 1.0;
                 if !needs_clip {
                     self.render_children(&children, pixmap, transform, alpha);
                 } else {

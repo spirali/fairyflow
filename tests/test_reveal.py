@@ -1,4 +1,4 @@
-from fairyflow import Group, Rect
+from fairyflow import Group, Rect, Scene
 
 FRAMES = [0, 12, 24]
 
@@ -73,3 +73,39 @@ def test_clip_xywh(test_scene):
         with Group().size(80, 60) as g:
             Rect().size(80, 60).color("coral")
         g.clip(w=0.5, h=0.5)
+
+
+def test_clip_bare_clips_to_own_box(test_scene):
+    """A bare `.clip()` (no args) enables clipping to the group's own box -
+    regression test for the bare-call-is-a-no-op bug."""
+    with test_scene:
+        with Group().xy(5, 5).size(20, 15) as g:
+            Rect().size(40, 30).color("coral")  # overflows g's box on both axes
+        g.clip()
+
+
+def test_clip_bare_call_writes_explicit_wire_defaults():
+    """A bare `.clip()` must write clip_x/y/w/h explicitly (even though they
+    equal the engine's own defaults) so the wire distinguishes "explicitly
+    enabled" from "never called clip()" - this is the mechanism behind the
+    fix for the bare-call-is-a-no-op bug, checked independently of rendering."""
+    from fairyflow.serializer import create_export
+
+    s1 = Scene(60, 40)
+    with s1:
+        g1 = Group().size(20, 15)
+        g1.clip()
+    node1 = create_export(0, s1)["nodes"][0]
+    assert (node1["clip_x"], node1["clip_y"], node1["clip_w"], node1["clip_h"]) == (
+        0,
+        0,
+        1,
+        1,
+    )
+
+    s2 = Scene(60, 40)
+    with s2:
+        Group().size(20, 15)  # .clip() never called
+    node2 = create_export(0, s2)["nodes"][0]
+    for key in ("clip_x", "clip_y", "clip_w", "clip_h"):
+        assert key not in node2

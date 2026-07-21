@@ -749,4 +749,49 @@ mod tests {
         assert!((layer.x - 130.0).abs() < 1e-3, "layer.x = {}", layer.x);
         assert!((layer.y - 40.0).abs() < 1e-3, "layer.y = {}", layer.y);
     }
+
+    /// A bare `.clip()` (Python side) used to be a complete no-op: both
+    /// renderers only clip when `clip_x/y/w/h` differ from the literal
+    /// default box, so a group that explicitly requests clipping "at the
+    /// full box" was indistinguishable from one that never called `.clip()`
+    /// at all. `clip_enabled` is a derived presence flag - true whenever any
+    /// of the four fields is present in the wire JSON, regardless of value.
+    const CLIP_ENABLED_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "ClipEnabled", "width": 100, "height": 100, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "group", "x": 0, "y": 0, "w": 50, "h": 50,
+        "layout": {"kind": "center"},
+        "clip_x": 0, "clip_y": 0, "clip_w": 1, "clip_h": 1,
+        "children": []},
+       {"kind": "group", "x": 0, "y": 0, "w": 50, "h": 50,
+        "layout": {"kind": "center"},
+        "children": []}
+     ]}
+  ]
+}"#;
+
+    fn group_clip_enabled(scene: &renderer_core::Scene, id: u64) -> bool {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Group { clip_enabled, .. } => *clip_enabled,
+            other => panic!("expected a group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn clip_enabled_reflects_explicit_presence_not_value() {
+        let anim = AnimationDef::from_json(CLIP_ENABLED_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Node 0: clip_x/y/w/h explicitly present at literal-default values -
+        // clip_enabled must still be true (the exact bug this fixes).
+        assert!(group_clip_enabled(&scene, 0));
+        // Node 1: clip_x/y/w/h entirely absent from the JSON - clip_enabled
+        // stays false, so the renderers' perf fast-path is unaffected.
+        assert!(!group_clip_enabled(&scene, 1));
+    }
 }

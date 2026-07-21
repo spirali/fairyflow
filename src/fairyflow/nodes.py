@@ -1243,16 +1243,26 @@ class Group(
 
         Returns:
             self, for method chaining.
+
+        A bare call (all four args left as `None`) enables clipping to the
+        group's own box without changing the numeric clip window - useful
+        e.g. to bound overflow even when the full box is the desired window.
         """
         with Par():
-            if x is not None:
-                self._set_attr("clip_x", x, dur, ease)
-            if y is not None:
-                self._set_attr("clip_y", y, dur, ease)
-            if w is not None:
-                self._set_attr("clip_w", w, dur, ease)
-            if h is not None:
-                self._set_attr("clip_h", h, dur, ease)
+            if x is None and y is None and w is None and h is None:
+                self._set_attr("clip_x", self._ATTR_DEFAULTS["clip_x"], dur, ease)
+                self._set_attr("clip_y", self._ATTR_DEFAULTS["clip_y"], dur, ease)
+                self._set_attr("clip_w", self._ATTR_DEFAULTS["clip_w"], dur, ease)
+                self._set_attr("clip_h", self._ATTR_DEFAULTS["clip_h"], dur, ease)
+            else:
+                if x is not None:
+                    self._set_attr("clip_x", x, dur, ease)
+                if y is not None:
+                    self._set_attr("clip_y", y, dur, ease)
+                if w is not None:
+                    self._set_attr("clip_w", w, dur, ease)
+                if h is not None:
+                    self._set_attr("clip_h", h, dur, ease)
         return self
 
     def hide(

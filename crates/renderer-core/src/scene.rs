@@ -176,6 +176,12 @@ pub enum NodeKind {
         clip_y: f64,
         clip_w: f64,
         clip_h: f64,
+        /// True iff `.clip()` was explicitly called (any axis, even at the
+        /// literal default 0,0,1,1) - distinguishes "explicitly clipped to
+        /// the full box" from "never called `.clip()`", which the numeric
+        /// fields alone can't (both evaluate to the same 0,0,1,1). Drives the
+        /// `needs_clip` fast-path in both renderers.
+        clip_enabled: bool,
         children: Vec<Node>,
     },
     /// Python: Rect(PositionMixin, SizeMixin, StyleMixin) + rotation + scale

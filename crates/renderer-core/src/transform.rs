@@ -1,4 +1,4 @@
-use crate::{Node, NodeBox, NodeKind, Position, Size};
+use crate::{Camera, Node, NodeBox, NodeKind, Position, Size};
 
 /// Portable 2D affine transform.
 ///
@@ -116,6 +116,19 @@ pub fn positional_transform(
             position.y as f32 + pivot_y,
         ))
         .concat(parent)
+}
+
+/// Content-space camera transform (api-v2-proposal §4.7/§4.8): maps a point
+/// `p` in this node's own content frame to `box_center + (p - camera_center)
+/// * zoom` — composed *before* (as the innermost step relative to) the
+/// node's own box transform, never folded into it. See the plan/commit for
+/// the full derivation (why `box_center - zoom*center`, not `+center`).
+pub fn camera_transform(camera: &Camera, box_center: Position) -> AffineTransform {
+    let zoom = camera.camera_zoom as f32;
+    AffineTransform::from_scale(zoom, zoom).concat(AffineTransform::from_translate(
+        box_center.x as f32 - zoom * camera.camera_x as f32,
+        box_center.y as f32 - zoom * camera.camera_y as f32,
+    ))
 }
 
 /// Extract the z-level value from any node kind.

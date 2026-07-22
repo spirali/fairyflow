@@ -1,6 +1,6 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
-use crate::nodes::{AttrExpr, Node, NodeBox, NodeKind, Position, SceneDef, Size, Style, TextStyle};
+use crate::nodes::{AttrExpr, Camera, Node, NodeBox, NodeKind, Position, SceneDef, Style, TextStyle};
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Value};
 use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
@@ -461,7 +461,7 @@ impl Position {
     }
 }
 
-impl Size {
+/*impl Size {
     /// `owner` is the node this `Size` belongs to — needed to resolve the
     /// auto-layout default (`Node::auto_width/auto_height`) when absent.
     pub fn eval(&self, ctx: &EvalCtx, owner: &Node) -> anyhow::Result<renderer_core::Size> {
@@ -476,7 +476,7 @@ impl Size {
             },
         })
     }
-}
+}*/
 
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Style> {
@@ -533,6 +533,16 @@ impl TextStyle {
     }
 }
 
+impl Camera {
+    pub fn eval(&self, ctx: &EvalCtx, parent_w: f64, parent_h: f64) -> anyhow::Result<renderer_core::Camera> {
+        Ok(renderer_core::Camera {
+            camera_zoom: self.zoom.eval_or(ctx, 1.0)?,
+            camera_x: self.x.eval_or_else(ctx, |_ctx| Ok(parent_w * 0.5))?,
+            camera_y: self.y.eval_or_else(ctx, |_ctx| Ok(parent_h * 0.5))?,
+        })
+    }
+}
+
 // ──────────────────────────── Node eval impls ───────────────────────────────
 
 impl Node {
@@ -582,31 +592,37 @@ impl Node {
                 clip_y,
                 clip_w,
                 clip_h,
+                camera,
                 layout: _,
                 children,
                 ..
-            } => renderer_core::NodeKind::Group {
-                node_box: self.eval_node_box(node_box, ctx)?,
-                alpha: alpha.eval_or(ctx, 1.0)?,
-                clip_x: clip_x.eval_or(ctx, 0.0)?,
-                clip_y: clip_y.eval_or(ctx, 0.0)?,
-                clip_w: clip_w.eval_or(ctx, 1.0)?,
-                clip_h: clip_h.eval_or(ctx, 1.0)?,
-                clip_enabled: clip_x.get_expr().is_some()
-                    || clip_y.get_expr().is_some()
-                    || clip_w.get_expr().is_some()
-                    || clip_h.get_expr().is_some(),
-                children: {
-                    let mut result = Vec::new();
-                    for &id in children {
-                        let node = ctx.node(id)?;
-                        if node.is_active(ctx.frame()) {
-                            result.push(node.eval(ctx)?);
+            } => {
+                let node_box = self.eval_node_box(node_box, ctx)?;
+                let camera = camera.eval(ctx, node_box.size.width, node_box.size.height)?;
+                renderer_core::NodeKind::Group {
+                    node_box,
+                    camera,
+                    alpha: alpha.eval_or(ctx, 1.0)?,
+                    clip_x: clip_x.eval_or(ctx, 0.0)?,
+                    clip_y: clip_y.eval_or(ctx, 0.0)?,
+                    clip_w: clip_w.eval_or(ctx, 1.0)?,
+                    clip_h: clip_h.eval_or(ctx, 1.0)?,
+                    clip_enabled: clip_x.get_expr().is_some()
+                        || clip_y.get_expr().is_some()
+                        || clip_w.get_expr().is_some()
+                        || clip_h.get_expr().is_some(),
+                    children: {
+                        let mut result = Vec::new();
+                        for &id in children {
+                            let node = ctx.node(id)?;
+                            if node.is_active(ctx.frame()) {
+                                result.push(node.eval(ctx)?);
+                            }
                         }
-                    }
-                    result
-                },
-            },
+                        result
+                    },
+                }
+            }
             NodeKind::Rect {
                 node_box, style, ..
             } => renderer_core::NodeKind::Rect {
@@ -807,10 +823,13 @@ impl SceneDef {
                 children.push(node.eval(ctx)?);
             }
         }
+        let width = self.size.width.eval_or(ctx, 0.0)?;
+        let height = self.size.height.eval_or(ctx, 0.0)?;
         Ok(renderer_core::Scene {
-            width: self.size.width.eval_or(ctx, 0.0)?,
-            height: self.size.height.eval_or(ctx, 0.0)?,
+            width,
+            height,
             fill_color,
+            camera: self.camera.eval(ctx, width, height)?,
             children,
         })
     }

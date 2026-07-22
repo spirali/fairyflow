@@ -1,7 +1,7 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
-use crate::nodes::{AttrExpr, Node, NodeDef, NodeKind, SceneDef, Size};
+use crate::nodes::{AttrExpr, Camera, Node, NodeDef, NodeKind, SceneDef, Size};
 use crate::values::{Color, Expr};
 use renderer_core::{
     AffineTransform, Position as RcPosition, Size as RcSize, positional_transform,
@@ -79,6 +79,12 @@ struct RawScene {
     width: Expr<f64>,
     height: Expr<f64>,
     background: Expr<Color>,
+    #[serde(default)]
+    camera_zoom: Option<Expr<f64>>,
+    #[serde(default)]
+    camera_x: Option<Expr<f64>>,
+    #[serde(default)]
+    camera_y: Option<Expr<f64>>,
     frames: u32,
     #[serde(default)]
     cues: Vec<u32>,
@@ -115,6 +121,11 @@ impl SingleScene {
                 height: AttrExpr(Some(raw.height)),
             },
             fill_color: AttrExpr(Some(raw.background)),
+            camera: Camera {
+                zoom: AttrExpr(raw.camera_zoom),
+                x: AttrExpr(raw.camera_x),
+                y: AttrExpr(raw.camera_y),
+            },
             frames: raw.frames,
             cues: raw.cues,
             children: raw.children,
@@ -793,5 +804,52 @@ mod tests {
         // Node 1: clip_x/y/w/h entirely absent from the JSON - clip_enabled
         // stays false, so the renderers' perf fast-path is unaffected.
         assert!(!group_clip_enabled(&scene, 1));
+    }
+
+    /// A `Group` with `camera_zoom`/`camera_x`/`camera_y` entirely absent must
+    /// evaluate to the identity camera: `zoom=1.0`, `x/y` at the box's own
+    /// center (`w*0.5`/`h*0.5`) - mirrors `pivot_x`/`pivot_y`'s own
+    /// computed-default pattern. A second group with explicit values must
+    /// round-trip them unchanged.
+    const CAMERA_DEFAULTS_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "CameraDefaults", "width": 100, "height": 100, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "group", "x": 0, "y": 0, "w": 40, "h": 20,
+        "layout": {"kind": "center"}, "children": []},
+       {"kind": "group", "x": 0, "y": 0, "w": 40, "h": 20,
+        "layout": {"kind": "center"},
+        "camera_zoom": 2, "camera_x": 11, "camera_y": 13,
+        "children": []}
+     ]}
+  ]
+}"#;
+
+    fn group_camera(scene: &renderer_core::Scene, id: u64) -> renderer_core::Camera {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Group { camera, .. } => *camera,
+            other => panic!("expected a group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn camera_defaults_to_identity_when_absent() {
+        let anim = AnimationDef::from_json(CAMERA_DEFAULTS_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+
+        let absent = group_camera(&scene, 0);
+        assert_eq!(absent.camera_zoom, 1.0);
+        assert_eq!(absent.camera_x, 20.0); // w*0.5
+        assert_eq!(absent.camera_y, 10.0); // h*0.5
+
+        let explicit = group_camera(&scene, 1);
+        assert_eq!(explicit.camera_zoom, 2.0);
+        assert_eq!(explicit.camera_x, 11.0);
+        assert_eq!(explicit.camera_y, 13.0);
     }
 }

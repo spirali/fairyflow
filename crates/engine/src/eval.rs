@@ -330,7 +330,7 @@ where
     let mut own = true;
     loop {
         let Some(ts) = text_style_of(&current.kind) else {
-            // Structurally unreachable (t_group/t_span always chain up to a
+            // Structurally unreachable (tline/tspan always chain up to a
             // Text ancestor) — fall back to the literal default defensively.
             return Ok(terminal(own, root_default));
         };
@@ -756,7 +756,7 @@ impl Node {
             NodeKind::TextSpan { .. } => {
                 Ok(renderer_core::TextChild::Span(self.eval_as_text_span(ctx)?))
             }
-            _ => anyhow::bail!("expected t_group or t_span node, got {:?}", self.id),
+            _ => anyhow::bail!("expected tline or tspan node, got {:?}", self.id),
         }
     }
 
@@ -773,7 +773,7 @@ impl Node {
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             }),
-            _ => anyhow::bail!("expected t_group node, got {:?}", self.id),
+            _ => anyhow::bail!("expected tline node, got {:?}", self.id),
         }
     }
 

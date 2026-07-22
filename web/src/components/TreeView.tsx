@@ -3,8 +3,8 @@ import type { RawNode, RawImageLayer, SceneData, TreeNodeData } from "../types";
 import { NodeKindIcon } from "./Icons";
 
 const KIND_LABELS: Partial<Record<TreeNodeData["kind"], string>> = {
-  t_group: "TextGroup",
-  t_span: "TextSpan",
+  tline: "TextGroup",
+  tspan: "TextSpan",
 };
 
 function fmt(v: number | string): number | string {

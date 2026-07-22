@@ -292,9 +292,9 @@ pub(crate) enum Kind {
     Ellipse,
     Path,
     Text,
-    #[serde(rename = "t_group")]
+    #[serde(rename = "tline")]
     TextGroup,
-    #[serde(rename = "t_span")]
+    #[serde(rename = "tspan")]
     TextSpan,
     #[serde(rename = "move")]
     Move,

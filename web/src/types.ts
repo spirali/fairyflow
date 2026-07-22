@@ -2,7 +2,7 @@
 
 // A node in the evaluated scene tree (mirrors renderer::Node serialization).
 // Variant-specific fields are flattened into the object by serde.
-// Text children (t_group / t_span) are serialized as regular child nodes.
+// Text children (tline / tspan) are serialized as regular child nodes.
 export interface RawImageLayer {
   id: number;
   layer_name: string;
@@ -26,8 +26,8 @@ export interface RawNode {
     | "cubic"
     | "close"
     | "text"
-    | "t_group"
-    | "t_span"
+    | "tline"
+    | "tspan"
     | "image"
     | "layer";
   // position (group, rect, ellipse, move, line, cubic, text, image, layer)
@@ -41,7 +41,7 @@ export interface RawNode {
   scale_x?: number;
   scale_y?: number;
   rotation?: number;
-  // style (rect, ellipse, path, t_span)
+  // style (rect, ellipse, path, tspan)
   fill_color?: string;
   stroke_color?: string;
   stroke_width?: number;
@@ -52,9 +52,9 @@ export interface RawNode {
   c2_y?: number;
   // z-level (group, rect, ellipse, path, text, image, layer) — absent when inherited
   z_level?: number;
-  // children (group, t_group, text lines)
+  // children (group, tline, text lines)
   children?: RawNode[];
-  // t_span fields
+  // tspan fields
   text?: string;
   font_family?: string;
   font_size?: number;

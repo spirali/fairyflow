@@ -1605,8 +1605,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     """A vector path composed of move, line, cubic, and close command nodes.
 
     Build the shape by calling `move_to`, `line_to`, `cubic_to`, and `close` in
-    sequence. Supports crop animations and optional arrowheads via
-    `triangle_arrow`.
+    sequence. Supports crop animations and optional arrowheads via `arrow`.
     """
 
     kind = "path"
@@ -1749,30 +1748,96 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         path.close()
         return path
 
-    def triangle_arrow(
+    def _create_open_arrow(self, child, vx, vy, length, width):
+        nx = Call.norm(vx, vy)
+        ny = Call.norm(vy, vx)
+
+        pos = child.at()
+        px = pos.x + nx * length
+        py = pos.y + ny * length
+
+        dx = nx * width * 0.5
+        dy = ny * width * 0.5
+
+        path = Path()
+        path.move_to().xy(px - dy, py + dx)
+        path.line_to().pos(pos)
+        path.move_to().xy(px + dy, py - dx)
+        path.line_to().pos(pos)
+        return path
+
+    def _create_stealth_arrow(self, child, vx, vy, length, width):
+        nx = Call.norm(vx, vy)
+        ny = Call.norm(vy, vx)
+
+        pos = child.at()
+        px = pos.x + nx * length
+        py = pos.y + ny * length
+        notch_x = pos.x + nx * (length * 0.5)
+        notch_y = pos.y + ny * (length * 0.5)
+
+        dx = nx * width * 0.5
+        dy = ny * width * 0.5
+
+        path = Path()
+        path.move_to().xy(px - dy, py + dx)
+        path.line_to().pos(pos)
+        path.line_to().xy(px + dy, py - dx)
+        path.line_to().xy(notch_x, notch_y)
+        path.close()
+        return path
+
+    def _create_bar_arrow(self, child, vx, vy, length, width):
+        nx = Call.norm(vx, vy)
+        ny = Call.norm(vy, vx)
+
+        pos = child.at()
+        dx = nx * width * 0.5
+        dy = ny * width * 0.5
+
+        path = Path()
+        path.move_to().xy(pos.x - dy, pos.y + dx)
+        path.line_to().xy(pos.x + dy, pos.y - dx)
+        return path
+
+    def _create_dot_arrow(self, child, vx, vy, length, width):
+        pos = child.at()
+        dot = Ellipse()
+        dot.size(width, width)
+        dot.xy(pos.x - width * 0.5, pos.y - width * 0.5)
+        return dot
+
+    def arrow(
         self,
         placement: Literal["start", "end"] = "end",
         *,
+        style: Literal["triangle", "open", "stealth", "bar", "dot"] = "triangle",
         length: FloatLike | None = None,
         width: FloatLike | None = None,
-    ) -> "Path":
-        """Add a filled triangle arrowhead at one end of the path.
+    ) -> Union["Path", "Ellipse", None]:
+        """Add an arrowhead at one end of the path.
 
-        The arrowhead is created as a separate sibling `Path` node. To prevent
-        the main path from overlapping the arrowhead, ``crop_start`` or
-        ``crop_end`` is automatically adjusted.
+        The arrowhead is created as a separate sibling node (a `Path` for
+        every style except ``"dot"``, which is an `Ellipse`). For styles that
+        visually overlap the shaft (``"triangle"``, ``"stealth"``, ``"dot"``),
+        ``crop_start``/``crop_end`` is automatically adjusted to prevent the
+        main path from poking out through the head.
 
         Args:
             placement: Which end of the path receives the arrowhead.
                 ``"start"`` places it at the first point; ``"end"`` at the last.
+            style: The arrowhead shape — ``"triangle"`` (filled, default),
+                ``"open"`` (two stroked lines forming a V), ``"stealth"``
+                (concave filled head), ``"bar"`` (perpendicular stroke), or
+                ``"dot"`` (filled circle).
             length: Length of the arrowhead in pixels. Defaults to three times
-                the current stroke width.
+                the current stroke width. Unused by ``"bar"``.
             width: Base width of the arrowhead in pixels. Defaults to the same
                 value as ``length``.
 
         Returns:
-            The new `Path` node representing the arrowhead, or ``None`` if the
-            path has fewer than two points.
+            The new node representing the arrowhead, or ``None`` if the path
+            has fewer than two points.
         """
         if placement == "start":
             dir = self._get_start_direction()
@@ -1784,16 +1849,33 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             length = self._get_attr("stroke_width") * 3
         if width is None:
             width = length
-        path = self._create_arrow(*dir, length, width)
-        path.color(self._get_attr("stroke_color"))
 
-        length = to_expr(length)
-
-        if placement == "start":
-            self.crop_start((length * 0.5) / Call.path_length(self))
+        builder = {
+            "triangle": self._create_arrow,
+            "open": self._create_open_arrow,
+            "stealth": self._create_stealth_arrow,
+            "bar": self._create_bar_arrow,
+            "dot": self._create_dot_arrow,
+        }[style]
+        head = builder(*dir, length, width)
+        if style in ("triangle", "stealth", "dot"):
+            head.color(self._get_attr("stroke_color"))
         else:
-            self.crop_end(to_expr(1.0) - (length * 0.5) / Call.path_length(self))
-        return path
+            head.stroke_color(self._get_attr("stroke_color"))
+            head.stroke_width(self._get_attr("stroke_width"))
+
+        crop_len = {
+            "triangle": length * 0.5,
+            "stealth": length * 0.5,
+            "dot": width * 0.5,
+        }.get(style)
+        if crop_len is not None:
+            crop_len = to_expr(crop_len)
+            if placement == "start":
+                self.crop_start(crop_len / Call.path_length(self))
+            else:
+                self.crop_end(to_expr(1.0) - crop_len / Call.path_length(self))
+        return head
 
 
 class PathMove(Node, PositionMixin):

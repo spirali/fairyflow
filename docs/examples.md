@@ -43,7 +43,7 @@ with Scene(1280, 720):
         arrow = Path().stroke_color("green").stroke_width(4)
         arrow_start = arrow.move_to().xy(-150, -10)
         arrow_end = arrow.line_to().xy(-150, -50)
-        arrow_head = arrow.triangle_arrow("start")
+        arrow_head = arrow.arrow("start")
 
         for step in [2, 3]:
             idx = step - 1
@@ -254,12 +254,12 @@ outer clock to the longest child's end time (≈ 0.99 + 0.3 = 1.3 s), followed b
 arrow = Path().stroke_color("green").stroke_width(4)
 arrow_start = arrow.move_to().xy(-150, -10)
 arrow_end   = arrow.line_to().xy(-150, -50)
-arrow_head  = arrow.triangle_arrow("start")
+arrow_head  = arrow.arrow("start")
 ```
 
 `Path` builds a vector path from a sequence of commands. Each command (`move_to()`, `line_to()`)
-returns a node whose position can be animated independently. `triangle_arrow("start")` attaches
-a filled arrowhead at the start endpoint.
+returns a node whose position can be animated independently. `arrow("start")` attaches
+a filled triangle arrowhead at the start endpoint.
 
 The arrow begins at x = −150 — off the left edge of the canvas so it is invisible at first. It
 will be repositioned later by animating `arrow_start` and `arrow_end` to the coordinates of the

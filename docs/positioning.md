@@ -157,7 +157,7 @@ with Scene(width=300, height=160):
     arrow = Path().stroke_color("tomato").stroke_width(3)
     arrow.move_to().pos(box.at("top")).move(0, -30)
     arrow.line_to().pos(box.at("top")).move(0, -4)
-    arrow.triangle_arrow("end")
+    arrow.arrow("end")
 ```
 
 ---

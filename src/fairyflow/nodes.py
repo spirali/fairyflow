@@ -860,7 +860,7 @@ class StyleMixin(AlphaMixin, StyleMethods):
 class InheritedStyleMixin(AlphaMixin, StyleMethods):
     """Like `StyleMixin`, but fill/stroke/stroke_width/alpha default to the
     parent's resolved value when unset instead of a literal constant — used
-    by text runs (`t_group`/`t_span`), which cascade style from their
+    by text runs (`tline`/`tspan`), which cascade style from their
     ambient `Text`/`TextGroup` ancestor. `alpha` is overridden here (listed
     before `AlphaMixin` in the bases, so this entry is found first) since it
     cascades the same way as the rest of the style here, unlike everywhere

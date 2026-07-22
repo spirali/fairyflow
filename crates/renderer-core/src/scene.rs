@@ -118,9 +118,9 @@ pub struct TextSpan {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind")]
 pub enum TextChild {
-    #[serde(rename = "t_group")]
+    #[serde(rename = "tline")]
     Group(TextGroup),
-    #[serde(rename = "t_span")]
+    #[serde(rename = "tspan")]
     Span(TextSpan),
 }
 

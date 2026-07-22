@@ -60,7 +60,7 @@ class TextStyleMixin(StyleMixin, TextStyleMethods):
 
 @beartype
 class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
-    """Cascading font defaults — used by text runs (`t_group`/`t_span`),
+    """Cascading font defaults — used by text runs (`tline`/`tspan`),
     which inherit from their ambient `Text`/`TextGroup` ancestor when unset.
     Always terminates at a real value: these are only ever constructed under
     a `Text` ancestor (`Text.group()`/`.span()`, or transitively via
@@ -77,7 +77,7 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
 
 @beartype
 class TextSpan(Node, InheritedTextStyleMixin, PositionQueryMixin):
-    kind = "t_span"
+    kind = "tspan"
 
     def __init__(self, parent, text: StringLike):
         super().__init__(put_in_context=False, parent=parent)
@@ -89,7 +89,7 @@ class TextSpan(Node, InheritedTextStyleMixin, PositionQueryMixin):
 
 @beartype
 class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
-    kind = "t_group"
+    kind = "tline"
 
     def __init__(self, parent):
         super().__init__(put_in_context=False, parent=parent)

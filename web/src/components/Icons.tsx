@@ -223,9 +223,8 @@ const KIND_ICONS: Record<string, ({ size }: IconProps) => React.ReactElement> = 
   image: ImageIcon,
   layer: ImageLayerIcon,
   text: TextIcon,
-  t_line: TextLineIcon,
-  t_group: TextGroupIcon,
-  t_span: TextIcon,
+  tline: TextLineIcon,
+  tspan: TextIcon,
 };
 
 export function NodeKindIcon({ kind, size = 16 }: { kind: string; size?: number }) {

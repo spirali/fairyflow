@@ -108,11 +108,15 @@ class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
 class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
     kind = "text"
 
-    def __init__(self):
+    def __init__(self, text: StringLike | None = None):
         super().__init__()
         self.color("black")
         self.sh_language = None
         self.sh_theme = None
+        self._current_line = None
+        if text:
+            for part in text.split("\n"):
+                self.line(part)
 
     def sh(self, language, *, theme=None):
         """
@@ -122,15 +126,61 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
         self.sh_theme = theme
         return self
 
-    def group(self) -> TextGroup:
+    def line(self, text: StringLike = "") -> Union[TextSpan, TextGroup]:
+        """Start a new line, closing off the current one.
+
+        With `text`, the line is seeded with a single run and that run is
+        returned directly (no wrapper group — the common case); call
+        `.span()`/`.group()` on the result to add more runs to it later.
+        """
+        if text:
+            span = TextSpan(self, text)
+            self._children.append(span)
+            self._current_line = span
+            return span
         group = TextGroup(self)
         self._children.append(group)
+        self._current_line = group
         return group
 
+    def _promote_to_group(self) -> TextGroup:
+        """Convert the current bare-`TextSpan` line into a `TextGroup` in
+        place (preserving its sibling position) so a second run can join
+        it — mirrors `stext`'s own single-run collapsing, done lazily."""
+        cur = self._current_line
+        idx = self._children.index(cur)
+        group = TextGroup(self)
+        self._children[idx] = group
+        cur._parent = group
+        group._children.append(cur)
+        self._current_line = group
+        return group
+
+    def group(self) -> TextGroup:
+        """Start a nested inline group within the current (last) line,
+        starting a fresh line first if none exists yet."""
+        cur = self._current_line
+        if cur is None:
+            group = TextGroup(self)
+            self._children.append(group)
+            self._current_line = group
+            return group
+        if isinstance(cur, TextSpan):
+            cur = self._promote_to_group()
+        return cur.group()
+
     def span(self, text: StringLike) -> TextSpan:
-        span = TextSpan(self, text)
-        self._children.append(span)
-        return span
+        """Append an inline run to the current (last) line, starting a
+        fresh line first if none exists yet."""
+        cur = self._current_line
+        if cur is None:
+            span = TextSpan(self, text)
+            self._children.append(span)
+            self._current_line = span
+            return span
+        if isinstance(cur, TextSpan):
+            cur = self._promote_to_group()
+        return cur.span(text)
 
     def serialize(self, serializer):
         result = super().serialize(serializer)
@@ -247,7 +297,8 @@ def _apply_style(obj, attrs):
 def _add_lines(parent, text_str, name=None, attrs=None):
     for line in text_str.split("\n"):
         if line or name is None:
-            s = parent.span(line)
+            s = TextSpan(parent, line)
+            parent._children.append(s)
             if name is not None:
                 s.name(name)
             if attrs:
@@ -266,7 +317,9 @@ def _add_tag_to(parent, node):
     if plain is not None:
         _add_lines(parent, plain, name=node.name, attrs=node.attrs)
     else:
-        g = parent.group().name(node.name)
+        g = TextGroup(parent)
+        parent._children.append(g)
+        g.name(node.name)
         _apply_style(g, node.attrs)
         for child in node.children:
             _add_node_to(g, child)
@@ -278,14 +331,17 @@ def _flush_line(parent, current_line):
     if len(current_line) == 1:
         item = current_line[0]
         if isinstance(item, str):
-            parent.span(item)
+            s = TextSpan(parent, item)
+            parent._children.append(s)
         else:
             _add_tag_to(parent, item)
     else:
-        g = parent.group()
+        g = TextGroup(parent)
+        parent._children.append(g)
         for item in current_line:
             if isinstance(item, str):
-                g.span(item)
+                s = TextSpan(g, item)
+                g._children.append(s)
             else:
                 _add_tag_to(g, item)
     current_line.clear()

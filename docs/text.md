@@ -6,28 +6,40 @@ icon: lucide/type
 
 ## Text
 
-`Text` is a multi-span text node. Create it, then call `.span(text)` to add lines of text.
-Each span can have its own color, font size, weight, and style.
+`Text` is a multi-line text node. The constructor takes an optional string,
+split on `\n` into lines:
 
 ```ffpy frame="0"
 with Scene():
-    t = Text()
-    t.span("Hello, FairyFlow!").font_size(28).color("steelblue")
+    Text("Hello, FairyFlow!").font_size(28).color("steelblue")
 ```
 
-Multiple spans stack vertically as separate lines:
+```ffpy frame="0"
+with Scene():
+    Text("First line\nSecond line\nThird line").font_size(22).color("steelblue")
+```
+
+Use `.line(text="")` to start additional lines and style them individually,
+and `.span(text)` to add another inline run to the *current* (last) line:
 
 ```ffpy frame="0"
 with Scene():
-    t = Text()
-    t.span("First line").font_size(22).color("darkslateblue")
-    t.span("Second line").font_size(22).color("steelblue")
-    t.span("Third line").font_size(22).color("cornflowerblue")
+    t = Text("First line").font_size(22).color("darkslateblue")
+    t.line("Second line").color("steelblue")
+    t.line("Third line").color("cornflowerblue")
+```
+
+```ffpy frame="0"
+with Scene():
+    t = Text("INFO ").font_size(22).font("monospace")
+    t.span("server started").color("gray")
 ```
 
 ### Inline groups
 
-Use `.group()` on a `Text` or `TextGroup` to place spans side-by-side on the same line.
+Calling `.span(text)` more than once without an intervening `.line()` joins
+the runs onto the same line — `.group()` is only needed when you want a
+handle to a nested sub-group of runs (e.g. to name or style them together):
 
 ```ffpy frame="0"
 with Scene():

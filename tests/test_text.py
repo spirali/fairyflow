@@ -279,3 +279,84 @@ def test_tgroup_nested(test_scene):
         stext("<outer>foo <inner color='orange'>bar</inner></outer>").xy(
             4, 15
         ).font_size(16)
+
+
+# ── Text ctor / .line() tests ────────────────────────────────────────────────
+
+
+def test_ctor_single_line_is_bare_span(sc):
+    t = Text("hello")
+    assert len(t._children) == 1
+    assert isinstance(t._children[0], TextSpan)
+    assert _span_text(t._children[0]) == "hello"
+
+
+def test_ctor_multiline_splits_into_top_level_spans(sc):
+    t = Text("a\nb")
+    assert len(t._children) == 2
+    assert isinstance(t._children[0], TextSpan)
+    assert isinstance(t._children[1], TextSpan)
+    assert _span_text(t._children[0]) == "a"
+    assert _span_text(t._children[1]) == "b"
+
+
+def test_ctor_no_text_has_no_children(sc):
+    t = Text()
+    assert len(t._children) == 0
+
+
+def test_span_promotes_bare_line_to_group(sc):
+    t = Text("INFO ")
+    span = t.span("server started")
+    assert len(t._children) == 1
+    g = t._children[0]
+    assert isinstance(g, TextGroup)
+    assert len(g._children) == 2
+    assert _span_text(g._children[0]) == "INFO "
+    assert _span_text(g._children[1]) == "server started"
+    assert span is g._children[1]
+
+
+def test_line_starts_fresh_top_level_line(sc):
+    t = Text("INFO ")
+    t.span("server started")
+    t.line("second line")
+    assert len(t._children) == 2
+    assert isinstance(t._children[1], TextSpan)
+    assert _span_text(t._children[1]) == "second line"
+
+
+def test_span_without_ctor_text_starts_bare(sc):
+    t = Text()
+    span = t.span("a")
+    assert len(t._children) == 1
+    assert t._children[0] is span
+    assert isinstance(span, TextSpan)
+
+
+def test_span_span_promotes_second_call(sc):
+    t = Text()
+    t.span("a")
+    t.span("b")
+    assert len(t._children) == 1
+    g = t._children[0]
+    assert isinstance(g, TextGroup)
+    assert _span_text(g._children[0]) == "a"
+    assert _span_text(g._children[1]) == "b"
+
+
+def test_group_on_fresh_text_is_single_level(sc):
+    t = Text()
+    group = t.group()
+    assert t._children == [group]
+    assert isinstance(group, TextGroup)
+    group.span("hello")
+    assert len(group._children) == 1
+    assert isinstance(group._children[0], TextSpan)
+
+
+def test_text_ctor_multiline(test_scene):
+    """A two-line Text built via the ctor renders correctly end-to-end."""
+    test_scene.pdf_tolerance = 40  # two lines of vector-drawn glyphs vs. raster AA
+    with test_scene.size(200, 60):
+        Text("line one\nline two").xy(4, 15).font_size(16)

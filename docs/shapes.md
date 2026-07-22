@@ -112,8 +112,8 @@ with Scene():
 
 ### Arrows
 
-`.triangle_arrow()` adds a filled arrowhead at the end of a path. Pass `"start"` to place it
-at the beginning instead. The arrowhead is automatically sized to match the stroke width.
+`.arrow()` adds an arrowhead at the end of a path. Pass `"start"` to place it at the
+beginning instead. The arrowhead is automatically sized to match the stroke width.
 
 ```ffpy frame="0"
 with Scene():
@@ -121,13 +121,13 @@ with Scene():
     p.stroke_color("steelblue").stroke_width(3)
     p.move_to().xy(40, 100)
     p.line_to().xy(260, 100)
-    p.triangle_arrow()
-    p.triangle_arrow("start").color("tomato")
+    p.arrow("end")
+    p.arrow("start").color("tomato")
 ```
 
 The arrowhead inherits the path's stroke color by default. Call `.color()` on the returned arrow object to override it independently — as shown above with the red start arrow.
 
-The arrowhead scales automatically with stroke width. Pass `length` and `width` to `triangle_arrow()` to override the size explicitly — `length` is the tip-to-base distance, `width` is the base width (both default to `3 × stroke_width`):
+The arrowhead scales automatically with stroke width. Pass `length` and `width` to `arrow()` to override the size explicitly — `length` is the tip-to-base distance, `width` is the base width (both default to `3 × stroke_width`):
 
 ```ffpy frame="0"
 with Scene():
@@ -136,14 +136,38 @@ with Scene():
     p.stroke_color("steelblue").stroke_width(8)
     p.move_to().xy(40, 60)
     p.line_to().xy(250, 60)
-    p.triangle_arrow()
+    p.arrow("end")
 
     # bottom: same stroke but arrow manually set to length=40, width=20
     q = Path()
     q.stroke_color("steelblue").stroke_width(8)
     q.move_to().xy(40, 140)
     q.line_to().xy(250, 140)
-    q.triangle_arrow(length=40, width=20)
+    q.arrow("end", length=40, width=20)
+```
+
+### Arrowhead styles
+
+Pass `style=` to choose a different head shape. `"open"` and `"bar"` are stroked only
+(no fill); `"dot"` returns an `Ellipse` instead of a `Path`.
+
+| style | shape |
+|---|---|
+| `"triangle"` | filled triangle *(default)* |
+| `"open"` | two stroked lines forming a V |
+| `"stealth"` | concave filled head (TikZ-like) |
+| `"bar"` | perpendicular stroke — measurement / UML ends |
+| `"dot"` | filled circle at the endpoint |
+
+```ffpy frame="0"
+with Scene(width=200, height=200):
+    for i, style in enumerate(["triangle", "open", "stealth", "bar", "dot"]):
+        y = 20 + i * 35
+        p = Path()
+        p.stroke_color("steelblue").stroke_width(3)
+        p.move_to().xy(40, y)
+        p.line_to().xy(140, y)
+        p.arrow("end", style=style, width=20)
 ```
 
 ### Path cropping

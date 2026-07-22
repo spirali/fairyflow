@@ -33,13 +33,13 @@ def test_arrows(test_scene):
         p.stroke_color("black")
         p.move_to().xy(20, 10)
         p.line_to().xy(50, 20)
-        p.triangle_arrow()
-        p.triangle_arrow("start").color("green")
+        p.arrow("end")
+        p.arrow("start").color("green")
 
         p = Path()
         p.stroke_color("orange")
         p.move_to().xy(20, 20)
         p.cubic_to().xy(50, 60).c1_xy(-50, 25).c2_xy(35, 20)
 
-        p.triangle_arrow()
-        p.triangle_arrow("start").color("green")
+        p.arrow("end")
+        p.arrow("start").color("green")

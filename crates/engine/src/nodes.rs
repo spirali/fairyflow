@@ -1,6 +1,6 @@
 use crate::basictypes::{FrameId, NodeId};
 use crate::eval::EvalCtx;
-use crate::values::{Color, Eval, Expr, Value};
+use crate::values::{Color, Expr, Value};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
@@ -101,6 +101,13 @@ pub enum Layout {
 }
 
 #[derive(Debug)]
+pub struct Camera {
+    pub zoom: AttrExpr<f64>,
+    pub x: AttrExpr<f64>,
+    pub y: AttrExpr<f64>,
+}
+
+#[derive(Debug)]
 pub enum NodeKind {
     /// Python: `Group(PositionMixin, SizeMixin, AlphaMixin)` + rotation + scale
     Group {
@@ -111,6 +118,7 @@ pub enum NodeKind {
         clip_w: AttrExpr<f64>,
         clip_h: AttrExpr<f64>,
         layout: Layout,
+        camera: Camera,
         children: Vec<NodeId>,
     },
     /// Python: `Rect(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
@@ -267,6 +275,7 @@ impl Node {
 pub(crate) struct SceneDef {
     pub size: Size,
     pub fill_color: AttrExpr<Color>,
+    pub camera: Camera,
     pub frames: u32,
     pub cues: Vec<u32>,
     pub children: Vec<NodeId>,
@@ -322,6 +331,9 @@ pub(crate) struct NodeDef {
     pub clip_y: Option<Expr<f64>>,
     pub clip_w: Option<Expr<f64>>,
     pub clip_h: Option<Expr<f64>>,
+    pub camera_zoom: Option<Expr<f64>>,
+    pub camera_x: Option<Expr<f64>>,
+    pub camera_y: Option<Expr<f64>>,
 
     pub fill: Option<Expr<Color>>,
     pub stroke: Option<Expr<Color>>,
@@ -430,6 +442,11 @@ impl Node {
                 clip_y: AttrExpr(def.clip_y.take()),
                 clip_w: AttrExpr(def.clip_w.take()),
                 clip_h: AttrExpr(def.clip_h.take()),
+                camera: Camera {
+                    zoom: AttrExpr(def.camera_zoom.take()),
+                    x: AttrExpr(def.camera_x.take()),
+                    y: AttrExpr(def.camera_y.take()),
+                },
                 layout: def
                     .layout
                     .take()

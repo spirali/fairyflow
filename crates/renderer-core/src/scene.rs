@@ -182,6 +182,8 @@ pub enum NodeKind {
         /// fields alone can't (both evaluate to the same 0,0,1,1). Drives the
         /// `needs_clip` fast-path in both renderers.
         clip_enabled: bool,
+        #[serde(flatten)]
+        camera: Camera,
         children: Vec<Node>,
     },
     /// Python: Rect(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
@@ -270,11 +272,25 @@ pub struct Node {
     pub kind: NodeKind,
 }
 
+/// Content-space viewpoint (api-v2-proposal §4.7/§4.8): `camera_zoom = 1.0`
+/// with `camera_x/y` at the box's own center is the identity camera.
+/// Applied only when recursing into a container's children — never folded
+/// into `NodeBox`'s own transform, so it never affects layout, world-
+/// bounds, or hit-testing. See `transform::camera_transform`.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Camera {
+    pub camera_zoom: f64,
+    pub camera_x: f64,
+    pub camera_y: f64,
+}
+
 /// Root of a single frame. Mirrors Scene(SizeMixin) in Python.
 #[derive(Debug, Clone, Serialize)]
 pub struct Scene {
     pub width: f64,
     pub height: f64,
     pub fill_color: Color,
+    #[serde(flatten)]
+    pub camera: Camera,
     pub children: Vec<Node>,
 }

@@ -359,3 +359,60 @@ with Scene():
     wait(0.4)
     g.hide("left", dur=1)      # shrink clip from right to left
 ```
+
+---
+
+## Camera
+
+Every `Group` and the `Scene` itself have an animatable `.camera` — a
+viewpoint onto that node's **content**, distinct from `.scale()`/`.rotate()`
+which transform the node as a widget:
+
+```python
+g.scale(2)          # the group grows as a widget — its box, layout, and
+                     # hit-testing all move with it
+g.camera.zoom(2)     # only the *content* magnifies — the group's own box
+                     # stays exactly where layout put it
+```
+
+`.camera.zoom(factor)` magnifies content around the current camera center.
+`.camera.center(x, y)` sets the content point the camera looks at — or pass a
+live `Position` to track a moving target. `.camera.reset()` returns to
+`zoom=1` centered on the group's own box.
+
+```ffpy video="mp4"
+with Scene():
+    with Group().size(200, 140).align(0.5, 0.5) as g:
+        Rect().size(200, 140).color("steelblue")
+        Ellipse().size(24, 24).color("gold").xy(150, 30)
+    with anim(1):
+        g.camera.zoom(1.9)
+        g.camera.center(160, 40)
+    wait(0.4)
+    g.camera.reset(dur=0.6)
+```
+
+`.camera.center()` also accepts a `Position`, tracking a moving node the same
+way `.pivot()` does:
+
+```ffpy video="mp4"
+with Scene():
+    with Group().size(200, 140).align(0.5, 0.5) as g:
+        Rect().size(200, 140).color("steelblue")
+        ball = Ellipse().size(20, 20).color("gold").xy(20, 20)
+    g.camera.zoom(1.6)
+    g.camera.center(ball.at("center"))
+    ball.xy(160, 100, dur=1.5)
+```
+
+The camera does **not** auto-clip — zoomed content overflows the group's box
+unless paired with `.clip()`:
+
+```ffpy frame="0"
+with Scene():
+    with Group().size(140, 100).align(0.5, 0.5) as g:
+        Rect().size(140, 100).color("steelblue")
+        Ellipse().size(20, 20).color("gold").xy(60, 40)
+    g.clip()          # crop overflow to the group's own (un-zoomed) box
+    g.camera.zoom(2)
+```

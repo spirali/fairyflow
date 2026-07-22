@@ -12,7 +12,7 @@ use renderer_core::path_utils::build_cropped_path_verbs;
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{
-    AffineTransform, node_z_level, positional_transform, transform_node_box,
+    AffineTransform, camera_transform, node_z_level, positional_transform, transform_node_box,
 };
 use renderer_core::{
     Color, ImageLayer, Node, NodeKind, Position, Scene, Size, Style, TextChild, TextSpan,
@@ -87,6 +87,13 @@ impl PdfRenderer {
             }
         }
 
+        // Scene-level camera (innermost, applied before children paint).
+        let box_center = Position::new(scene.width * 0.5, scene.height * 0.5);
+        surface.push_transform(&to_krilla_transform(camera_transform(
+            &scene.camera,
+            box_center,
+        )));
+
         // Z-sorted children.
         let mut order: Vec<usize> = (0..scene.children.len()).collect();
         order.sort_by(|&a, &b| {
@@ -102,6 +109,8 @@ impl PdfRenderer {
                 1.0,
             );
         }
+
+        surface.pop(); // scene camera
 
         surface.finish();
         page.finish();
@@ -124,6 +133,7 @@ impl PdfRenderer {
                 clip_w,
                 clip_h,
                 clip_enabled,
+                camera,
                 children,
             } => {
                 let transform = transform_node_box(&node_box, parent_transform);
@@ -154,6 +164,12 @@ impl PdfRenderer {
                     }
                 }
 
+                // Camera (innermost layer): affects only the children drawn
+                // below, never the clip path above.
+                let box_center =
+                    Position::new(node_box.size.width * 0.5, node_box.size.height * 0.5);
+                surface.push_transform(&to_krilla_transform(camera_transform(camera, box_center)));
+
                 // Z-sort children.
                 let mut order: Vec<usize> = (0..children.len()).collect();
                 order.sort_by(|&a, &b| {
@@ -170,6 +186,7 @@ impl PdfRenderer {
                     );
                 }
 
+                surface.pop(); // camera
                 for _ in 0..extra_pops {
                     surface.pop();
                 }

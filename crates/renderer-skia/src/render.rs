@@ -42,12 +42,12 @@ impl RasterRenderer {
         let mut pixmap =
             Pixmap::new(width.max(1), height.max(1)).expect("invalid scene dimensions");
         pixmap.fill(color_to_skia(&scene.fill_color));
-        self.render_children(
-            &scene.children,
-            &mut pixmap,
-            Transform::from_scale(scale, scale),
-            1.0,
+        let box_center = Position::new(scene.width * 0.5, scene.height * 0.5);
+        let content_transform = skia_from_affine(
+            renderer_core::camera_transform(&scene.camera, box_center)
+                .concat(affine_from_skia(Transform::from_scale(scale, scale))),
         );
+        self.render_children(&scene.children, &mut pixmap, content_transform, 1.0);
         pixmap
     }
 
@@ -85,9 +85,16 @@ impl RasterRenderer {
                 clip_w,
                 clip_h,
                 clip_enabled,
+                camera,
                 children,
             } => {
                 let transform = transform_nodebox(node_box, parent_transform);
+                let box_center =
+                    Position::new(node_box.size.width * 0.5, node_box.size.height * 0.5);
+                let content_transform = skia_from_affine(
+                    renderer_core::camera_transform(camera, box_center)
+                        .concat(affine_from_skia(transform)),
+                );
                 let alpha = parent_alpha * *alpha as f32;
                 let children = children.clone();
 
@@ -97,12 +104,12 @@ impl RasterRenderer {
                     || *clip_w < 1.0
                     || *clip_h < 1.0;
                 if !needs_clip {
-                    self.render_children(&children, pixmap, transform, alpha);
+                    self.render_children(&children, pixmap, content_transform, alpha);
                 } else {
                     let w = pixmap.width();
                     let h = pixmap.height();
                     let mut offscreen = Pixmap::new(w, h).expect("offscreen pixmap");
-                    self.render_children(&children, &mut offscreen, transform, alpha);
+                    self.render_children(&children, &mut offscreen, content_transform, alpha);
 
                     let lw = node_box.size.width as f32;
                     let lh = node_box.size.height as f32;

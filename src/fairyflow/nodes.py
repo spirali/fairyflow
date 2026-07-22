@@ -1133,6 +1133,131 @@ class RotAndScaleMixin:
 
 
 @beartype
+class CameraProxy:
+    """Returned by `.camera` — a fresh, stateless wrapper each access (same
+    shape as `Position`), not stored on the node."""
+
+    def __init__(self, node):
+        self._node = node
+
+    def zoom(
+        self, factor: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
+        """Magnify this group's content around the current camera center.
+
+        Does not change the group's own box — only its content is scaled.
+        Pair with `.clip()` if overflowing content should not be visible.
+
+        Args:
+            factor: Zoom factor. ``1.0`` is the original scale; ``2.0``
+                magnifies content 2x.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        self._node._set_attr("camera_zoom", factor, dur, ease)
+        return self
+
+    def center(
+        self,
+        x: FloatLike | Position,
+        y: FloatLike | None = None,
+        *,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Set the content point the camera looks at.
+
+        Args:
+            x: Either the x coordinate (in this group's own content space) or
+                a live `Position` to track — e.g. `g.camera.center(node.at("center"))`.
+            y: The y coordinate. Required unless `x` is a `Position`.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        if isinstance(x, Position):
+            if y is not None:
+                raise TypeError(
+                    "camera.center(): pass either a Position or x, y — not both"
+                )
+            mapped = x.into_node(self._node)
+            cx, cy = mapped.x, mapped.y
+        else:
+            if y is None:
+                raise TypeError(
+                    "camera.center(): pass two numbers or a single Position"
+                )
+            cx, cy = x, y
+        with Par():
+            self._node._set_attr("camera_x", cx, dur, ease)
+            self._node._set_attr("camera_y", cy, dur, ease)
+        return self
+
+    def reset(self, *, dur: Duration = None, ease: Easing = None) -> Self:
+        """Reset zoom to 1 and re-center on the group's own box center.
+
+        Args:
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        with Par():
+            self._node._set_attr("camera_zoom", 1, dur, ease)
+            self._node._set_attr(
+                "camera_x", Call.mul(0.5, _effective_width(self._node)), dur, ease
+            )
+            self._node._set_attr(
+                "camera_y", Call.mul(0.5, _effective_height(self._node)), dur, ease
+            )
+        return self
+
+
+def _default_camera_x(node):
+    return Call.mul(0.5, _effective_width(node))
+
+
+def _default_camera_y(node):
+    return Call.mul(0.5, _effective_height(node))
+
+
+@beartype
+class CameraMixin:
+    """Mixin that adds an animatable content-space `.camera` to `Group`/`Scene`.
+
+    `camera` is distinct from `scale()`/`rotate()`: those transform the node
+    as a widget (box, layout, hit-testing all move with it). The camera only
+    transforms the *content* relative to the node's own fixed box.
+    """
+
+    # Unlike pivot_x/pivot_y's wire-inert 0.5 placeholder, these seeds are not
+    # inert: `AnimatedValue.set()` bakes whatever is seeded here into the wire
+    # as the animation's start keyframe the moment a `dur=` call first touches
+    # the attribute (`avalue.py`) - a plain literal 0 would make the very
+    # first `camera.zoom()`/`camera.center()` with a `dur=` animate from the
+    # top-left corner instead of the true box center. These must compute the
+    # same box-center default the engine itself falls back to
+    # (`eval_or_else(ctx, |_ctx| Ok(w * 0.5))`, `eval.rs`), mirroring
+    # `PositionQueryMixin`'s `Call.auto_x`/`Call.auto_y` factories rather than
+    # RotAndScaleMixin's static pivot placeholder.
+    _ATTR_DEFAULTS = {
+        "camera_zoom": 1,
+        "camera_x": _default_camera_x,
+        "camera_y": _default_camera_y,
+    }
+
+    @property
+    def camera(self) -> CameraProxy:
+        return CameraProxy(self)
+
+
+@beartype
 class Group(
     NodeWithChildren,
     ContextManagerMixin,
@@ -1141,6 +1266,7 @@ class Group(
     AlphaMixin,
     ZLevelMixin,
     RotAndScaleMixin,
+    CameraMixin,
 ):
     """A rectangular container node that positions, clips, and transforms its children.
 
@@ -1345,7 +1471,9 @@ class Group(
 
 
 @beartype
-class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin):
+class Scene(
+    NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin, CameraMixin
+):
     """Top-level container for an animation, defining canvas size and background color.
 
     Must be used as a context manager (``with Scene(...) as s:``) before adding
@@ -1432,6 +1560,10 @@ class Scene(NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin
             "background": serialize_expr(self._attrs["fill_color"]),
             "frames": self.max_frame + 1,
         }
+        for name in ("camera_zoom", "camera_x", "camera_y"):
+            av = self._attrs.get(name)
+            if av is not None and not av.is_default:
+                result[name] = serialize_expr(av)
         if self.cue_at_start:
             self.cues.add(0)
         if self.cues:

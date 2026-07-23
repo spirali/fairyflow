@@ -62,11 +62,14 @@ def test_at_unknown_anchor_rejected(sc):
 
 
 def test_at_center_on_text_uses_measured_extent(sc):
+    # Text is a SizeMixin node (proposal §4.10): the center anchor goes
+    # through its own `width`/`height` attrs (defaulting to `auto_w`/`auto_h`
+    # — the measured extent), same as any other sized node (Rect, Scene).
     t = Text()
     t.span("hello")
     p = t.at()
-    expected_x = t._get_attr("x") + Call.auto_width(t) * 0.5
-    expected_y = t._get_attr("y") + Call.auto_height(t) * 0.5
+    expected_x = t._get_attr("x") + t._get_attr("width") * 0.5
+    expected_y = t._get_attr("y") + t._get_attr("height") * 0.5
     assert repr(p.x) == repr(expected_x)
     assert repr(p.y) == repr(expected_y)
 

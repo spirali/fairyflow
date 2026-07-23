@@ -219,11 +219,16 @@ pub enum NodeKind {
         crop_end: f64,
         children: Vec<PathCommand>,
     },
-    /// Python: Text — positioned block of text lines.
-    /// Each element of `lines` is one line (rendered top-to-bottom).
+    /// Python: Text(PositionMixin, SizeMixin) — positioned block of text lines.
+    /// Each element of `lines` is one line (rendered top-to-bottom). `size` is
+    /// the resolved box the laid-out lines are scaled to fit (equals the
+    /// natural measured extent when never explicitly set).
     Text {
         #[serde(flatten)]
         position: Position,
+        #[serde(flatten)]
+        size: Size,
+        keep_aspect: bool,
         #[serde(flatten)]
         text_style: TextStyle,
         #[serde(skip_serializing_if = "Option::is_none")]

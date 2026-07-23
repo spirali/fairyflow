@@ -106,6 +106,55 @@ The target font must be loaded — either from `font_directories` or from system
 
 ---
 
+## Sizing
+
+By default a `Text` node's box is the *measured* extent of the laid-out text —
+whatever width/height the current font size and line breaks produce. Call
+`.size(w=, h=)` to scale the finished block to fit an explicit box; this does not
+re-layout the text or move any line breaks, it magnifies the whole block as a unit —
+the same fit model [`Image`](images.md) uses.
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi").font(size=16).size(w=100)
+```
+
+When only one axis is given, the other is derived automatically to preserve the aspect
+ratio:
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi").font(size=16).size(h=80)
+```
+
+When both axes are given, the block is fit into the box scaled uniformly and centered
+(letterboxed) by default (`keep_aspect=True`):
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi").font(size=16).size(100, 60)
+```
+
+Pass `.keep_aspect(False)` to stretch the block to exactly fill the box instead:
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi").font(size=16).size(100, 60).keep_aspect(False)
+```
+
+`.expand()` fills the parent completely — handy for poster-style text:
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi").font(size=16).expand()
+```
+
+`.font(size=)` and `.size()` are not the same thing: `.font(size=)` changes the
+*layout* — metrics and where line breaks fall. `.size()` magnifies the already
+laid-out result; line breaks never move.
+
+---
+
 ## Positioning
 
 `Text` supports `.xy()`, `.align()`, and `.move()` for placement — see [Positioning](positioning.md) for details.

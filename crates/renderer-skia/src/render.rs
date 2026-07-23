@@ -197,16 +197,29 @@ impl RasterRenderer {
             }
             NodeKind::Text {
                 position,
+                size,
+                keep_aspect,
                 lines,
                 sh_language,
                 sh_theme,
                 ..
             } => {
+                let (nat_w, nat_h) = renderer_core::measure_text(lines);
+                let (sx, sy, off_x, off_y) = text_fit_scale(
+                    size.width as f32,
+                    size.height as f32,
+                    nat_w,
+                    nat_h,
+                    *keep_aspect,
+                );
                 let transform = positional_transform(
-                    *position,
+                    Position {
+                        x: position.x + off_x as f64,
+                        y: position.y + off_y as f64,
+                    },
                     Size {
-                        width: 1.0,
-                        height: 1.0,
+                        width: sx as f64,
+                        height: sy as f64,
                     },
                     0.0,
                     0.0,
@@ -571,6 +584,30 @@ fn build_cropped_path(
     crop_end: f64,
 ) -> Option<tiny_skia::Path> {
     verbs_to_skia_path(&build_cropped_path_verbs(commands, crop_start, crop_end))
+}
+
+/// `(sx, sy, offset_x, offset_y)` to scale + center a `Text` node's laid-out
+/// lines (natural extent `nat_w × nat_h`) to fit an explicit `size(w=, h=)`
+/// box `dest_w × dest_h` — same fit math as `ImagePlacement` below, kept as a
+/// separate small function since `Image`'s placement also folds in
+/// destination-pixmap sizing that `Text` doesn't need. Degenerate (empty)
+/// text keeps scale 1, matching the untouched-default case.
+fn text_fit_scale(
+    dest_w: f32,
+    dest_h: f32,
+    nat_w: f32,
+    nat_h: f32,
+    keep_aspect: bool,
+) -> (f32, f32, f32, f32) {
+    if nat_w <= 0.0 || nat_h <= 0.0 {
+        return (1.0, 1.0, 0.0, 0.0);
+    }
+    if keep_aspect {
+        let s = (dest_w / nat_w).min(dest_h / nat_h);
+        (s, s, (dest_w - nat_w * s) / 2.0, (dest_h - nat_h * s) / 2.0)
+    } else {
+        (dest_w / nat_w, dest_h / nat_h, 0.0, 0.0)
+    }
 }
 
 // ── Image rendering ───────────────────────────────────────────────────────────

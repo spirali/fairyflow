@@ -13,6 +13,8 @@ from .nodes import (
     NodeWithChildren,
     PositionMixin,
     PositionQueryMixin,
+    SizeMixin,
+    KeepAspectMixin,
     StyleMixin,
     InheritedStyleMixin,
     ZLevelMixin,
@@ -118,12 +120,20 @@ class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
         return group
 
 
-class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
+class Text(
+    NodeWithChildren,
+    PositionMixin,
+    SizeMixin,
+    KeepAspectMixin,
+    TextStyleMixin,
+    ZLevelMixin,
+):
     kind = "text"
 
     def __init__(self, text: StringLike | None = None):
         super().__init__()
         self.fill("black")
+        self._add_attr("keep_aspect", True)
         self.sh_language = None
         self.sh_theme = None
         self._current_line = None

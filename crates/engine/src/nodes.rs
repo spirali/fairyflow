@@ -162,9 +162,13 @@ pub enum NodeKind {
         children: Vec<NodeId>,
     },
 
-    /// Python: `Text` — block of styled text with Line children
+    /// Python: `Text(PositionMixin, SizeMixin)` — block of styled text with Line
+    /// children. `size` is the explicit/auto-derived box the laid-out text is
+    /// scaled to fit (never re-lays-out text; that's `font(size=)`'s job).
     Text {
         position: Position,
+        size: Size,
+        keep_aspect: AttrExpr<bool>,
         text_style: TextStyle,
         z_level: AttrExpr<f64>,
         sh_language: Option<Arc<String>>,
@@ -514,9 +518,12 @@ impl Node {
             }
             Kind::Text => {
                 let position = def.position();
+                let size = def.size();
                 let z_level = def.z_level();
                 NodeKind::Text {
                     position,
+                    size,
+                    keep_aspect: AttrExpr(def.keep_aspect.take()),
                     text_style: def.text_style(),
                     z_level,
                     sh_language: def.sh_language.take(),

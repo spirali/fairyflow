@@ -118,8 +118,8 @@ with Scene(width=300, height=160):
         Rect().size(60, 60).fill("coral")
 
     connector = Path().stroke("#555", 2)
-    connector.move_to().pos(a.at("right"))   # right-center of a
-    connector.line_to().pos(b.at("left"))    # left-center of b
+    connector.move_to(a.at("right"))   # right-center of a
+    connector.line_to(b.at("left"))    # left-center of b
 ```
 
 ### Tracking during animation
@@ -137,8 +137,8 @@ with Scene(width=300, height=160):
         Rect().size(50, 50).fill("steelblue")
 
     line = Path().stroke("#888", 2)
-    line.move_to().pos(anchor.at())  # fixed end
-    line.line_to().pos(box.at())     # tracks box center (the default anchor)
+    line.move_to(anchor.at())  # fixed end
+    line.line_to(box.at())     # tracks box center (the default anchor)
 
     box.xy(180, 55, dur=1.5)   # move the box — the line stretches automatically
 ```
@@ -155,8 +155,8 @@ with Scene(width=300, height=160):
 
     # arrow tip sits 10 px above the top-center of box
     arrow = Path().stroke("tomato", 3)
-    arrow.move_to().pos(box.at("top")).move(0, -30)
-    arrow.line_to().pos(box.at("top")).move(0, -4)
+    arrow.move_to(box.at("top")).move(0, -30)
+    arrow.line_to(box.at("top")).move(0, -4)
     arrow.arrow("end")
 ```
 
@@ -207,19 +207,16 @@ duration. The node travels from `start` to `end` (both are path parameters in th
 The clock advances automatically by `tr` seconds.
 
 Any `Path` shape works as the track — straight lines, multi-segment paths, or Bézier curves.
-Use `cubic_to()` to add a cubic Bézier segment; its two control points are set with
-`c1_xy(dx, dy)` and `c2_xy(dx, dy)`, where the offsets are relative to the segment's start
-and end points respectively:
+Use `cubic_to(x, y, c1=, c2=)` to add a cubic Bézier segment; `c1`/`c2` are `(dx, dy)`
+offsets relative to the segment's start and end points respectively:
 
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
     # The track: an arch-shaped cubic Bézier
     track = Path().stroke("#bbb", 2)
-    track.move_to().xy(30, 160)
-    curve = track.cubic_to()
-    curve.xy(270, 160)
-    curve.c1_xy(60, -130)   # control point 1: pulls up from the start
-    curve.c2_xy(-60, -130)  # control point 2: pulls up into the end
+    track.move_to(30, 160)
+    track.cubic_to(270, 160, c1=(60, -130), c2=(-60, -130))
+    # c1: pulls up from the start; c2: pulls up into the end
 
     # A ball that travels along the arch
     ball = Ellipse().size(22, 22).fill("steelblue")
@@ -232,11 +229,8 @@ start. This is useful for animating a return trip or for reversing entrance effe
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
     track = Path().stroke("#bbb", 2)
-    track.move_to().xy(30, 160)
-    curve = track.cubic_to()
-    curve.xy(270, 160)
-    curve.c1_xy(60, -130)
-    curve.c2_xy(-60, -130)
+    track.move_to(30, 160)
+    track.cubic_to(270, 160, c1=(60, -130), c2=(-60, -130))
 
     with Par():
         Ellipse().size(22, 22).fill("steelblue").follow_path(track, dur=2)
@@ -249,11 +243,8 @@ staggered procession where each traveller starts slightly after the previous one
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
     track = Path().stroke("#bbb", 2)
-    track.move_to().xy(30, 160)
-    curve = track.cubic_to()
-    curve.xy(270, 160)
-    curve.c1_xy(60, -130)
-    curve.c2_xy(-60, -130)
+    track.move_to(30, 160)
+    track.cubic_to(270, 160, c1=(60, -130), c2=(-60, -130))
 
     colors = ["steelblue", "coral", "gold"]
     with Par():

@@ -1752,6 +1752,19 @@ class Ellipse(
     kind = "ellipse"
 
 
+def _resolve_path_point(parent: "Path", x, y, *, method: str):
+    """Resolve a `move_to`/`line_to` argument pair into a plain (x, y) pair
+    already in `parent`'s own frame - `x` may be a live `Position` (in which
+    case `y` must be omitted), or a plain coordinate (in which case `y` is
+    required)."""
+    if isinstance(x, Position):
+        pos = x.into_node(parent)
+        return pos.x, pos.y
+    if y is None:
+        raise TypeError(f"{method}() requires y when x is not a Position")
+    return x, y
+
+
 @beartype
 class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
     """A vector path composed of move, line, cubic, and close command nodes.
@@ -1767,39 +1780,31 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         "crop_end": 1.0,
     }
 
-    def _prev_coords(self):
-        if self._children:
-            c = self._children[0]
-            return (c._get_attr("y"), c._get_attr("y"))
-        else:
-            return (0, 0)
-
-    def crop_start(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def crop(
+        self,
+        *,
+        start: FloatLike | None = None,
+        end: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
-        """Crop the path from its start.
+        """Crop the path by relative start/end offsets.
 
         Args:
-            value: Relative start offset in ``[0.0, 1.0]``. ``0.0`` keeps the
-                full path; ``1.0`` hides it entirely from the start.
+            start: Relative start offset in ``[0.0, 1.0]``. ``0.0`` keeps the
+                full path; ``1.0`` hides it entirely from the start. ``None``
+                (default) leaves the start untouched.
+            end: Relative end offset in ``[0.0, 1.0]``. ``1.0`` keeps the
+                full path; ``0.0`` hides it entirely from the end. ``None``
+                (default) leaves the end untouched.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
         """
-        self._set_attr("crop_start", value, dur, ease)
-        return self
-
-    def crop_end(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
-        """Crop the path from its end.
-
-        Args:
-            value: Relative end offset in ``[0.0, 1.0]``. ``1.0`` keeps the
-                full path; ``0.0`` hides it entirely from the end.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-        """
-        self._set_attr("crop_end", value, dur, ease)
+        with Par():
+            if start is not None:
+                self._set_attr("crop_start", start, dur, ease)
+            if end is not None:
+                self._set_attr("crop_end", end, dur, ease)
         return self
 
     def draw(self, *, dur: Duration = None, ease: Easing = None) -> Self:
@@ -1817,47 +1822,84 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         Returns:
             self, for method chaining.
         """
-        self.crop_end(0)
-        self.crop_end(1, dur=dur, ease=ease)
+        self.crop(end=0)
+        self.crop(end=1, dur=dur, ease=ease)
         return self
 
-    def move_to(self) -> "PathMove":
+    def move_to(
+        self, x: FloatLike | Position, y: FloatLike | None = None
+    ) -> "PathMove":
         """Append a move-to command to the path.
 
         Moves the current drawing position without drawing a line. Use this
         as the first command of a path or to start a new subpath.
 
+        Args:
+            x: The target x coordinate, or a `Position` (in which case `y`
+                must be omitted).
+            y: The target y coordinate. Required unless `x` is a `Position`.
+
         Returns:
-            The newly created `PathMove` node for setting the target position.
+            The newly created `PathMove` node, still animatable via
+            `xy()`/`pos()`/`move()`.
         """
-        p = PathMove(self, *self._prev_coords())
+        rx, ry = _resolve_path_point(self, x, y, method="move_to")
+        p = PathMove(self, rx, ry)
         self._children.append(p)
         return p
 
-    def line_to(self) -> "PathLine":
+    def line_to(
+        self, x: FloatLike | Position, y: FloatLike | None = None
+    ) -> "PathLine":
         """Append a line-to command to the path.
 
         Draws a straight line from the current position to the target.
 
+        Args:
+            x: The target x coordinate, or a `Position` (in which case `y`
+                must be omitted).
+            y: The target y coordinate. Required unless `x` is a `Position`.
+
         Returns:
-            The newly created `PathLine` node for setting the target position.
+            The newly created `PathLine` node, still animatable via
+            `xy()`/`pos()`/`move()`.
         """
-        p = PathLine(self, *self._prev_coords())
+        rx, ry = _resolve_path_point(self, x, y, method="line_to")
+        p = PathLine(self, rx, ry)
         self._children.append(p)
         return p
 
-    def cubic_to(self) -> "PathCubic":
+    def cubic_to(
+        self,
+        x: FloatLike,
+        y: FloatLike,
+        *,
+        c1: tuple[FloatLike, FloatLike] | None = None,
+        c2: tuple[FloatLike, FloatLike] | None = None,
+    ) -> "PathCubic":
         """Append a cubic Bézier curve command to the path.
 
         Draws a cubic Bézier segment from the current position to the target,
         shaped by two control points.
 
+        Args:
+            x: The target x coordinate.
+            y: The target y coordinate.
+            c1: Control point 1 as an ``(dx, dy)`` offset relative to the
+                segment's start point.
+            c2: Control point 2 as an ``(dx, dy)`` offset relative to the
+                segment's end point.
+
         Returns:
-            The newly created `PathCubic` node. Use its ``c1_xy`` / ``c2_xy``
-            methods to set the control points and ``xy`` to set the endpoint.
+            The newly created `PathCubic` node. Use its `c1()`/`c2()` methods
+            to animate the control points later.
         """
-        p = PathCubic(self, *self._prev_coords())
+        p = PathCubic(self, x, y)
         self._children.append(p)
+        if c1 is not None:
+            p.c1(*c1)
+        if c2 is not None:
+            p.c2(*c2)
         return p
 
     def close(self) -> "PathClose":
@@ -1913,9 +1955,9 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dy = ny * width * 0.5
 
         path = Path()
-        path.move_to().xy(px - dy, py + dx)
-        path.line_to().pos(pos)
-        path.line_to().xy(px + dy, py - dx)
+        path.move_to(px - dy, py + dx)
+        path.line_to(pos)
+        path.line_to(px + dy, py - dx)
         path.close()
         return path
 
@@ -1931,10 +1973,10 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dy = ny * width * 0.5
 
         path = Path()
-        path.move_to().xy(px - dy, py + dx)
-        path.line_to().pos(pos)
-        path.move_to().xy(px + dy, py - dx)
-        path.line_to().pos(pos)
+        path.move_to(px - dy, py + dx)
+        path.line_to(pos)
+        path.move_to(px + dy, py - dx)
+        path.line_to(pos)
         return path
 
     def _create_stealth_arrow(self, child, vx, vy, length, width):
@@ -1951,10 +1993,10 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dy = ny * width * 0.5
 
         path = Path()
-        path.move_to().xy(px - dy, py + dx)
-        path.line_to().pos(pos)
-        path.line_to().xy(px + dy, py - dx)
-        path.line_to().xy(notch_x, notch_y)
+        path.move_to(px - dy, py + dx)
+        path.line_to(pos)
+        path.line_to(px + dy, py - dx)
+        path.line_to(notch_x, notch_y)
         path.close()
         return path
 
@@ -1967,8 +2009,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         dy = ny * width * 0.5
 
         path = Path()
-        path.move_to().xy(pos.x - dy, pos.y + dx)
-        path.line_to().xy(pos.x + dy, pos.y - dx)
+        path.move_to(pos.x - dy, pos.y + dx)
+        path.line_to(pos.x + dy, pos.y - dx)
         return path
 
     def _create_dot_arrow(self, child, vx, vy, length, width):
@@ -2042,9 +2084,9 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         if crop_len is not None:
             crop_len = to_expr(crop_len)
             if placement == "start":
-                self.crop_start(crop_len / Call.path_length(self))
+                self.crop(start=crop_len / Call.path_length(self))
             else:
-                self.crop_end(to_expr(1.0) - crop_len / Call.path_length(self))
+                self.crop(end=to_expr(1.0) - crop_len / Call.path_length(self))
         return head
 
 
@@ -2094,84 +2136,42 @@ class PathCubic(Node, PositionMixin):
         self._add_attr("x", x)
         self._add_attr("y", y)
 
-    def c1_x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Set the x coordinate of control point 1, relative to the segment's start point.
-
-        Args:
-            px: Relative x offset of control point 1 in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-        """
-        self._set_attr("c1_x", px, dur, ease)
-        return self
-
-    def c1_y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Set the y coordinate of control point 1, relative to the segment's start point.
-
-        Args:
-            px: Relative y offset of control point 1 in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-        """
-        self._set_attr("c1_y", px, dur, ease)
-        return self
-
-    def c2_x(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Set the x coordinate of control point 2, relative to the segment's end point.
-
-        Args:
-            px: Relative x offset of control point 2 in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-        """
-        self._set_attr("c2_x", px, dur, ease)
-        return self
-
-    def c2_y(self, px: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
-        """Set the y coordinate of control point 2, relative to the segment's end point.
-
-        Args:
-            px: Relative y offset of control point 2 in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-        """
-        self._set_attr("c2_y", px, dur, ease)
-        return self
-
-    def c1_xy(
-        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def c1(
+        self, dx: FloatLike, dy: FloatLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
-        """Set both coordinates of control point 1, relative to the segment's start point.
+        """Set control point 1, relative to the segment's start point.
 
         Args:
-            x: Relative x offset of control point 1 in pixels.
-            y: Relative y offset of control point 1 in pixels.
+            dx: Relative x offset of control point 1 in pixels.
+            dy: Relative y offset of control point 1 in pixels.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self.c1_x(x, dur=dur, ease=ease)
-        self.c1_y(y, dur=dur, ease=ease)
+        with Par():
+            self._set_attr("c1_x", dx, dur, ease)
+            self._set_attr("c1_y", dy, dur, ease)
         return self
 
-    def c2_xy(
-        self, x: FloatLike, y: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def c2(
+        self, dx: FloatLike, dy: FloatLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
-        """Set both coordinates of control point 2, relative to the segment's end point.
+        """Set control point 2, relative to the segment's end point.
 
         Args:
-            x: Relative x offset of control point 2 in pixels.
-            y: Relative y offset of control point 2 in pixels.
+            dx: Relative x offset of control point 2 in pixels.
+            dy: Relative y offset of control point 2 in pixels.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self.c2_x(x, dur=dur, ease=ease)
-        self.c2_y(y, dur=dur, ease=ease)
+        with Par():
+            self._set_attr("c2_x", dx, dur, ease)
+            self._set_attr("c2_y", dy, dur, ease)
         return self
 
 

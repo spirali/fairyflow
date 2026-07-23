@@ -21,7 +21,7 @@ def test_at_no_args_is_center(sc):
 
 def test_at_no_args_on_unsized_node_is_its_point(sc):
     p = Path()
-    handle = p.move_to().xy(5, 7)
+    handle = p.move_to(5, 7)
     pos = handle.at()
     assert pos.x == handle._get_attr("x")
     assert pos.y == handle._get_attr("y")

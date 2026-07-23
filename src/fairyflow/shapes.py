@@ -40,8 +40,8 @@ class Line(Path):
         super().__init__()
         sx, sy = _point_xy(self, start)
         ex, ey = _point_xy(self, end)
-        self.start = self.move_to().xy(sx, sy)
-        self.end = self.line_to().xy(ex, ey)
+        self.start = self.move_to(sx, sy)
+        self.end = self.line_to(ex, ey)
 
 
 @beartype
@@ -79,8 +79,8 @@ class Arrow(Path):
             if head in ("end", "both"):
                 ex, ey = ex + ux * gap, ey + uy * gap
 
-        self.start = self.move_to().xy(sx, sy)
-        self.end = self.line_to().xy(ex, ey)
+        self.start = self.move_to(sx, sy)
+        self.end = self.line_to(ex, ey)
 
         self.arrowheads = []
         if head in ("start", "both"):
@@ -98,9 +98,9 @@ class Polygon(Path):
         if len(points) < 2:
             raise ValueError("Polygon needs at least 2 points")
         x0, y0 = points[0]
-        self.move_to().xy(x0, y0)
+        self.move_to(x0, y0)
         for x, y in points[1:]:
-            self.line_to().xy(x, y)
+            self.line_to(x, y)
         self.close()
 
 

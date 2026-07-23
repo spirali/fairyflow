@@ -41,8 +41,8 @@ with Scene(1280, 720):
         wait(0.2)
 
         arrow = Path().stroke("green", 4)
-        arrow_start = arrow.move_to().xy(-150, -10)
-        arrow_end = arrow.line_to().xy(-150, -50)
+        arrow_start = arrow.move_to(-150, -10)
+        arrow_end = arrow.line_to(-150, -50)
         arrow_head = arrow.arrow("start")
 
         for step in [2, 3]:
@@ -67,12 +67,12 @@ with Scene(1280, 720):
             with Group() as m:
                 m.pos(numbers[idx].at())
                 p = Path().stroke("red", 2)
-                a = p.move_to()
-                b = p.line_to()
-                p.move_to().pos(a.at()).move(0, -4)
-                p.line_to().pos(a.at()).move(0, 4)
-                p.move_to().pos(b.at()).move(0, -4)
-                p.line_to().pos(b.at()).move(0, 4)        
+                a = p.move_to(0, 0)
+                b = p.line_to(0, 0)
+                p.move_to(a.at()).move(0, -4)
+                p.line_to(a.at()).move(0, 4)
+                p.move_to(b.at()).move(0, -4)
+                p.line_to(b.at()).move(0, 4)        
                 t = Text().pos(numbers[idx].get_child(kind="text").at())
                 t.span(str(step)).fill("red")            
                 m.fade_in(dur=0.5)
@@ -252,14 +252,14 @@ outer clock to the longest child's end time (≈ 0.99 + 0.3 = 1.3 s), followed b
 
 ```python
 arrow = Path().stroke("green", 4)
-arrow_start = arrow.move_to().xy(-150, -10)
-arrow_end   = arrow.line_to().xy(-150, -50)
+arrow_start = arrow.move_to(-150, -10)
+arrow_end   = arrow.line_to(-150, -50)
 arrow_head  = arrow.arrow("start")
 ```
 
-`Path` builds a vector path from a sequence of commands. Each command (`move_to()`, `line_to()`)
-returns a node whose position can be animated independently. `arrow("start")` attaches
-a filled triangle arrowhead at the start endpoint.
+`Path` builds a vector path from a sequence of commands. Each command (`move_to(x, y)`,
+`line_to(x, y)`) returns a node whose position can be animated independently. `arrow("start")`
+attaches a filled triangle arrowhead at the start endpoint.
 
 The arrow begins at x = −150 — off the left edge of the canvas so it is invisible at first. It
 will be repositioned later by animating `arrow_start` and `arrow_end` to the coordinates of the
@@ -305,12 +305,12 @@ Passing that `Position` to `.pos()` animates the path endpoint to the cell's cen
 with Group() as m:
     m.pos(numbers[idx].at())
     p = Path().stroke("red", 2)
-    a = p.move_to()
-    b = p.line_to()
-    p.move_to().pos(a.at()).move(0, -4)
-    p.line_to().pos(a.at()).move(0, 4)
-    p.move_to().pos(b.at()).move(0, -4)
-    p.line_to().pos(b.at()).move(0, 4)
+    a = p.move_to(0, 0)
+    b = p.line_to(0, 0)
+    p.move_to(a.at()).move(0, -4)
+    p.line_to(a.at()).move(0, 4)
+    p.move_to(b.at()).move(0, -4)
+    p.line_to(b.at()).move(0, 4)
     t = Text().pos(numbers[idx].get_child(kind="text").at())
     t.span(str(step)).fill("red")
     m.fade_in(dur=0.5)
@@ -319,13 +319,13 @@ with Group() as m:
 This builds a red bracket: a horizontal line from `a` to `b` with a short vertical tick at each
 end. The path has 6 commands in total:
 
-1. The main line: `move_to()` → `a`, `line_to()` → `b`
-2. Left tick: `move_to()` at `a.at()` offset by (0, −4), `line_to()` at `a.at()`
+1. The main line: `move_to(0, 0)` → `a`, `line_to(0, 0)` → `b`
+2. Left tick: `move_to(a.at())` offset by (0, −4), `line_to(a.at())`
    offset by (0, +4)
 3. Right tick: same pattern at `b.at()`
 
 The key insight is that the tick endpoints are defined *relative to `a` and `b`* using
-`pos(a.at()).move(0, ±4)`. When `a` and `b` are animated to new positions the ticks move
+`move_to(a.at()).move(0, ±4)`. When `a` and `b` are animated to new positions the ticks move
 with them automatically — you never have to update them separately.
 
 The text label `t` sits next to the starting cell and shows the prime value in red.

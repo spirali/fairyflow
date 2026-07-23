@@ -159,8 +159,8 @@ def test_path_draw_snaps_crop_end_then_animates():
     s = Scene(100, 100)
     with s:
         p = Path()
-        p.move_to().xy(0, 0)
-        p.line_to().xy(10, 10)
+        p.move_to(0, 0)
+        p.line_to(10, 10)
         p.draw(dur=1)
     frames = sorted(p._attrs["crop_end"].values)
     assert len(frames) == 2
@@ -172,8 +172,8 @@ def test_path_draw_instant_without_dur():
     s = Scene(100, 100)
     with s:
         p = Path()
-        p.move_to().xy(0, 0)
-        p.line_to().xy(10, 10)
+        p.move_to(0, 0)
+        p.line_to(10, 10)
         p.draw()
     av = p._attrs["crop_end"]
     assert av.values[av.init_frame] == 1
@@ -194,15 +194,15 @@ def test_dashed_stroke(test_scene):
         Rect().xy(10, 10).size(60, 60).stroke("black", 3, dash=(8, 4))
         Ellipse().xy(90, 10).size(60, 60).stroke("black", 3, dash=(8, 4))
         p = Path().stroke("black", 3, dash=(6, 3))
-        p.move_to().xy(170, 10)
-        p.line_to().xy(200, 70)
+        p.move_to(170, 10)
+        p.line_to(200, 70)
 
 
 def test_path_draw_animation(test_scene):
     with test_scene.size(120, 60):
         p = Path().stroke("darkorange", 3)
-        p.move_to().xy(10, 30)
-        p.line_to().xy(110, 30)
+        p.move_to(10, 30)
+        p.line_to(110, 30)
         p.draw(dur=1)
 
 

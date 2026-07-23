@@ -121,24 +121,29 @@ to set the line color and thickness. Like `Rect`, it can also be filled with `.f
 with Scene():
     p = Path()
     p.stroke("darkslateblue", 3).fill("lavender")
-    p.move_to().xy(30, 100)
-    p.line_to().xy(150, 40)
-    p.line_to().xy(270, 100)
-    p.line_to().xy(150, 160)
+    p.move_to(30, 100)
+    p.line_to(150, 40)
+    p.line_to(270, 100)
+    p.line_to(150, 160)
     p.close()
 ```
 
+`move_to`/`line_to` also accept a live `Position` instead of `(x, y)` —
+`p.line_to(other.at("right"))` tracks `other`'s right edge as it moves.
+
 ### Cubic Bézier curves
 
-`.cubic_to()` appends a cubic Bézier segment. Use `.c1_xy(dx, dy)` and `.c2_xy(dx, dy)` to
-set the two control point offsets (relative to the segment start and end respectively).
+`cubic_to(x, y, c1=, c2=)` appends a cubic Bézier segment in one call — `c1`/`c2` are
+`(dx, dy)` offsets for the two control points, relative to the segment's start and end
+respectively. The returned handle's `.c1(dx, dy, dur=)`/`.c2(dx, dy, dur=)` re-animate
+them later.
 
 ```ffpy frame="0"
 with Scene():
     p = Path()
     p.stroke("darkorange", 3)
-    p.move_to().xy(40, 150)
-    p.cubic_to().xy(260, 150).c1_xy(60, -130).c2_xy(-60, -130)
+    p.move_to(40, 150)
+    p.cubic_to(260, 150, c1=(60, -130), c2=(-60, -130))
 ```
 
 ### Arrows
@@ -150,8 +155,8 @@ beginning instead. The arrowhead is automatically sized to match the stroke widt
 with Scene():
     p = Path()
     p.stroke("steelblue", 3)
-    p.move_to().xy(40, 100)
-    p.line_to().xy(260, 100)
+    p.move_to(40, 100)
+    p.line_to(260, 100)
     p.arrow("end")
     p.arrow("start").fill("tomato")
 ```
@@ -165,15 +170,15 @@ with Scene():
     # top: automatic size (stroke_width=8 → arrow 24×24)
     p = Path()
     p.stroke("steelblue", 8)
-    p.move_to().xy(40, 60)
-    p.line_to().xy(250, 60)
+    p.move_to(40, 60)
+    p.line_to(250, 60)
     p.arrow("end")
 
     # bottom: same stroke but arrow manually set to length=40, width=20
     q = Path()
     q.stroke("steelblue", 8)
-    q.move_to().xy(40, 140)
-    q.line_to().xy(250, 140)
+    q.move_to(40, 140)
+    q.line_to(250, 140)
     q.arrow("end", length=40, width=20)
 ```
 
@@ -196,34 +201,35 @@ with Scene(width=200, height=200):
         y = 20 + i * 35
         p = Path()
         p.stroke("steelblue", 3)
-        p.move_to().xy(40, y)
-        p.line_to().xy(140, y)
+        p.move_to(40, y)
+        p.line_to(140, y)
         p.arrow("end", style=style, width=20)
 ```
 
 ### Path cropping
 
-`crop_start` and `crop_end` trim the path from either end. Values are in `[0.0, 1.0]` where
-`0.0` is the full extent. This is mainly used to animate paths drawing themselves in.
+`.crop(start=, end=)` trims the path from either end. Values are in `[0.0, 1.0]` where
+`0.0`/`1.0` is the full extent; either side may be omitted to leave it untouched. This is
+mainly used to animate paths drawing themselves in.
 
 ```ffpy frame="0"
 with Scene():
     p = Path()
     p.stroke("mediumseagreen", 4)
-    p.move_to().xy(30, 100)
-    p.cubic_to().xy(150, 40).c1_xy(50, -60).c2_xy(-50, -60)
-    p.cubic_to().xy(270, 100).c1_xy(50, 60).c2_xy(-50, 60)
-    p.crop_end(0.5)
+    p.move_to(30, 100)
+    p.cubic_to(150, 40, c1=(50, -60), c2=(-50, -60))
+    p.cubic_to(270, 100, c1=(50, 60), c2=(-50, 60))
+    p.crop(end=0.5)
 ```
 
 `.draw(dur=, ease=)` is sugar for the common "draw itself in" animation: it snaps
-`crop_end` to `0`, then animates it to `1` over `dur`.
+`crop(end=0)`, then animates it to `1` over `dur`.
 
 ```ffpy video="mp4"
 with Scene():
     p = Path()
     p.stroke("darkorange", 3)
-    p.move_to().xy(30, 100)
-    p.line_to().xy(270, 100)
+    p.move_to(30, 100)
+    p.line_to(270, 100)
     p.draw(dur=1)
 ```

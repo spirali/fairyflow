@@ -57,7 +57,7 @@ def test_text_span_has_no_rotate(sc):
 
 def test_path_move_has_no_rotate(sc):
     p = FFPath()
-    handle = p.move_to().xy(5, 7)
+    handle = p.move_to(5, 7)
     assert not hasattr(handle, "rotate")
     assert isinstance(handle, PathMove)
 

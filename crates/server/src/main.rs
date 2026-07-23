@@ -438,7 +438,7 @@ async fn run_init(directory: PathBuf) {
         ),
         (
             "prologue.py",
-            "from fairyflow import *\n\nset_default_scene(width=300, height=200, color=\"white\", cue_at_start=True)\n",
+            "from fairyflow import *\n\nset_default_scene(width=300, height=200, background=\"white\", cue_at_start=True)\n",
         ),
         (
             "scenes/scene1.ffpy",

@@ -7,12 +7,12 @@ icon: lucide/shapes
 ## Rect
 
 `Rect` draws a filled rectangle. Set its size with `.size(width, height)`, fill color with
-`.color()`, and position with `.xy(x, y)`. By default the rect has zero size and is placed
+`.fill()`, and position with `.xy(x, y)`. By default the rect has zero size and is placed
 according to the parent's layout (centered for the default layout).
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(160, 90).color("steelblue")
+    Rect().size(160, 90).fill("steelblue")
 ```
 
 ### Stroke
@@ -23,7 +23,7 @@ gives a hollow shape.
 ```ffpy frame="0"
 with Scene():
     r = Rect().size(160, 90)
-    r.color("lightyellow").stroke("navy", 4)
+    r.fill("lightyellow").stroke("navy", 4)
 ```
 
 Passing `None` as the stroke color disables it again; omitting `color` entirely
@@ -31,7 +31,7 @@ Passing `None` as the stroke color disables it again; omitting `color` entirely
 
 ```ffpy frame="0"
 with Scene():
-    r = Rect().size(160, 90).color("lightyellow").stroke("navy", 4)
+    r = Rect().size(160, 90).fill("lightyellow").stroke("navy", 4)
     r.stroke(None)  # outline removed, fill unaffected
 ```
 
@@ -43,8 +43,8 @@ of self-intersecting geometry.
 
 ```ffpy frame="0"
 with Scene(width=200, height=100):
-    Rect().xy(20, 20).size(60, 60).radius(12).color("steelblue")
-    Rect().xy(110, 20).size(60, 60).radius(30).color("mediumseagreen")  # pill
+    Rect().xy(20, 20).size(60, 60).radius(12).fill("steelblue")
+    Rect().xy(110, 20).size(60, 60).radius(30).fill("mediumseagreen")  # pill
 ```
 
 ### Dashed strokes
@@ -69,20 +69,20 @@ group — no wrapping `Group()` is required just to use `rel()`.
 ```ffpy frame="0"
 with Scene(width=300, height=180):
     with Group().size(300, 180):
-        Rect().expand().color("whitesmoke")   # full background
-        Rect().size(rel(0.5), rel(0.5)).color("steelblue")  # top-left quadrant
+        Rect().expand().fill("whitesmoke")   # full background
+        Rect().size(rel(0.5), rel(0.5)).fill("steelblue")  # top-left quadrant
 ```
 
 ```ffpy frame="0"
 with Scene(width=300, height=180):
     with Group().size(300, 180):
-        Rect().expand().color("whitesmoke")
-        Rect().size(w=rel(1), h=rel(0.25)).color("coral")   # full-width banner
+        Rect().expand().fill("whitesmoke")
+        Rect().size(w=rel(1), h=rel(0.25)).fill("coral")   # full-width banner
 ```
 
 ```ffpy frame="0"
 with Scene(width=300, height=180):
-    Rect().size(rel(0.5), rel(0.5)).color("steelblue")   # relative to the Scene directly
+    Rect().size(rel(0.5), rel(0.5)).fill("steelblue")   # relative to the Scene directly
 ```
 
 ### Positioning
@@ -98,14 +98,14 @@ to `Rect`.
 
 ```ffpy frame="0"
 with Scene():
-    Ellipse().size(160, 110).color("coral")
+    Ellipse().size(160, 110).fill("coral")
 ```
 
 ```ffpy frame="0"
 with Scene():
-    Ellipse().size(80, 80).color("orchid").xy(30, 60)
-    Ellipse().size(80, 40).color("gold").xy(130, 80)
-    Ellipse().size(40, 80).color("steelblue").xy(220, 60)
+    Ellipse().size(80, 80).fill("orchid").xy(30, 60)
+    Ellipse().size(80, 40).fill("gold").xy(130, 80)
+    Ellipse().size(40, 80).fill("steelblue").xy(220, 60)
 ```
 
 ---
@@ -113,14 +113,14 @@ with Scene():
 ## Path
 
 `Path` draws an arbitrary vector shape from a sequence of commands. Use `.stroke(color, width)`
-to set the line color and thickness. Like `Rect`, it can also be filled with `.color()`.
+to set the line color and thickness. Like `Rect`, it can also be filled with `.fill()`.
 
 ### Line segments
 
 ```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke("darkslateblue", 3).color("lavender")
+    p.stroke("darkslateblue", 3).fill("lavender")
     p.move_to().xy(30, 100)
     p.line_to().xy(150, 40)
     p.line_to().xy(270, 100)
@@ -153,10 +153,10 @@ with Scene():
     p.move_to().xy(40, 100)
     p.line_to().xy(260, 100)
     p.arrow("end")
-    p.arrow("start").color("tomato")
+    p.arrow("start").fill("tomato")
 ```
 
-The arrowhead inherits the path's stroke color by default. Call `.color()` on the returned arrow object to override it independently — as shown above with the red start arrow.
+The arrowhead inherits the path's stroke color by default. Call `.fill()` on the returned arrow object to override it independently — as shown above with the red start arrow.
 
 The arrowhead scales automatically with stroke width. Pass `length` and `width` to `arrow()` to override the size explicitly — `length` is the tip-to-base distance, `width` is the base width (both default to `3 × stroke_width`):
 

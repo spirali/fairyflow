@@ -6,7 +6,7 @@ FRAMES = [0, 12, 24]
 def test_reveal_down(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.reveal("down", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -14,7 +14,7 @@ def test_reveal_down(test_scene):
 def test_reveal_up(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.reveal("up", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -22,7 +22,7 @@ def test_reveal_up(test_scene):
 def test_reveal_right(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.reveal("right", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -30,7 +30,7 @@ def test_reveal_right(test_scene):
 def test_reveal_left(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.reveal("left", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -38,7 +38,7 @@ def test_reveal_left(test_scene):
 def test_hide_down(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.hide("down", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -46,7 +46,7 @@ def test_hide_down(test_scene):
 def test_hide_up(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.hide("up", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -54,7 +54,7 @@ def test_hide_up(test_scene):
 def test_hide_right(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.hide("right", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -62,7 +62,7 @@ def test_hide_right(test_scene):
 def test_hide_left(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
+            Rect().size(40, 30).fill("steelblue")
         g.hide("left", dur=1)
     test_scene.select_frames = FRAMES
 
@@ -71,7 +71,7 @@ def test_clip_xywh(test_scene):
     """clip(x=, y=, w=, h=) sets multiple clip axes at once."""
     with test_scene:
         with Group().size(80, 60) as g:
-            Rect().size(80, 60).color("coral")
+            Rect().size(80, 60).fill("coral")
         g.clip(w=0.5, h=0.5)
 
 
@@ -80,7 +80,7 @@ def test_clip_bare_clips_to_own_box(test_scene):
     regression test for the bare-call-is-a-no-op bug."""
     with test_scene:
         with Group().xy(5, 5).size(20, 15) as g:
-            Rect().size(40, 30).color("coral")  # overflows g's box on both axes
+            Rect().size(40, 30).fill("coral")  # overflows g's box on both axes
         g.clip()
 
 

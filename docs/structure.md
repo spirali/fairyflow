@@ -42,7 +42,7 @@ The only fixed path is `fairyflow.toml` that has to be in the root.
 A `Scene` is the top-level canvas. It defines the canvas dimensions and background color. Everything visible in an animation belongs to a scene.
 
 ```python
-with Scene(width=400, height=300, color="white"):
+with Scene(width=400, height=300, background="white"):
     ...
 ```
 
@@ -57,8 +57,8 @@ A `Group` is a container node. It has its own coordinate system, optional layout
 ```python
 with Scene():
     with Group().size(200, 120).xy(50, 40):
-        Rect().size(60, 60).color("steelblue").xy(10, 30)
-        Ellipse().size(60, 60).color("coral").xy(130, 30)
+        Rect().size(60, 60).fill("steelblue").xy(10, 30)
+        Ellipse().size(60, 60).fill("coral").xy(130, 30)
 ```
 
 ### Nodes

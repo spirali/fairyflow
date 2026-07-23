@@ -59,7 +59,7 @@ def test_stroke_color_only():
 
 
 def test_stroke_none_disables_previously_set_color():
-    """`stroke(None)` explicitly disables the stroke (matches `.color(None)`
+    """`stroke(None)` explicitly disables the stroke (matches `.fill(None)`
     for fill, and the old `stroke_color(None)` behavior it replaced) -
     distinct from a bare `stroke()` call, which leaves the color untouched.
     `ColorLike` already includes `None` as a real value, so the omitted
@@ -184,8 +184,8 @@ def test_path_draw_instant_without_dur():
 
 def test_rounded_rect(test_scene):
     with test_scene.size(200, 100):
-        Rect().xy(20, 20).size(60, 60).radius(12).color("steelblue")
-        Rect().xy(110, 20).size(60, 60).radius(30).color("mediumseagreen")  # pill
+        Rect().xy(20, 20).size(60, 60).radius(12).fill("steelblue")
+        Rect().xy(110, 20).size(60, 60).radius(30).fill("mediumseagreen")  # pill
 
 
 def test_dashed_stroke(test_scene):
@@ -204,3 +204,25 @@ def test_path_draw_animation(test_scene):
         p.move_to().xy(10, 30)
         p.line_to().xy(110, 30)
         p.draw(dur=1)
+
+
+# ── fill() — replaces color() (api-v2-impl.md item 11) ──────────────────────
+
+
+def test_fill_writes_fill_color():
+    s = Scene(100, 100)
+    with s:
+        Rect().fill("tomato")
+        Text("hi").fill("steelblue")
+    nodes = create_export(0, s)["nodes"]
+    assert nodes[0]["fill"] == "tomato"
+    assert nodes[1]["fill"] == "steelblue"
+
+
+def test_shapes_and_text_have_no_color_method():
+    s = Scene(100, 100)
+    with s:
+        r = Rect()
+        t = Text("hi")
+    assert not hasattr(r, "color")
+    assert not hasattr(t, "color")

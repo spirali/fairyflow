@@ -793,7 +793,7 @@ class StyleMethods:
     `InheritedStyleMixin` (inherited defaults) — the methods themselves don't
     care which default strategy backs the attribute."""
 
-    def color(
+    def fill(
         self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
         """Set the fill color of the node.
@@ -825,7 +825,7 @@ class StyleMethods:
         Args:
             color: Any color value accepted by `Color.parse` (e.g. a hex
                 string, an RGB tuple, or a `Color` instance). Pass `None` to
-                disable the stroke (matches `.color(None)` for fill); omit
+                disable the stroke (matches `.fill(None)` for fill); omit
                 entirely to leave the current stroke color untouched.
             width: The stroke width in pixels.
             dash: ``(on, off)`` pixel lengths for a dashed stroke; omitted
@@ -1505,7 +1505,7 @@ class Scene(
     Args:
         width: Canvas width in pixels.
         height: Canvas height in pixels.
-        color: Background color (string or `Color` instance).
+        background: Background color (string or `Color` instance).
         cue_at_start: If ``True``, frame 0 is automatically added as a cue point.
     """
 
@@ -1520,7 +1520,7 @@ class Scene(
         self,
         width: SupportsFloat | None = None,
         height: SupportsFloat | None = None,
-        color: str | Color | None = None,
+        background: str | Color | None = None,
         cue_at_start: bool | None = None,
     ):
         reset_scene()
@@ -1530,13 +1530,13 @@ class Scene(
             width = DEFAULT_SCENE_CONFIG["width"]
         if height is None:
             height = DEFAULT_SCENE_CONFIG["height"]
-        if color is None:
-            color = DEFAULT_SCENE_CONFIG["color"]
+        if background is None:
+            background = DEFAULT_SCENE_CONFIG["background"]
         if cue_at_start is None:
             cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
         self._add_attr("width", width)
         self._add_attr("height", height)
-        self._add_attr("fill_color", color)
+        self._add_attr("fill_color", background)
         self._id_counter = 0
         self._id = 0
         self._layout = CENTERING_LAYOUT
@@ -1552,7 +1552,7 @@ class Scene(
         self.max_frame = end_frame()
         return super().__exit__(*args)
 
-    def color(
+    def background(
         self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
         """Set the background color of the scene.
@@ -1922,7 +1922,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         }[style]
         head = builder(*dir, length, width)
         if style in ("triangle", "stealth", "dot"):
-            head.color(self._get_attr("stroke_color"))
+            head.fill(self._get_attr("stroke_color"))
         else:
             head.stroke(self._get_attr("stroke_color"), self._get_attr("stroke_width"))
 

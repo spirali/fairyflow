@@ -34,7 +34,7 @@ with Scene(1280, 720):
                 with Seq():
                     wait(0.01 * i)
                     with Group().xy(50 * (i % 20), (i // 20) * 50) as n:                    
-                        Rect().stroke("black").color("#ccc").size(40, 40)
+                        Rect().stroke("black").fill("#ccc").size(40, 40)
                         Text().span(str(i + 1))
                         n.fade_in(dur=0.3)
                 numbers.append(n)
@@ -61,7 +61,7 @@ with Scene(1280, 720):
 
             r = numbers[idx].get_child(kind="rect")
             wait(0.3)
-            r.color("green", dur=0.4)
+            r.fill("green", dur=0.4)
             wait(0.2)
 
             with Group() as m:
@@ -74,7 +74,7 @@ with Scene(1280, 720):
                 p.move_to().pos(b.at()).move(0, -4)
                 p.line_to().pos(b.at()).move(0, 4)        
                 t = Text().pos(numbers[idx].get_child(kind="text").at())
-                t.span(str(step)).color("red")            
+                t.span(str(step)).fill("red")            
                 m.fade_in(dur=0.5)
            
             for i in range(3):
@@ -85,7 +85,7 @@ with Scene(1280, 720):
                 #g.pos(numbers[1 + i * 2].at())
                 wait(0.2)
                 r = numbers[idx + (i + 1) * step].get_child(kind="rect")              
-                r.color("red", dur=0.5)
+                r.fill("red", dur=0.5)
                 wait(0.5)
 
             with Par():
@@ -99,7 +99,7 @@ with Scene(1280, 720):
                 for i in range(idx + (i * step), 100, step):
                     with Seq():
                         wait(i * 0.02)
-                        numbers[i].get_child(kind="rect").color("red", dur=0.3)
+                        numbers[i].get_child(kind="rect").fill("red", dur=0.3)
 
         for step in [5, 7, 11]:
             idx = step - 1
@@ -109,7 +109,7 @@ with Scene(1280, 720):
                 arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)                                  
             wait(0.2)
             r = numbers[idx].get_child(kind="rect")
-            r.color("green", dur=0.4)
+            r.fill("green", dur=0.4)
             wait(0.2)
 
             if step == 11:
@@ -119,7 +119,7 @@ with Scene(1280, 720):
                 for i in range(idx + 3 * step, 100, step):
                     with Seq():
                         wait(i * 0.01)
-                        numbers[i].get_child(kind="rect").color("red", dur=0.3)       
+                        numbers[i].get_child(kind="rect").fill("red", dur=0.3)       
         with Par():
             arrow.alpha(0, dur=0.3)
             arrow_head.alpha(0, dur=0.3)            
@@ -130,7 +130,7 @@ with Scene(1280, 720):
                 with Seq():
                     idx = p - 1
                     wait(i * 0.02)
-                    numbers[idx].get_child(kind="rect").color("green", dur=0.3)                           
+                    numbers[idx].get_child(kind="rect").fill("green", dur=0.3)                           
 
         wait(0.5)
         with Par():
@@ -214,7 +214,7 @@ with Group().size(1000, 400) as g:
             with Seq():
                 wait(0.01 * i)
                 with Group().xy(50 * (i % 20), (i // 20) * 50) as n:
-                    Rect().stroke("black").color("#ccc").size(40, 40)
+                    Rect().stroke("black").fill("#ccc").size(40, 40)
                     Text().span(str(i + 1))
                     n.fade_in(dur=0.3)
             numbers.append(n)
@@ -293,7 +293,7 @@ Passing that `Position` to `.pos()` animates the path endpoint to the cell's cen
 
 ```python
     r = numbers[idx].get_child(kind="rect")
-    r.color("green", dur=0.4)
+    r.fill("green", dur=0.4)
 ```
 
 `get_child(kind="rect")` searches the cell's children for a `Rect` node and returns it.
@@ -312,7 +312,7 @@ with Group() as m:
     p.move_to().pos(b.at()).move(0, -4)
     p.line_to().pos(b.at()).move(0, 4)
     t = Text().pos(numbers[idx].get_child(kind="text").at())
-    t.span(str(step)).color("red")
+    t.span(str(step)).fill("red")
     m.fade_in(dur=0.5)
 ```
 
@@ -338,7 +338,7 @@ for i in range(3):
         t.pos(numbers[idx + i * step].at("top_left").move(70, -30), dur=0.5)
     wait(0.2)
     r = numbers[idx + (i + 1) * step].get_child(kind="rect")
-    r.color("red", dur=0.5)
+    r.fill("red", dur=0.5)
     wait(0.5)
 ```
 
@@ -353,7 +353,7 @@ with Par():
     for i in range(idx + (i * step), 100, step):
         with Seq():
             wait(i * 0.02)
-            numbers[i].get_child(kind="rect").color("red", dur=0.3)
+            numbers[i].get_child(kind="rect").fill("red", dur=0.3)
 ```
 
 After the animated demonstration the rest of the multiples are coloured red in a rapid sweep.
@@ -372,7 +372,7 @@ for step in [5, 7, 11]:
         for i in range(idx + 3 * step, 100, step):
             with Seq():
                 wait(i * 0.01)
-                numbers[i].get_child(kind="rect").color("red", dur=0.3)
+                numbers[i].get_child(kind="rect").fill("red", dur=0.3)
 ```
 
 Primes 5, 7, and 11 get a simpler treatment: the arrow moves to each prime and its background

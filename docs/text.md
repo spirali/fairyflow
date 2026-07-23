@@ -11,12 +11,12 @@ split on `\n` into lines:
 
 ```ffpy frame="0"
 with Scene():
-    Text("Hello, FairyFlow!").font(size=28).color("steelblue")
+    Text("Hello, FairyFlow!").font(size=28).fill("steelblue")
 ```
 
 ```ffpy frame="0"
 with Scene():
-    Text("First line\nSecond line\nThird line").font(size=22).color("steelblue")
+    Text("First line\nSecond line\nThird line").font(size=22).fill("steelblue")
 ```
 
 Use `.line(text="")` to start additional lines and style them individually,
@@ -24,15 +24,15 @@ and `.span(text)` to add another inline run to the *current* (last) line:
 
 ```ffpy frame="0"
 with Scene():
-    t = Text("First line").font(size=22).color("darkslateblue")
-    t.line("Second line").color("steelblue")
-    t.line("Third line").color("cornflowerblue")
+    t = Text("First line").font(size=22).fill("darkslateblue")
+    t.line("Second line").fill("steelblue")
+    t.line("Third line").fill("cornflowerblue")
 ```
 
 ```ffpy frame="0"
 with Scene():
     t = Text("INFO ").font("monospace", 22)
-    t.span("server started").color("gray")
+    t.span("server started").fill("gray")
 ```
 
 ### Inline groups
@@ -45,9 +45,9 @@ handle to a nested sub-group of runs (e.g. to name or style them together):
 with Scene():
     t = Text()
     g = t.group()
-    g.span("Bold").font(size=26, bold=True).color("darkred")
-    g.span("  normal  ").font(size=26).color("gray")
-    g.span("Italic").font(size=26, italic=True).color("darkblue")
+    g.span("Bold").font(size=26, bold=True).fill("darkred")
+    g.span("  normal  ").font(size=26).fill("gray")
+    g.span("Italic").font(size=26, italic=True).fill("darkblue")
 ```
 
 ---
@@ -56,7 +56,7 @@ with Scene():
 
 All text nodes share one structured style setter,
 `.font(family=None, size=None, *, weight=, italic=, bold=, mono=, dur=, ease=)`,
-plus `.color(c)` for the text fill color:
+plus `.fill(c)` for the text fill color:
 
 | Parameter | Effect |
 |---|---|
@@ -72,9 +72,9 @@ plus `.color(c)` for the text fill color:
 ```ffpy frame="0"
 with Scene():
     t = Text()
-    t.span("Small").font(size=14).color("gray")
-    t.span("Medium").font(size=22).color("steelblue")
-    t.span("Large").font(size=36, bold=True).color("darkslateblue")
+    t.span("Small").font(size=14).fill("gray")
+    t.span("Medium").font(size=22).fill("steelblue")
+    t.span("Large").font(size=36, bold=True).fill("darkslateblue")
 ```
 
 To use your own font files, add a `font_directories` key to `fairyflow.toml`. FairyFlow scans each listed directory recursively and loads all fonts it finds (`.ttf`, `.otf`, `.ttc`, `.otc`, `.woff`, `.woff2`). Paths are relative to the project root.
@@ -158,8 +158,8 @@ The tag name is still recorded via `.name()`, so you can look the span up and re
 
 ```python
 t = stext("<title>FairyFlow\n<subtitle>Animation for Python")
-t.find_node(name="title").font(size=32, bold=True).color("steelblue")
-t.find_node(name="subtitle").font(size=18).color("gray")
+t.find_node(name="title").font(size=32, bold=True).fill("steelblue")
+t.find_node(name="subtitle").font(size=18).fill("gray")
 ```
 
 ### Literal `<` characters
@@ -202,7 +202,7 @@ Preinstalled themes:
 * "Solarized (light)"
 
 ```ffpy frame="0"
-with Scene(color="#2b303b"):
+with Scene(background="#2b303b"):
     stext(
 """
 x = "world"

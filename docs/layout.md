@@ -12,7 +12,7 @@ manually computing coordinates:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(160, 90).color("steelblue")
+    Rect().size(160, 90).fill("steelblue")
 ```
 
 ## Positioning
@@ -33,9 +33,9 @@ Call `.column(gap, align, reserve)` on a `Group` to stack its children **vertica
 ```ffpy frame="0"
 with Scene():
     with Group().size(120, 180).column(gap=10, align=0.5):
-        Rect().size(100, 40).color("steelblue")
-        Rect().size(100, 40).color("coral")
-        Rect().size(100, 40).color("mediumseagreen")
+        Rect().size(100, 40).fill("steelblue")
+        Rect().size(100, 40).fill("coral")
+        Rect().size(100, 40).fill("mediumseagreen")
 ```
 
 Left-aligned column with varying widths:
@@ -43,10 +43,10 @@ Left-aligned column with varying widths:
 ```ffpy frame="0"
 with Scene():
     with Group().size(200, 160).column(gap=8, align=0.0):
-        Rect().size(180, 30).color("steelblue")
-        Rect().size(120, 30).color("cornflowerblue")
-        Rect().size(80, 30).color("lightskyblue")
-        Rect().size(40, 30).color("aliceblue").stroke("steelblue", 1)
+        Rect().size(180, 30).fill("steelblue")
+        Rect().size(120, 30).fill("cornflowerblue")
+        Rect().size(80, 30).fill("lightskyblue")
+        Rect().size(40, 30).fill("aliceblue").stroke("steelblue", 1)
 ```
 
 ---
@@ -62,10 +62,10 @@ Call `.row(gap, align, reserve)` on a `Group` to place its children **horizontal
 ```ffpy frame="0"
 with Scene():
     with Group().size(260, 90).row(gap=10, align=0.5):
-        Rect().size(60, 60).color("tomato")
-        Rect().size(60, 60).color("gold")
-        Rect().size(60, 60).color("mediumseagreen")
-        Rect().size(60, 60).color("steelblue")
+        Rect().size(60, 60).fill("tomato")
+        Rect().size(60, 60).fill("gold")
+        Rect().size(60, 60).fill("mediumseagreen")
+        Rect().size(60, 60).fill("steelblue")
 ```
 
 Bottom-aligned row with varying heights:
@@ -73,11 +73,11 @@ Bottom-aligned row with varying heights:
 ```ffpy frame="0"
 with Scene():
     with Group().size(240, 120).row(gap=8, align=1.0):
-        Rect().size(40, 30).color("lightskyblue")
-        Rect().size(40, 60).color("cornflowerblue")
-        Rect().size(40, 90).color("steelblue")
-        Rect().size(40, 60).color("cornflowerblue")
-        Rect().size(40, 30).color("lightskyblue")
+        Rect().size(40, 30).fill("lightskyblue")
+        Rect().size(40, 60).fill("cornflowerblue")
+        Rect().size(40, 90).fill("steelblue")
+        Rect().size(40, 60).fill("cornflowerblue")
+        Rect().size(40, 30).fill("lightskyblue")
 ```
 
 ---
@@ -90,17 +90,17 @@ Groups can be nested to build complex grids and hierarchies:
 with Scene(width=300, height=200):
     with Group().size(280, 160).row(gap=10, align=0.5):
         with Group().size(80, 160).column(gap=8, align=0.5):
-            Rect().size(80, 48).color("steelblue")
-            Rect().size(80, 48).color("cornflowerblue")
-            Rect().size(80, 48).color("lightskyblue")
+            Rect().size(80, 48).fill("steelblue")
+            Rect().size(80, 48).fill("cornflowerblue")
+            Rect().size(80, 48).fill("lightskyblue")
         with Group().size(80, 160).column(gap=8, align=0.5):
-            Rect().size(80, 48).color("tomato")
-            Rect().size(80, 48).color("coral")
-            Rect().size(80, 48).color("lightsalmon")
+            Rect().size(80, 48).fill("tomato")
+            Rect().size(80, 48).fill("coral")
+            Rect().size(80, 48).fill("lightsalmon")
         with Group().size(80, 160).column(gap=8, align=0.5):
-            Rect().size(80, 48).color("mediumseagreen")
-            Rect().size(80, 48).color("lightgreen")
-            Rect().size(80, 48).color("honeydew").stroke("mediumseagreen", 1)
+            Rect().size(80, 48).fill("mediumseagreen")
+            Rect().size(80, 48).fill("lightgreen")
+            Rect().size(80, 48).fill("honeydew").stroke("mediumseagreen", 1)
 ```
 
 ---
@@ -118,9 +118,9 @@ item appears or an old one disappears.
 ```ffpy frames="0,1"
 with Scene(width=200, height=120):
     with Group().column(gap=10):   # reserve=True by default
-        Rect().size(160, 30).color("steelblue")
+        Rect().size(160, 30).fill("steelblue")
         next_frame()
-        Rect().size(160, 50).color("coral")
+        Rect().size(160, 50).fill("coral")
 ```
 
 **`reserve=False`** — only currently active children occupy space.  The
@@ -130,9 +130,9 @@ reflow on each frame.
 ```ffpy frames="0,1"
 with Scene(width=200, height=120):
     with Group().column(gap=10, reserve=False):
-        Rect().size(160, 30).color("steelblue")
+        Rect().size(160, 30).fill("steelblue")
         next_frame()
-        Rect().size(160, 50).color("coral")
+        Rect().size(160, 50).fill("coral")
 ```
 
 Use `reserve=True` when you want a stable layout where items "drop in" to
@@ -150,8 +150,8 @@ animation moves or transforms the group as a whole.
 ```ffpy video="mp4"
 with Scene():
     with Group().size(220, 70).align(0.5, 0.5).row(gap=8, align=0.5) as g:
-        Rect().size(60, 50).color("steelblue")
-        Rect().size(60, 50).color("coral")
-        Rect().size(60, 50).color("gold")
+        Rect().size(60, 50).fill("steelblue")
+        Rect().size(60, 50).fill("coral")
+        Rect().size(60, 50).fill("gold")
     g.rotate(180, dur=1.5)
 ```

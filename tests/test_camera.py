@@ -53,10 +53,10 @@ def test_camera_center_position_writes_map_x_map_y():
     expressions, same shape as `pivot(Position)` (test_pivot_group_position)."""
     s = Scene(60, 40)
     with s:
-        anchor = Rect().xy(23, 23).size(4, 4).color("gold")
+        anchor = Rect().xy(23, 23).size(4, 4).fill("gold")
         g = Group().xy(5, 5).size(20, 20)
         with g:
-            Rect().size(8, 8).color("steelblue")
+            Rect().size(8, 8).fill("steelblue")
         g.camera.center(anchor.at("center"))
     nodes = create_export(0, s)["nodes"]
     group_node = next(n for n in nodes if n["kind"] == "group")
@@ -106,8 +106,8 @@ def test_scene_camera_zoom_writes_top_level_field():
 def test_camera_zoom_only(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
-            Ellipse().size(10, 10).color("gold").xy(5, 5)
+            Rect().size(40, 30).fill("steelblue")
+            Ellipse().size(10, 10).fill("gold").xy(5, 5)
         g.camera.zoom(2, dur=1)
     test_scene.select_frames = FRAMES
 
@@ -115,8 +115,8 @@ def test_camera_zoom_only(test_scene):
 def test_camera_pan_only(test_scene):
     with test_scene:
         with Group().xy(10, 5).size(40, 30) as g:
-            Rect().size(40, 30).color("steelblue")
-            Ellipse().size(10, 10).color("gold").xy(5, 5)
+            Rect().size(40, 30).fill("steelblue")
+            Ellipse().size(10, 10).fill("gold").xy(5, 5)
         g.camera.center(30, 20, dur=1)
     test_scene.select_frames = FRAMES
 
@@ -125,8 +125,8 @@ def test_camera_zoom_and_pan(test_scene):
     """Adapts the spec's own worked example: zoom in on a point, then reset."""
     with test_scene:
         with Group().xy(0, 0).size(60, 40) as g:
-            Rect().size(60, 40).color("steelblue")
-            Ellipse().size(10, 10).color("gold").xy(40, 25)
+            Rect().size(60, 40).fill("steelblue")
+            Ellipse().size(10, 10).fill("gold").xy(40, 25)
         with Par(), anim(1):
             g.camera.zoom(1.9)
             g.camera.center(45, 30)
@@ -138,7 +138,7 @@ def test_camera_center_tracks_moving_node(test_scene):
     `pivot(Position)`."""
     with test_scene:
         with Group().xy(0, 0).size(60, 40) as g:
-            target = Rect().size(8, 8).color("gold").xy(5, 5)
+            target = Rect().size(8, 8).fill("gold").xy(5, 5)
         g.camera.zoom(1.5)
         g.camera.center(target.at("center"))
         target.xy(40, 25, dur=1)
@@ -147,8 +147,8 @@ def test_camera_center_tracks_moving_node(test_scene):
 
 def test_scene_level_camera(test_scene):
     with test_scene:
-        Rect().size(60, 40).color("steelblue")
-        Ellipse().size(10, 10).color("gold").xy(25, 15)
+        Rect().size(60, 40).fill("steelblue")
+        Ellipse().size(10, 10).fill("gold").xy(25, 15)
         test_scene.camera.zoom(1.5, dur=1)
     test_scene.select_frames = FRAMES
 
@@ -159,8 +159,8 @@ def test_camera_does_not_auto_clip_pairs_with_clip(test_scene):
     computed against the un-zoomed box."""
     with test_scene:
         with Group().xy(10, 5).size(30, 20) as g:
-            Rect().size(30, 20).color("steelblue")
-            Ellipse().size(8, 8).color("gold").xy(11, 6)
+            Rect().size(30, 20).fill("steelblue")
+            Ellipse().size(8, 8).fill("gold").xy(11, 6)
         g.clip()
         g.camera.zoom(2)
     test_scene.select_frames = FRAMES

@@ -79,19 +79,19 @@ def test_path_has_no_rotate_scale_pivot(sc):
 
 def test_rect_rotate(test_scene):
     with test_scene:
-        Rect().xy(10, 5).size(30, 20).color("steelblue").rotate(45)
+        Rect().xy(10, 5).size(30, 20).fill("steelblue").rotate(45)
 
 
 def test_ellipse_scale(test_scene):
     with test_scene:
-        Ellipse().xy(10, 5).size(30, 20).color("coral").scale_x(1.5).scale_y(0.5)
+        Ellipse().xy(10, 5).size(30, 20).fill("coral").scale_x(1.5).scale_y(0.5)
 
 
 def test_rect_pivot(test_scene):
     """Rotate around a corner pivot (top_left) instead of the default center,
     via the real `pivot()` setter."""
     with test_scene:
-        r = Rect().xy(20, 10).size(20, 20).color("mediumpurple")
+        r = Rect().xy(20, 10).size(20, 20).fill("mediumpurple")
         r.pivot("top_left")
         r.rotate(30)
 
@@ -101,7 +101,7 @@ def test_rect_pivot_px(test_scene):
     top-left, distinct from the anchor spelling above - here an
     out-of-box point below-right of the shape."""
     with test_scene:
-        r = Rect().xy(15, 10).size(20, 20).color("mediumpurple")
+        r = Rect().xy(15, 10).size(20, 20).fill("mediumpurple")
         r.pivot(x=30, y=30)
         r.rotate(30)
 
@@ -112,15 +112,15 @@ def test_rect_pivot_rel(test_scene):
     pre-existing `node.pivot(node.at(fx, fy))` workaround. 20x20 rect, so
     rel(0.25)/rel(0.75) pivots at (5, 15) from its own top-left."""
     with test_scene:
-        r = Rect().xy(20, 10).size(20, 20).color("mediumpurple")
+        r = Rect().xy(20, 10).size(20, 20).fill("mediumpurple")
         r.pivot(x=rel(0.25), y=rel(0.75))
         r.rotate(30)
 
 
 def test_pivot_position_orbit(test_scene):
     with test_scene:
-        sun = Ellipse().xy(30, 15).size(10, 10).color("gold")
-        planet = Rect().xy(45, 18).size(4, 4).color("steelblue")
+        sun = Ellipse().xy(30, 15).size(10, 10).fill("gold")
+        planet = Rect().xy(45, 18).size(4, 4).fill("steelblue")
         planet.pivot(sun.at("center"))
         planet.rotate(90)
 
@@ -132,9 +132,9 @@ def test_pivot_group_position(test_scene):
     engine), unlike the leaf case above where the node's own x/y must be
     subtracted."""
     with test_scene:
-        anchor = Rect().xy(23, 23).size(4, 4).color("gold")
+        anchor = Rect().xy(23, 23).size(4, 4).fill("gold")
         with Group().xy(5, 5).size(20, 20) as g:
-            Rect().size(8, 8).color("steelblue")
+            Rect().size(8, 8).fill("steelblue")
         g.pivot(anchor.at("center"))
         g.rotate(30)
 

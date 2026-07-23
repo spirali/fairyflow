@@ -559,6 +559,16 @@ mod tests {
         }
     }
 
+    fn group_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Group { node_box, .. } => {
+                (node_box.size.width, node_box.size.height)
+            }
+            other => panic!("expected a group, got {other:?}"),
+        }
+    }
+
     /// Rotation math routes through `f64::cos`/`sin`, so e.g. `cos(90°)` lands at
     /// `~6e-17`, not exactly `0.0` - assertions on rotated points need an epsilon.
     fn assert_close(actual: (f64, f64), expected: (f64, f64)) {
@@ -696,6 +706,220 @@ mod tests {
         // node 2: unrotated 10x10 rect - sits right after node 1's *outer*
         // width (10, gap=0), vertically centered in the row's own 30-tall box.
         assert_close(rect_xy(&scene, 2), (10.0, 10.0));
+    }
+
+    const GRID_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "Grid", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "grid", "cols": 2, "gap_x": 5, "gap_y": 5, "reserve": true},
+        "children": [1, 2, 3]},
+       {"kind": "rect", "w": 40, "h": 10, "fill": "red"},
+       {"kind": "rect", "w": 10, "h": 30, "fill": "green"},
+       {"kind": "rect", "w": 20, "h": 20, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn grid_places_children_row_major_with_col_and_row_sizing() {
+        let anim = AnimationDef::from_json(GRID_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // 2 cols; row-major: (row0,col0)=node1 40x10, (row0,col1)=node2 10x30,
+        // (row1,col0)=node3 20x20. col_widths=[40,20->max(40,20)=40, 10],
+        // row_heights=[max(10,30)=30, 20].
+        assert_close(rect_xy(&scene, 1), (0.0, 0.0));
+        assert_close(rect_xy(&scene, 2), (45.0, 0.0)); // col0 width (40) + gap_x (5)
+        assert_close(rect_xy(&scene, 3), (0.0, 35.0)); // row0 height (30) + gap_y (5)
+        // group auto-size: cols sum (40+10) + 1 gap_x (5) = 55; rows sum (30+20) + 1 gap_y (5) = 55.
+        assert_close(group_wh(&scene, 0), (55.0, 55.0));
+    }
+
+    const GRID_PARTIAL_ROW_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "GridPartial", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "grid", "cols": 2, "gap_x": 0, "gap_y": 0, "reserve": true},
+        "children": [1, 2, 3]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "green"},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn grid_partial_last_row() {
+        let anim = AnimationDef::from_json(GRID_PARTIAL_ROW_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // 3 children, 2 cols -> a partial last row (1 child). Width always
+        // reserves the full declared 2 columns; height only reserves the 2
+        // rows actually filled, not a phantom 3rd.
+        assert_close(group_wh(&scene, 0), (40.0, 20.0));
+    }
+
+    const GRID_EMPTY_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "GridEmpty", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "grid", "cols": 3, "gap_x": 10, "gap_y": 10, "reserve": true},
+        "children": []}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn grid_empty_group_is_zero_sized() {
+        let anim = AnimationDef::from_json(GRID_EMPTY_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // No phantom (cols-1)*gap_x / (rows-1)*gap_y for an empty group.
+        assert_close(group_wh(&scene, 0), (0.0, 0.0));
+    }
+
+    const ROTATED_GRID_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "RotatedGrid", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "grid", "cols": 2, "gap_x": 0, "gap_y": 0, "reserve": true},
+        "children": [1, 2]},
+       {"kind": "rect", "w": 30, "h": 10, "rotation": 90, "fill": "green"},
+       {"kind": "rect", "w": 10, "h": 10, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn rotated_rect_in_grid_uses_outer_dimensions_for_position_not_own_size() {
+        let anim = AnimationDef::from_json(ROTATED_GRID_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Same rotated 30x10->90deg rect as the Row regression above, now the
+        // sole occupant of grid cell (row0,col0): its *outer* 10x30 footprint
+        // drives its own reported top-left and column0's *position* width
+        // (auto_x/auto_y use outer dims, matching Row/Column's convention).
+        assert_close(rect_xy(&scene, 1), (-10.0, 10.0));
+        // node 2 at (row0,col1): starts right after column0's outer width (10).
+        assert_close(rect_xy(&scene, 2), (10.0, 0.0));
+        // The group's own auto-size uses PLAIN (non-outer) dims per child,
+        // matching Row/Column's existing auto_width/auto_height convention:
+        // col_widths=[30 (node1's raw w), 10], row_heights=[max(10, 10)=10].
+        assert_close(group_wh(&scene, 0), (40.0, 10.0));
+    }
+
+    const PADDING_COLUMN_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PaddingColumn", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "column", "gap": 0, "align": 0, "reserve": true},
+        "padding_top": 10, "padding_right": 6, "padding_bottom": 4, "padding_left": 20,
+        "children": [1]},
+       {"kind": "rect", "w": 15, "h": 8, "fill": "red"}
+     ]}
+  ]
+}"#;
+
+    const PADDING_CENTER_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PaddingCenter", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "w": 100, "h": 50,
+        "layout": {"kind": "center"},
+        "padding_left": 10, "padding_right": 30,
+        "children": [1]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn padding_insets_column_and_center_layout() {
+        let anim = AnimationDef::from_json(PADDING_COLUMN_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // align=0 (left) + first child: x = padding_left, y = padding_top.
+        assert_close(rect_xy(&scene, 1), (20.0, 10.0));
+        // group auto-size: content (15x8) + padding (left+right=26, top+bottom=14).
+        assert_close(group_wh(&scene, 0), (41.0, 22.0));
+
+        let anim = AnimationDef::from_json(PADDING_CENTER_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Center layout centers within the *padded* box, not the raw box:
+        // x = 10 + (100 - 10 - 30 - 20) / 2 = 30; y = 0 + (50 - 0 - 0 - 10) / 2 = 20.
+        assert_close(rect_xy(&scene, 1), (30.0, 20.0));
+    }
+
+    const PADDING_ABSENT_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PaddingAbsent", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "w": 40,
+        "layout": {"kind": "column", "gap": 0, "align": 0.5, "reserve": true},
+        "children": [1]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn padding_defaults_to_zero_when_absent_from_wire() {
+        let anim = AnimationDef::from_json(PADDING_ABSENT_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // No padding_* fields at all in the wire JSON -> identical to
+        // pre-padding behavior: (40 - 20) * 0.5 = 10.
+        assert_close(rect_xy(&scene, 1), (10.0, 0.0));
+    }
+
+    const FLOAT_MAX_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "FloatMax", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "rect", "x": ["max", 3, 7], "y": 0, "w": 10, "h": 10, "fill": "red"},
+       {"kind": "rect", "x": ["max", 7, 3], "y": 0, "w": 10, "h": 10, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn float_call_max_picks_larger_operand() {
+        let anim = AnimationDef::from_json(FLOAT_MAX_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        assert_close(rect_xy(&scene, 0), (7.0, 0.0));
+        assert_close(rect_xy(&scene, 1), (7.0, 0.0));
     }
 
     /// `collect_world_bounds` used to only build a rotation/scale-aware

@@ -46,3 +46,22 @@ class RowLayout(LayoutBase):
             "align": serialize_expr(self.align),
             "reserve": self.reserve,
         }
+
+
+class GridLayout(LayoutBase):
+    def __init__(self, frame, cols, gap_x, gap_y, reserve):
+        self.cols = cols
+        self.gap_x = AnimatedValue(gap_x, frame)
+        self.gap_y = AnimatedValue(gap_y, frame)
+        self.reserve = reserve
+
+    def serialize(self, serializer):
+        from .serializer import serialize_expr
+
+        return {
+            "kind": "grid",
+            "cols": self.cols,
+            "gap_x": serialize_expr(self.gap_x),
+            "gap_y": serialize_expr(self.gap_y),
+            "reserve": self.reserve,
+        }

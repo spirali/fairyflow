@@ -1,3 +1,4 @@
+use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::values::Eval;
@@ -170,6 +171,26 @@ impl Node {
         }
     }
 
+    /// Returns the evaluated `(left, top, right, bottom)` padding of this
+    /// node's parent Group, or all-zero if this node has no parent (scene
+    /// root).
+    pub fn parent_padding(&self, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64)> {
+        if let Some(parent) = self.parent {
+            let node = ctx.node(parent)?;
+            let NodeKind::Group { padding, .. } = &node.kind else {
+                unreachable!()
+            };
+            Ok((
+                padding.left.eval_or(ctx, 0.0)?,
+                padding.top.eval_or(ctx, 0.0)?,
+                padding.right.eval_or(ctx, 0.0)?,
+                padding.bottom.eval_or(ctx, 0.0)?,
+            ))
+        } else {
+            Ok((0.0, 0.0, 0.0, 0.0))
+        }
+    }
+
     pub fn auto_x(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         Ok(match self.kind {
             // Layers live inside an Image, not a Group, so layout doesn't apply.
@@ -180,23 +201,24 @@ impl Node {
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
                 let off = self.aabb_offset(ctx)?;
+                let (pl, _pt, pr, _pb) = self.parent_padding(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) / 2.0 - off.x
+                        pl + (parent_w - pl - pr - self_w) / 2.0 - off.x
                     }
                     Layout::Column { align, .. } => {
                         let parent_w = self.get_parent_width(ctx)?;
                         let self_w = self.get_outer_width(ctx)?;
-                        (parent_w - self_w) * align.eval(ctx)? - off.x
+                        pl + (parent_w - pl - pr - self_w) * align.eval(ctx)? - off.x
                     }
                     Layout::Row { gap, reserve, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
-                        let mut x = 0.0f64;
+                        let mut x = pl;
                         let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
@@ -208,6 +230,29 @@ impl Node {
                             }
                         }
                         0.0
+                    }
+                    Layout::Grid {
+                        cols,
+                        gap_x,
+                        reserve,
+                        ..
+                    } => {
+                        let parent = ctx.node(self.parent.unwrap())?;
+                        let NodeKind::Group { children, .. } = &parent.kind else {
+                            unreachable!()
+                        };
+                        let cols = (*cols).max(1) as usize;
+                        let (col_widths, _row_heights, idx) =
+                            grid_dims(ctx, children, cols, *reserve, Some(self.id), true)?;
+                        match idx {
+                            Some(idx) => {
+                                let col = idx % cols;
+                                pl + col_widths[..col].iter().sum::<f64>()
+                                    + col as f64 * gap_x.eval(ctx)?
+                                    - off.x
+                            }
+                            None => 0.0,
+                        }
                     }
                 }
             }
@@ -231,18 +276,19 @@ impl Node {
             | NodeKind::Text { .. }
             | NodeKind::Image { .. } => {
                 let off = self.aabb_offset(ctx)?;
+                let (_pl, pt, _pr, pb) = self.parent_padding(ctx)?;
                 match self.parent_layout(ctx)? {
                     Layout::Center => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) / 2.0 - off.y
+                        pt + (parent_h - pt - pb - self_h) / 2.0 - off.y
                     }
                     Layout::Column { gap, reserve, .. } => {
                         let parent = ctx.node(self.parent.unwrap())?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
-                        let mut y = 0.0f64;
+                        let mut y = pt;
                         let gap = gap.eval(ctx)?;
                         for child in children {
                             if *child == self.id {
@@ -258,7 +304,30 @@ impl Node {
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
                         let self_h = self.get_outer_height(ctx)?;
-                        (parent_h - self_h) * align.eval(ctx)? - off.y
+                        pt + (parent_h - pt - pb - self_h) * align.eval(ctx)? - off.y
+                    }
+                    Layout::Grid {
+                        cols,
+                        gap_y,
+                        reserve,
+                        ..
+                    } => {
+                        let parent = ctx.node(self.parent.unwrap())?;
+                        let NodeKind::Group { children, .. } = &parent.kind else {
+                            unreachable!()
+                        };
+                        let cols = (*cols).max(1) as usize;
+                        let (_col_widths, row_heights, idx) =
+                            grid_dims(ctx, children, cols, *reserve, Some(self.id), true)?;
+                        match idx {
+                            Some(idx) => {
+                                let row = idx / cols;
+                                pt + row_heights[..row].iter().sum::<f64>()
+                                    + row as f64 * gap_y.eval(ctx)?
+                                    - off.y
+                            }
+                            None => 0.0,
+                        }
                     }
                 }
             }
@@ -290,32 +359,53 @@ impl Node {
                 nw as f64
             }
             NodeKind::Group {
-                children, layout, ..
-            } => match layout {
-                Layout::Center | Layout::Column { .. } => {
-                    let mut w = 0.0f64;
-                    for child in children {
-                        let node = ctx.node(*child)?;
-                        w = w.max(node.get_width(ctx)?);
+                children,
+                layout,
+                padding,
+                ..
+            } => {
+                let content_w = match layout {
+                    Layout::Center | Layout::Column { .. } => {
+                        let mut w = 0.0f64;
+                        for child in children {
+                            let node = ctx.node(*child)?;
+                            w = w.max(node.get_width(ctx)?);
+                        }
+                        w
                     }
-                    w
-                }
-                Layout::Row { gap, reserve, .. } => {
-                    let mut w = 0.0f64;
-                    let mut count: u32 = 0;
-                    for child in children {
-                        let node = ctx.node(*child)?;
-                        if *reserve || node.is_active(ctx.frame()) {
-                            w += node.get_width(ctx)?;
-                            count += 1;
+                    Layout::Row { gap, reserve, .. } => {
+                        let mut w = 0.0f64;
+                        let mut count: u32 = 0;
+                        for child in children {
+                            let node = ctx.node(*child)?;
+                            if *reserve || node.is_active(ctx.frame()) {
+                                w += node.get_width(ctx)?;
+                                count += 1;
+                            }
+                        }
+                        if count > 0 {
+                            w += (count - 1) as f64 * gap.eval(ctx)?;
+                        }
+                        w
+                    }
+                    Layout::Grid {
+                        cols,
+                        gap_x,
+                        reserve,
+                        ..
+                    } => {
+                        let cols = (*cols).max(1) as usize;
+                        let (col_widths, row_heights, _) =
+                            grid_dims(ctx, children, cols, *reserve, None, false)?;
+                        if row_heights.is_empty() {
+                            0.0
+                        } else {
+                            col_widths.iter().sum::<f64>() + (cols - 1) as f64 * gap_x.eval(ctx)?
                         }
                     }
-                    if count > 0 {
-                        w += (count - 1) as f64 * gap.eval(ctx)?;
-                    }
-                    w
-                }
-            },
+                };
+                content_w + padding.left.eval_or(ctx, 0.0)? + padding.right.eval_or(ctx, 0.0)?
+            }
             NodeKind::Text { children, .. } => {
                 let lines = children
                     .iter()
@@ -372,32 +462,54 @@ impl Node {
                 nh as f64
             }
             NodeKind::Group {
-                children, layout, ..
-            } => match layout {
-                Layout::Center | Layout::Row { .. } => {
-                    let mut h = 0.0f64;
-                    for child in children {
-                        let node = ctx.node(*child)?;
-                        h = h.max(node.get_height(ctx)?);
+                children,
+                layout,
+                padding,
+                ..
+            } => {
+                let content_h = match layout {
+                    Layout::Center | Layout::Row { .. } => {
+                        let mut h = 0.0f64;
+                        for child in children {
+                            let node = ctx.node(*child)?;
+                            h = h.max(node.get_height(ctx)?);
+                        }
+                        h
                     }
-                    h
-                }
-                Layout::Column { gap, reserve, .. } => {
-                    let mut h = 0.0f64;
-                    let mut count: u32 = 0;
-                    for child in children {
-                        let node = ctx.node(*child)?;
-                        if *reserve || node.is_active(ctx.frame()) {
-                            h += node.get_height(ctx)?;
-                            count += 1;
+                    Layout::Column { gap, reserve, .. } => {
+                        let mut h = 0.0f64;
+                        let mut count: u32 = 0;
+                        for child in children {
+                            let node = ctx.node(*child)?;
+                            if *reserve || node.is_active(ctx.frame()) {
+                                h += node.get_height(ctx)?;
+                                count += 1;
+                            }
+                        }
+                        if count > 0 {
+                            h += (count - 1) as f64 * gap.eval(ctx)?;
+                        }
+                        h
+                    }
+                    Layout::Grid {
+                        cols,
+                        gap_y,
+                        reserve,
+                        ..
+                    } => {
+                        let cols = (*cols).max(1) as usize;
+                        let (_col_widths, row_heights, _) =
+                            grid_dims(ctx, children, cols, *reserve, None, false)?;
+                        if row_heights.is_empty() {
+                            0.0
+                        } else {
+                            row_heights.iter().sum::<f64>()
+                                + (row_heights.len() - 1) as f64 * gap_y.eval(ctx)?
                         }
                     }
-                    if count > 0 {
-                        h += (count - 1) as f64 * gap.eval(ctx)?;
-                    }
-                    h
-                }
-            },
+                };
+                content_h + padding.top.eval_or(ctx, 0.0)? + padding.bottom.eval_or(ctx, 0.0)?
+            }
             NodeKind::Text { children, .. } => {
                 let lines = children
                     .iter()
@@ -446,6 +558,55 @@ fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(renderer_core::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0)))
+}
+
+/// Per-column widths (max width of any counted child in that column) and
+/// per-row heights (max height), scanning `children` once in row-major
+/// order (row = i/cols, col = i%cols, i counting only reserve-or-active
+/// children — same predicate `Row`/`Column` already use). `outer` selects
+/// `get_outer_width`/`get_outer_height` (position queries, matching
+/// `auto_x`/`auto_y`'s convention) vs. plain `get_width`/`get_height` (the
+/// group's own auto-size, matching `auto_width`/`auto_height`'s
+/// convention) — these two already intentionally differ for `Row`/`Column`
+/// today, and `Grid` preserves the same split rather than a third one.
+///
+/// `col_widths` always has exactly `cols` entries; `row_heights` grows to
+/// however many rows the counted children actually fill. If `find` matches
+/// a counted child, also returns its 0-based row-major index.
+fn grid_dims(
+    ctx: &EvalCtx,
+    children: &[NodeId],
+    cols: usize,
+    reserve: bool,
+    find: Option<NodeId>,
+    outer: bool,
+) -> anyhow::Result<(Vec<f64>, Vec<f64>, Option<usize>)> {
+    let mut col_widths = vec![0.0f64; cols];
+    let mut row_heights: Vec<f64> = Vec::new();
+    let mut i = 0usize;
+    let mut found = None;
+    for &child_id in children {
+        let node = ctx.node(child_id)?;
+        if !(reserve || node.is_active(ctx.frame())) {
+            continue;
+        }
+        if Some(child_id) == find {
+            found = Some(i);
+        }
+        let (row, col) = (i / cols, i % cols);
+        if row >= row_heights.len() {
+            row_heights.resize(row + 1, 0.0);
+        }
+        let (w, h) = if outer {
+            (node.get_outer_width(ctx)?, node.get_outer_height(ctx)?)
+        } else {
+            (node.get_width(ctx)?, node.get_height(ctx)?)
+        };
+        col_widths[col] = col_widths[col].max(w);
+        row_heights[row] = row_heights[row].max(h);
+        i += 1;
+    }
+    Ok((col_widths, row_heights, found))
 }
 /*
 /// Returns the axis-aligned bounding box `(x, y, width, height)` of the immediate

@@ -104,6 +104,12 @@ pub enum Layout {
         align: Expr<f64>,
         reserve: bool,
     },
+    Grid {
+        cols: u32,
+        gap_x: Expr<f64>,
+        gap_y: Expr<f64>,
+        reserve: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -111,6 +117,14 @@ pub struct Camera {
     pub zoom: AttrExpr<f64>,
     pub x: AttrExpr<f64>,
     pub y: AttrExpr<f64>,
+}
+
+#[derive(Debug)]
+pub struct Padding {
+    pub top: AttrExpr<f64>,
+    pub right: AttrExpr<f64>,
+    pub bottom: AttrExpr<f64>,
+    pub left: AttrExpr<f64>,
 }
 
 #[derive(Debug)]
@@ -123,6 +137,7 @@ pub enum NodeKind {
         clip_y: AttrExpr<f64>,
         clip_w: AttrExpr<f64>,
         clip_h: AttrExpr<f64>,
+        padding: Padding,
         layout: Layout,
         camera: Camera,
         children: Vec<NodeId>,
@@ -341,6 +356,10 @@ pub(crate) struct NodeDef {
     pub camera_zoom: Option<Expr<f64>>,
     pub camera_x: Option<Expr<f64>>,
     pub camera_y: Option<Expr<f64>>,
+    pub padding_top: Option<Expr<f64>>,
+    pub padding_right: Option<Expr<f64>>,
+    pub padding_bottom: Option<Expr<f64>>,
+    pub padding_left: Option<Expr<f64>>,
 
     pub fill: Option<Expr<Color>>,
     pub stroke: Option<Expr<Color>>,
@@ -457,6 +476,12 @@ impl Node {
                 clip_y: AttrExpr(def.clip_y.take()),
                 clip_w: AttrExpr(def.clip_w.take()),
                 clip_h: AttrExpr(def.clip_h.take()),
+                padding: Padding {
+                    top: AttrExpr(def.padding_top.take()),
+                    right: AttrExpr(def.padding_right.take()),
+                    bottom: AttrExpr(def.padding_bottom.take()),
+                    left: AttrExpr(def.padding_left.take()),
+                },
                 camera: Camera {
                     zoom: AttrExpr(def.camera_zoom.take()),
                     x: AttrExpr(def.camera_x.take()),

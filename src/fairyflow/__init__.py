@@ -6,6 +6,7 @@ from .sentinels import DEFAULT, rel
 from .color import Color
 from .text import stext, Text
 from .shapes import Line, Arrow, Polygon, RegularPolygon, Star
+from .helpers import Table
 from .config import set_default_scene
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "Polygon",
     "RegularPolygon",
     "Star",
+    "Table",
     "wait",
     "next_frame",
     "cue",

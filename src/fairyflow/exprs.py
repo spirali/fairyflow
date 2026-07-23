@@ -69,6 +69,10 @@ class Call(Expr):
         return Call("norm", a, b)
 
     @staticmethod
+    def max(a, b):
+        return Call("max", a, b)
+
+    @staticmethod
     def path_length(path):
         return Call("path_len", path)
 

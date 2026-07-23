@@ -82,6 +82,87 @@ with Scene():
 
 ---
 
+## Grid layout
+
+Call `.grid(cols, gap, gap_y)` on a `Group` to place its children in a grid,
+row-major (row = index // cols, column = index % cols):
+
+- `cols` — number of columns (required)
+- `gap` — horizontal spacing between columns in pixels (default `0`); also used
+  as the vertical spacing if `gap_y` is left unset
+- `gap_y` — vertical spacing between rows in pixels (default: same as `gap`)
+
+Each column is sized to its widest child, each row to its tallest. Children
+keep their own natural size and are anchored at their cell's top-left corner —
+there is no per-cell alignment or stretching in this layout; size cells
+explicitly if you need uniform backgrounds (this is exactly what
+[`Table`](table.md) does).
+
+```ffpy frame="0"
+with Scene():
+    with Group().grid(cols=2, gap=10):
+        Rect().size(80, 40).fill("steelblue")
+        Rect().size(40, 60).fill("coral")
+        Rect().size(60, 30).fill("mediumseagreen")
+        Rect().size(50, 50).fill("gold")
+```
+
+A separate horizontal/vertical gap:
+
+```ffpy frame="0"
+with Scene():
+    with Group().grid(cols=3, gap=6, gap_y=24):
+        Rect().size(40, 30).fill("steelblue")
+        Rect().size(40, 30).fill("coral")
+        Rect().size(40, 30).fill("mediumseagreen")
+        Rect().size(40, 30).fill("gold")
+        Rect().size(40, 30).fill("orchid")
+        Rect().size(40, 30).fill("tomato")
+```
+
+`reserve` (whether inactive children still occupy their grid cell) works the
+same way as for [column](#column-layout)/[row](#row-layout) layout, but has
+no dedicated `grid()` keyword yet — it's always `True`.
+
+---
+
+## Padding
+
+Call `.padding(all, *, x=, y=, top=, right=, bottom=, left=)` on a `Group` to
+add inner spacing between the group's own box and its laid-out children.
+Applies to every layout kind (centering, column, row, grid) alike — `gap`
+(spacing *between* siblings) and `padding` (spacing between the box edge and
+its content) are independent, composable settings; `gap` alone can't produce
+what `padding` does, since it never affects the space between the *outermost*
+children and the box edge.
+
+To see that clearly, draw the box itself with a border rect behind the
+padded content — the two steelblue/coral rects sit inset from every edge of
+the outlined box, not just spaced apart from each other:
+
+```ffpy frame="0"
+with Scene(width=200, height=140):
+    with Group().size(200, 140):
+        Rect().expand().fill(None).stroke("steelblue", 2)
+        with Group().expand().column(gap=10).padding(20):
+            Rect().size(120, 30).fill("steelblue")
+            Rect().size(120, 30).fill("coral")
+```
+
+Most specific wins: `all` is applied first, then `x`/`y`, then the individual
+`top`/`right`/`bottom`/`left` args, each overriding whatever came before
+within the same call. A later call only touches the sides it names:
+
+```python
+card.padding(16)       # 16px inset on all four sides
+card.padding(top=32)   # widen just the top inset, leave the other three sides alone
+```
+
+Padding also participates in auto-sizing: a group with no explicit `size()`
+call grows to fit its content plus the padding on each side.
+
+---
+
 ## Nested layouts
 
 Groups can be nested to build complex grids and hierarchies:
@@ -143,7 +224,7 @@ when you want the group to tightly fit its visible children at every frame.
 
 ## Layout and animation
 
-Groups with column or row layout can still be animated — position, rotation, scale, alpha,
+Groups with column, row, or grid layout can still be animated — position, rotation, scale, alpha,
 and the clipping window all work as usual. The layout controls where children are placed;
 animation moves or transforms the group as a whole.
 

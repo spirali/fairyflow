@@ -195,6 +195,7 @@ pub enum FloatCall {
     Mul(Box<FloatParamsPair>),
     Div(Box<FloatParamsPair>),
     Norm(Box<FloatParamsPair>),
+    Max(Box<FloatParamsPair>),
     AutoWidth { node: NodeId },
     AutoHeight { node: NodeId },
     AutoX { node: NodeId },
@@ -231,6 +232,10 @@ impl CallParse for FloatCall {
                 b: next!(),
             })),
             "norm" => FloatCall::Norm(Box::new(FloatParamsPair {
+                a: next!(),
+                b: next!(),
+            })),
+            "max" => FloatCall::Max(Box::new(FloatParamsPair {
                 a: next!(),
                 b: next!(),
             })),

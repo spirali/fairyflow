@@ -393,6 +393,10 @@ impl Eval<f64> for FloatCall {
                 let d = va * va + vb * vb;
                 Ok(if d < 0.0001 { 0.0 } else { va / d.sqrt() })
             }
+            FloatCall::Max(pair) => {
+                let (va, vb) = pair.eval(ctx)?;
+                Ok(va.max(vb))
+            }
             FloatCall::MapX(params) => {
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;

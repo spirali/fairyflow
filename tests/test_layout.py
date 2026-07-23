@@ -1,4 +1,5 @@
-from fairyflow import DEFAULT, Group, Rect, Ellipse, next_frame, rel
+from fairyflow import DEFAULT, Group, Rect, Ellipse, Scene, next_frame, rel
+from fairyflow.serializer import create_export
 
 
 def test_centering_layout1(test_scene):
@@ -44,6 +45,59 @@ def test_row_layout_with_rotated_rect(test_scene):
         with Group().row(gap=5, align=0.5):
             Rect().size(30, 10).fill("steelblue").rotate(90)
             Rect().size(10, 10).fill("coral")
+
+
+def test_grid_layout(test_scene):
+    """grid(cols=2) places children row-major; each column sized to its
+    widest child, each row to its tallest."""
+    with test_scene.size(90, 90):
+        with Group().grid(cols=2, gap=5):
+            Rect().size(40, 10).fill("orange")
+            Rect().size(10, 30).fill("blue")
+            Rect().size(20, 20).fill("green")
+
+
+def test_grid_layout_gap_y(test_scene):
+    """A separate gap_y from gap (the horizontal gap) is respected."""
+    with test_scene.size(100, 100):
+        with Group().grid(cols=2, gap=5, gap_y=20):
+            Rect().size(30, 10).fill("orange")
+            Rect().size(30, 10).fill("blue")
+            Rect().size(30, 10).fill("green")
+            Rect().size(30, 10).fill("coral")
+
+
+def test_padding_on_column(test_scene):
+    """padding() insets a Column layout's children from the group's own box."""
+    with test_scene.size(60, 60):
+        with Group().column(gap=10).padding(15):
+            Rect().size(20, 10).fill("steelblue")
+            Rect().size(20, 10).fill("coral")
+
+
+def test_padding_most_specific_wins(test_scene):
+    """A later padding(top=) call only overrides the side it names."""
+    with test_scene.size(60, 60):
+        with Group().padding(15) as g:
+            g.padding(top=30)
+            Rect().size(20, 20).fill("mediumpurple")
+
+
+def test_align_respects_parent_padding():
+    """align() must compose with padding() - it computes an explicit x/y
+    expression independently of the engine's auto_x/auto_y (which is where
+    padding-awareness was added), so it needs its own padding-aware formula
+    or it silently ignores padding entirely. Regression for a bug caught
+    after the fact: Table's left-aligned cell content used `.align(0, 0.5)`
+    and sat flush against the cell border regardless of the table's
+    padding, since align() never consulted it."""
+    s = Scene(100, 100)
+    with s:
+        with Group().size(100, 100).padding(20):
+            Rect().size(20, 20).fill("steelblue").align(0, 0)
+    node = create_export(0, s)["nodes"][1]
+    assert node["x"] == 20
+    assert node["y"] == 20
 
 
 def test_column_reserve_true(test_scene):

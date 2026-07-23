@@ -55,6 +55,7 @@ nav = [
     "images.md",
     "positioning.md",
     "layout.md",
+    "table.md",
     "anim.md",
     "cues.md",
     "exports.md",

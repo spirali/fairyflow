@@ -10,7 +10,7 @@ import json as json
 
 _active: "Serializer | None" = None
 
-_FOLDABLE_OPS = {"+", "-", "*", "/", "norm"}
+_FOLDABLE_OPS = {"+", "-", "*", "/", "norm", "max"}
 
 
 def _try_fold(obj):
@@ -53,6 +53,8 @@ def _try_fold(obj):
             return a * b
         if obj.op == "/":
             return 0.0 if abs(b) < 0.000001 else a / b
+        if obj.op == "max":
+            return max(a, b)
         d = a * a + b * b  # "norm"
         return 0.0 if d < 0.0001 else a / math.sqrt(d)
     return None

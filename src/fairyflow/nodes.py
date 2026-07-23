@@ -3,7 +3,7 @@ from beartype import beartype
 import os
 
 from .types import ColorLike, FloatLike
-from .layout import CENTERING_LAYOUT, ColumnLayout, RowLayout
+from .layout import CENTERING_LAYOUT, ColumnLayout, GridLayout, RowLayout
 from .position import Position
 from .info import get_info
 from .animtime import Duration, Easing
@@ -629,15 +629,29 @@ class PositionMixin(PositionQueryMixin):
             self, for method chaining.
         """
         parent = self.parent_group()
+        # Only `Group` carries padding attrs (`Scene` doesn't) - align()
+        # within the parent's *padded* box, matching the engine's
+        # padding-aware Center-layout formula, so `.align()` and
+        # `.padding()` compose instead of `.align()` silently ignoring
+        # padding entirely.
+        if isinstance(parent, Group):
+            pl = parent._get_attr("padding_left")
+            pr = parent._get_attr("padding_right")
+            pt = parent._get_attr("padding_top")
+            pb = parent._get_attr("padding_bottom")
+        else:
+            pl = pr = pt = pb = 0
         with Par():
             if x is not None:
-                new_x = Call.mul(
-                    Call.sub(parent._get_attr("width"), _effective_width(self)), x
+                inner_w = Call.sub(Call.sub(parent._get_attr("width"), pl), pr)
+                new_x = Call.add(
+                    pl, Call.mul(Call.sub(inner_w, _effective_width(self)), x)
                 )
                 self._set_attr("x", new_x, dur, ease)
             if y is not None:
-                new_y = Call.mul(
-                    Call.sub(parent._get_attr("height"), _effective_height(self)), y
+                inner_h = Call.sub(Call.sub(parent._get_attr("height"), pt), pb)
+                new_y = Call.add(
+                    pt, Call.mul(Call.sub(inner_h, _effective_height(self)), y)
                 )
                 self._set_attr("y", new_y, dur, ease)
         return self
@@ -1304,6 +1318,10 @@ class Group(
         "clip_y": 0,
         "clip_w": 1,
         "clip_h": 1,
+        "padding_top": 0,
+        "padding_right": 0,
+        "padding_bottom": 0,
+        "padding_left": 0,
     }
 
     def __init__(self):
@@ -1359,6 +1377,96 @@ class Group(
             self, for method chaining.
         """
         self._layout = RowLayout(get_frame(), gap, align, reserve)
+        return self
+
+    def grid(
+        self, cols: int, gap: FloatLike = 0, gap_y: FloatLike | None = None
+    ) -> Self:
+        """Switch the group to grid layout.
+
+        Children are placed row-major (``row = i // cols``, ``col = i % cols``).
+        Each column is sized to its widest child, each row to its tallest.
+        Children keep their own natural size, anchored at their cell's
+        top-left corner — there is no per-cell align/stretch in this layout;
+        size cells explicitly if uniform backgrounds are needed (as `Table`
+        does).
+
+        Args:
+            cols: Number of columns. Must be >= 1.
+            gap: Horizontal gap between columns, in pixels. Also used as the
+                vertical gap between rows if `gap_y` is left as ``None``.
+            gap_y: Vertical gap between rows, in pixels. ``None`` (default)
+                reuses `gap` for both axes.
+
+        Returns:
+            self, for method chaining.
+        """
+        if cols < 1:
+            raise ValueError("grid(): cols must be >= 1")
+        self._layout = GridLayout(
+            get_frame(), cols, gap, gap if gap_y is None else gap_y, reserve=True
+        )
+        return self
+
+    def padding(
+        self,
+        all: FloatLike | None = None,
+        *,
+        x: FloatLike | None = None,
+        y: FloatLike | None = None,
+        top: FloatLike | None = None,
+        right: FloatLike | None = None,
+        bottom: FloatLike | None = None,
+        left: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Set inner spacing between the group's own box and its laid-out
+        children. Applies to `Center`/`Column`/`Row`/`Grid` layout alike.
+
+        Most specific wins: `all` is applied first, then `x`/`y`, then the
+        named per-side args, each overriding whatever came before within
+        this same call. A later call (e.g. ``card.padding(top=32)``) only
+        touches the sides it names, leaving the others at their current
+        value.
+
+        Args:
+            all: Padding for all four sides.
+            x: Left and right padding.
+            y: Top and bottom padding.
+            top: Top padding.
+            right: Right padding.
+            bottom: Bottom padding.
+            left: Left padding.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        with Par():
+            if all is not None:
+                for side in (
+                    "padding_top",
+                    "padding_right",
+                    "padding_bottom",
+                    "padding_left",
+                ):
+                    self._set_attr(side, all, dur, ease)
+            if x is not None:
+                self._set_attr("padding_left", x, dur, ease)
+                self._set_attr("padding_right", x, dur, ease)
+            if y is not None:
+                self._set_attr("padding_top", y, dur, ease)
+                self._set_attr("padding_bottom", y, dur, ease)
+            for name, val in (
+                ("padding_top", top),
+                ("padding_right", right),
+                ("padding_bottom", bottom),
+                ("padding_left", left),
+            ):
+                if val is not None:
+                    self._set_attr(name, val, dur, ease)
         return self
 
     def serialize(self, serializer):

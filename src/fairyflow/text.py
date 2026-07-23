@@ -123,7 +123,7 @@ class Text(NodeWithChildren, PositionMixin, TextStyleMixin, ZLevelMixin):
 
     def __init__(self, text: StringLike | None = None):
         super().__init__()
-        self.color("black")
+        self.fill("black")
         self.sh_language = None
         self.sh_theme = None
         self._current_line = None
@@ -294,7 +294,7 @@ def _plain_text(nodes):
 def _apply_style(obj, attrs):
     for key, val in attrs.items():
         if key == "color":
-            obj.color(val)
+            obj.fill(val)
         elif key in ("text-size", "font-size"):
             obj.font(size=float(val))
         elif key == "bold":
@@ -387,7 +387,7 @@ def stext(input_text: str, *, strip: bool = True, delimiters: str = "<>"):
     each newline starts a new top-level line.
 
     Tag attributes are applied as styles:
-      color='...'            → .color(...)
+      color='...'            → .fill(...)
       font-size='...'        → .font(size=...)  (also: text-size)
       font='...'             → .font(...)
       font-weight='...'      → .font(weight=...)

@@ -179,25 +179,25 @@ def test_next_to_scene_exports_without_circular_reference(sc):
 def test_next_to_right(test_scene):
     with test_scene:
         with Group().size(60, 40):
-            a = Rect().size(20, 20).color("steelblue").xy(10, 10)
-            b = Rect().size(10, 10).color("tomato")
+            a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
+            b = Rect().size(10, 10).fill("tomato")
             b.next_to(a, "right", gap=5)
 
 
 def test_next_to_below(test_scene):
     with test_scene:
         with Group().size(60, 40):
-            a = Rect().size(20, 20).color("steelblue").xy(10, 10)
-            b = Rect().size(10, 10).color("tomato")
+            a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
+            b = Rect().size(10, 10).fill("tomato")
             b.next_to(a, "below", gap=5, align=0)
 
 
 def test_next_to_across_groups(test_scene):
     with test_scene:
         with Group().size(30, 30).xy(0, 0):
-            a = Rect().size(20, 20).color("steelblue").xy(5, 5)
+            a = Rect().size(20, 20).fill("steelblue").xy(5, 5)
         with Group().size(30, 30).xy(30, 0):
-            b = Rect().size(10, 10).color("tomato")
+            b = Rect().size(10, 10).fill("tomato")
             b.next_to(a, "right", gap=5)
 
 
@@ -206,8 +206,8 @@ def test_next_to_top_level(test_scene):
     # has a reserved wire id (SCENE_NODE_ID, position.py) precisely so this
     # works instead of hitting a circular-reference error at export time.
     with test_scene:
-        a = Rect().size(20, 20).color("steelblue").xy(10, 10)
-        b = Rect().size(10, 10).color("tomato")
+        a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
+        b = Rect().size(10, 10).fill("tomato")
         b.next_to(a, "right", gap=5)
 
 
@@ -215,9 +215,9 @@ def test_next_to_top_level_mixed_with_group(test_scene):
     # a is a direct Scene child; b lives inside a Group - map_x/map_y must
     # walk b's ancestor chain up while treating a's side as the root frame.
     with test_scene:
-        a = Rect().size(20, 20).color("steelblue").xy(10, 10)
+        a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
         with Group().size(10, 10).xy(0, 25):
-            b = Rect().size(10, 10).color("tomato")
+            b = Rect().size(10, 10).fill("tomato")
             b.next_to(a, "right", gap=5)
 
 
@@ -229,7 +229,7 @@ def test_next_to_text(test_scene):
         with Group().size(60, 40):
             t = Text().xy(2, 12)
             t.span("Hi").font(size=14)
-            r = Rect().size(8, 8).color("tomato")
+            r = Rect().size(8, 8).fill("tomato")
             r.next_to(t, "right", gap=3)
 
 
@@ -241,7 +241,7 @@ def test_next_to_span(test_scene):
         with Group().size(60, 40):
             t = Text().xy(2, 12)
             span = t.span("Hi").font(size=14)
-            r = Rect().size(8, 8).color("tomato")
+            r = Rect().size(8, 8).fill("tomato")
             r.next_to(span, "right", gap=3)
 
 
@@ -250,5 +250,5 @@ def test_next_to_scene(test_scene):
     # naturally partly off-canvas for right/below, so use above/gap<0 to land
     # a visible rect near the top edge instead.
     with test_scene:
-        r = Rect().size(8, 8).color("tomato")
+        r = Rect().size(8, 8).fill("tomato")
         r.next_to(test_scene, "above", gap=-20)

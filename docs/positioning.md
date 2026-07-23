@@ -16,9 +16,9 @@ within the parent, and `.move()` for small relative offsets on top of any of the
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(60, 60).color("tomato").xy(20, 20)
-    Rect().size(60, 60).color("gold").xy(120, 70)
-    Rect().size(60, 60).color("mediumseagreen").xy(220, 120)
+    Rect().size(60, 60).fill("tomato").xy(20, 20)
+    Rect().size(60, 60).fill("gold").xy(120, 70)
+    Rect().size(60, 60).fill("mediumseagreen").xy(220, 120)
 ```
 
 ---
@@ -33,7 +33,7 @@ group:
 
 ```ffpy frame="0"
 with Scene(width=300, height=160):
-    Rect().size(60, 60).color("tomato").xy(x=rel(0.5) - 30, y=rel(0.5) - 30)
+    Rect().size(60, 60).fill("tomato").xy(x=rel(0.5) - 30, y=rel(0.5) - 30)
 ```
 
 `rel(f)` is an `Expr`, so it composes with arithmetic (`rel(1) - 20`, `rel(0.5) + 10`) —
@@ -51,9 +51,9 @@ omitted to leave it untouched.
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(60, 60).color("tomato").align(0, 0)
-    Rect().size(60, 60).color("gold").align(0.5, 0.5)
-    Rect().size(60, 60).color("mediumseagreen").align(1, 1)
+    Rect().size(60, 60).fill("tomato").align(0, 0)
+    Rect().size(60, 60).fill("gold").align(0.5, 0.5)
+    Rect().size(60, 60).fill("mediumseagreen").align(1, 1)
 ```
 
 `.align()` composes freely with `.xy()` — you can align on one axis and set the other
@@ -61,8 +61,8 @@ directly:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(80, 50).color("steelblue").align(x=0.5).xy(0, 30)
-    Rect().size(80, 50).color("coral").align(x=0.5).xy(0, 110)
+    Rect().size(80, 50).fill("steelblue").align(x=0.5).xy(0, 30)
+    Rect().size(80, 50).fill("coral").align(x=0.5).xy(0, 110)
 ```
 
 ---
@@ -74,9 +74,9 @@ position, regardless of how that position was set:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(60, 60).color("orchid").align(0.5, 0.5).move(-80, 0)
-    Rect().size(60, 60).color("steelblue").align(0.5, 0.5)
-    Rect().size(60, 60).color("gold").align(0.5, 0.5).move(80, 0)
+    Rect().size(60, 60).fill("orchid").align(0.5, 0.5).move(-80, 0)
+    Rect().size(60, 60).fill("steelblue").align(0.5, 0.5)
+    Rect().size(60, 60).fill("gold").align(0.5, 0.5).move(80, 0)
 ```
 
 ---
@@ -113,9 +113,9 @@ A common use-case is drawing a line between two nodes that live in separate grou
 ```ffpy frame="0"
 with Scene(width=300, height=160):
     with Group().size(60, 60).xy(30, 50) as a:
-        Rect().size(60, 60).color("steelblue")
+        Rect().size(60, 60).fill("steelblue")
     with Group().size(60, 60).xy(210, 50) as b:
-        Rect().size(60, 60).color("coral")
+        Rect().size(60, 60).fill("coral")
 
     connector = Path().stroke("#555", 2)
     connector.move_to().pos(a.at("right"))   # right-center of a
@@ -131,10 +131,10 @@ other end is permanently bound to the moving box's center:
 
 ```ffpy video="mp4"
 with Scene(width=300, height=160):
-    anchor = Ellipse().size(12, 12).color("tomato").xy(100, 20)    
+    anchor = Ellipse().size(12, 12).fill("tomato").xy(100, 20)    
 
     with Group().size(50, 50).xy(20, 55) as box:
-        Rect().size(50, 50).color("steelblue")
+        Rect().size(50, 50).fill("steelblue")
 
     line = Path().stroke("#888", 2)
     line.move_to().pos(anchor.at())  # fixed end
@@ -151,7 +151,7 @@ fixed offset:
 ```ffpy frame="0"
 with Scene(width=300, height=160):
     with Group().size(60, 60).align(0.5, 0.5) as box:
-        Rect().size(60, 60).color("steelblue")
+        Rect().size(60, 60).fill("steelblue")
 
     # arrow tip sits 10 px above the top-center of box
     arrow = Path().stroke("tomato", 3)
@@ -171,7 +171,7 @@ places it **beside another node**, taking both boxes' size into account — the 
 ```ffpy frame="0"
 with Scene(width=300, height=120):
     with Group().size(60, 60).xy(40, 30) as box:
-        Rect().size(60, 60).color("steelblue")
+        Rect().size(60, 60).fill("steelblue")
 
     label = Text()
     label.span("label").font(size=16)
@@ -186,7 +186,7 @@ end-aligned:
 ```ffpy frame="0"
 with Scene(width=300, height=120):
     with Group().size(60, 60).xy(40, 20) as img:
-        Rect().size(60, 60).color("coral")
+        Rect().size(60, 60).fill("coral")
 
     caption = Text()
     caption.span("caption").font(size=14)
@@ -222,7 +222,7 @@ with Scene(width=300, height=200):
     curve.c2_xy(-60, -130)  # control point 2: pulls up into the end
 
     # A ball that travels along the arch
-    ball = Ellipse().size(22, 22).color("steelblue")
+    ball = Ellipse().size(22, 22).fill("steelblue")
     ball.follow_path(track, dur=2)
 ```
 
@@ -239,8 +239,8 @@ with Scene(width=300, height=200):
     curve.c2_xy(-60, -130)
 
     with Par():
-        Ellipse().size(22, 22).color("steelblue").follow_path(track, dur=2)
-        Ellipse().size(22, 22).color("coral").follow_path(track, dur=2, start=1, end=0)
+        Ellipse().size(22, 22).fill("steelblue").follow_path(track, dur=2)
+        Ellipse().size(22, 22).fill("coral").follow_path(track, dur=2, start=1, end=0)
 ```
 
 The same path can be used to animate multiple nodes. Nesting `Seq` inside `Par` creates a
@@ -260,5 +260,5 @@ with Scene(width=300, height=200):
         for i, color in enumerate(colors):
             with Seq():
                 wait(0.4 * i)
-                Ellipse().size(22, 22).color(color).follow_path(track, dur=2)
+                Ellipse().size(22, 22).fill(color).follow_path(track, dur=2)
 ```

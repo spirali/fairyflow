@@ -189,20 +189,20 @@ def test_arrow_head_both(test_scene):
 
 def test_arrow_gap_leaves_space_before_target(test_scene):
     with test_scene.size(200, 100):
-        target = Rect().xy(150, 30).size(40, 40).color("steelblue")
+        target = Rect().xy(150, 30).size(40, 40).fill("steelblue")
         Arrow((10, 50), target.at("left"), gap=6).stroke("black", 3)
 
 
 def test_polygon_irregular_triangle(test_scene):
     with test_scene.size(160, 120):
-        Polygon([(20, 100), (140, 60), (60, 10)]).color("steelblue")
+        Polygon([(20, 100), (140, 60), (60, 10)]).fill("steelblue")
 
 
 def test_regular_polygon_hexagon(test_scene):
     with test_scene.size(160, 160):
-        RegularPolygon(6, radius=60, center=(80, 80)).color("mediumseagreen")
+        RegularPolygon(6, radius=60, center=(80, 80)).fill("mediumseagreen")
 
 
 def test_star_five_point(test_scene):
     with test_scene.size(160, 160):
-        Star(points=5, outer=70, inner=28, center=(80, 80)).color("gold")
+        Star(points=5, outer=70, inner=28, center=(80, 80)).fill("gold")

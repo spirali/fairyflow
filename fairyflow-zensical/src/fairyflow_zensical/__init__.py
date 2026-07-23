@@ -4,16 +4,16 @@ Zensical plugin for ``ffpy`` custom fenced code blocks.
 Image mode (single frame):
     ```ffpy frame=3
     with Scene():
-        Rect().size(20, 20).color("green")
+        Rect().size(20, 20).fill("green")
     ```
     Renders frame N as PNG, embeds as base64 data-URI <img>.
 
 Multi-frame mode (several frames, code written once):
     ```ffpy frames="0,1,2"
     with Scene():
-        Rect().size(20, 20).color("green")
+        Rect().size(20, 20).fill("green")
         next_frame()
-        Rect().size(20, 20).color("red")
+        Rect().size(20, 20).fill("red")
     ```
     Compiles the source once, renders each listed frame as a PNG, and
     displays them side-by-side with "Frame N" labels.
@@ -21,7 +21,7 @@ Multi-frame mode (several frames, code written once):
 Video mode:
     ```ffpy video="mp4"
     with Scene():
-        Rect().size(20, 20).color("green")
+        Rect().size(20, 20).fill("green")
     ```
     Renders all frames, runs ffmpeg, saves to docs/assets/ffpy/<hash>.mp4,
     embeds as <video>.

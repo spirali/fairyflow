@@ -10,7 +10,9 @@ from .animtime import Duration, Easing
 from .sentinels import (
     DEFAULT,
     INHERITED_VALUE,
+    OMITTED,
     DefaultMarker,
+    OmittedMarker,
     RelValue,
     rel,
     resolve_rel,
@@ -808,37 +810,55 @@ class StyleMethods:
         self._set_attr("fill_color", Color.parse(value), dur, ease)
         return self
 
-    def stroke_color(
-        self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
+    def stroke(
+        self,
+        color: ColorLike | OmittedMarker = OMITTED,
+        width: FloatLike | None = None,
+        *,
+        dash: tuple[SupportsFloat, SupportsFloat] | None = None,
+        offset: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
     ) -> Self:
-        """Set the stroke (outline) color of the node.
+        """Set the stroke (outline) of the node: color, width, and dash pattern.
 
         Args:
-            value: Any color value accepted by `Color.parse` (e.g. a hex
-                string, an RGB tuple, or a `Color` instance).
-            dur: Optional duration for animation.
+            color: Any color value accepted by `Color.parse` (e.g. a hex
+                string, an RGB tuple, or a `Color` instance). Pass `None` to
+                disable the stroke (matches `.color(None)` for fill); omit
+                entirely to leave the current stroke color untouched.
+            width: The stroke width in pixels.
+            dash: ``(on, off)`` pixel lengths for a dashed stroke; omitted
+                means a solid stroke. Only supported on `Rect`, `Ellipse`,
+                and `Path` — not animatable (structural, set once).
+            offset: Shifts the dash pattern along the stroke, e.g. to animate
+                a "marching ants" effect. Only meaningful together with
+                `dash` (own or previously set).
+            dur: Optional duration for animation (`color`/`width`/`offset`).
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("stroke_color", Color.parse(value), dur, ease)
-        return self
-
-    def stroke_width(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ):
-        """Set the stroke width of the node in pixels.
-
-        Args:
-            value: The stroke width in pixels.
-            dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
-
-        Returns:
-            self, for method chaining.
-        """
-        self._set_attr("stroke_width", value, dur, ease)
+        if (dash is not None or offset is not None) and not isinstance(
+            self, (Rect, Ellipse, Path)
+        ):
+            raise TypeError("dash/offset are only supported on Rect, Ellipse, and Path")
+        with Par():
+            if color is not OMITTED:
+                self._set_attr("stroke_color", Color.parse(color), dur, ease)
+            if width is not None:
+                self._set_attr("stroke_width", width, dur, ease)
+            if dash is not None:
+                on, off = dash
+                on = float(on)
+                off = float(off)
+                if on <= 0 or off <= 0:
+                    raise ValueError("dash on/off lengths must be positive")
+                self._set_attr("dash_on", on)
+                self._set_attr("dash_off", off)
+            if offset is not None:
+                self._set_attr("dash_offset", offset, dur, ease)
         return self
 
 
@@ -853,6 +873,9 @@ class StyleMixin(AlphaMixin, StyleMethods):
         "fill_color": "",
         "stroke_color": "",
         "stroke_width": 1,
+        "dash_on": 0.0,
+        "dash_off": 0.0,
+        "dash_offset": 0.0,
     }
 
 
@@ -1589,6 +1612,27 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin, RotAndScaleM
     for shape kinds, same as the old eager `width(0).height(0)` seed."""
 
     kind = "rect"
+    _ATTR_DEFAULTS = {"radius": 0.0}
+
+    def radius(
+        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    ) -> Self:
+        """Set the corner radius in pixels, rounding the rect's corners.
+
+        Clamped to `min(w, h) / 2` at render time — an oversized radius
+        degrades to a fully-rounded "stadium" shape rather than
+        self-intersecting geometry.
+
+        Args:
+            value: Corner radius in pixels. `0` (the default) is square corners.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        self._set_attr("radius", value, dur, ease)
+        return self
 
 
 @beartype
@@ -1648,6 +1692,25 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             ease: Optional easing curve (``"linear"`` default).
         """
         self._set_attr("crop_end", value, dur, ease)
+        return self
+
+    def draw(self, *, dur: Duration = None, ease: Easing = None) -> Self:
+        """Animate the path drawing itself in, from invisible to complete.
+
+        Sugar for snapping `crop_end` to ``0`` at the current frame, then
+        animating it to ``1`` over `dur`.
+
+        Args:
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        self.crop_end(0)
+        self.crop_end(1, dur=dur, ease=ease)
         return self
 
     def move_to(self) -> "PathMove":
@@ -1861,8 +1924,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         if style in ("triangle", "stealth", "dot"):
             head.color(self._get_attr("stroke_color"))
         else:
-            head.stroke_color(self._get_attr("stroke_color"))
-            head.stroke_width(self._get_attr("stroke_width"))
+            head.stroke(self._get_attr("stroke_color"), self._get_attr("stroke_width"))
 
         crop_len = {
             "triangle": length * 0.5,

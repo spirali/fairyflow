@@ -17,13 +17,45 @@ with Scene():
 
 ### Stroke
 
-Add an outline with `.stroke_color()` and `.stroke_width()`. Setting a fill color to `None`
+Add an outline with `.stroke(color, width)`. Setting a fill color to `None`
 gives a hollow shape.
 
 ```ffpy frame="0"
 with Scene():
     r = Rect().size(160, 90)
-    r.color("lightyellow").stroke_color("navy").stroke_width(4)
+    r.color("lightyellow").stroke("navy", 4)
+```
+
+Passing `None` as the stroke color disables it again; omitting `color` entirely
+(e.g. `.stroke(width=5)`) leaves whatever stroke color is already set untouched:
+
+```ffpy frame="0"
+with Scene():
+    r = Rect().size(160, 90).color("lightyellow").stroke("navy", 4)
+    r.stroke(None)  # outline removed, fill unaffected
+```
+
+### Rounded corners
+
+`.radius(r)` rounds a rect's corners. It's clamped to `min(width, height) / 2` at
+render time, so an oversized radius degrades to a fully-rounded "pill" shape instead
+of self-intersecting geometry.
+
+```ffpy frame="0"
+with Scene(width=200, height=100):
+    Rect().xy(20, 20).size(60, 60).radius(12).color("steelblue")
+    Rect().xy(110, 20).size(60, 60).radius(30).color("mediumseagreen")  # pill
+```
+
+### Dashed strokes
+
+Pass `dash=(on, off)` to `.stroke()` for a dashed outline (pixel lengths); `offset=`
+shifts the pattern along the stroke — animate it for a "marching ants" effect.
+Dash is available on `Rect`, `Ellipse`, and `Path`.
+
+```ffpy frame="0"
+with Scene(width=100, height=60):
+    Rect().xy(20, 10).size(60, 40).stroke("black", 3, dash=(8, 4))
 ```
 
 ### Relative sizing
@@ -80,16 +112,15 @@ with Scene():
 
 ## Path
 
-`Path` draws an arbitrary vector shape from a sequence of commands. Use `.stroke_color()` to
-set the line color and `.stroke_width()` for line thickness. Like `Rect`, it can also be
-filled with `.color()`.
+`Path` draws an arbitrary vector shape from a sequence of commands. Use `.stroke(color, width)`
+to set the line color and thickness. Like `Rect`, it can also be filled with `.color()`.
 
 ### Line segments
 
 ```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke_color("darkslateblue").stroke_width(3).color("lavender")
+    p.stroke("darkslateblue", 3).color("lavender")
     p.move_to().xy(30, 100)
     p.line_to().xy(150, 40)
     p.line_to().xy(270, 100)
@@ -105,7 +136,7 @@ set the two control point offsets (relative to the segment start and end respect
 ```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke_color("darkorange").stroke_width(3)
+    p.stroke("darkorange", 3)
     p.move_to().xy(40, 150)
     p.cubic_to().xy(260, 150).c1_xy(60, -130).c2_xy(-60, -130)
 ```
@@ -118,7 +149,7 @@ beginning instead. The arrowhead is automatically sized to match the stroke widt
 ```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke_color("steelblue").stroke_width(3)
+    p.stroke("steelblue", 3)
     p.move_to().xy(40, 100)
     p.line_to().xy(260, 100)
     p.arrow("end")
@@ -133,14 +164,14 @@ The arrowhead scales automatically with stroke width. Pass `length` and `width` 
 with Scene():
     # top: automatic size (stroke_width=8 → arrow 24×24)
     p = Path()
-    p.stroke_color("steelblue").stroke_width(8)
+    p.stroke("steelblue", 8)
     p.move_to().xy(40, 60)
     p.line_to().xy(250, 60)
     p.arrow("end")
 
     # bottom: same stroke but arrow manually set to length=40, width=20
     q = Path()
-    q.stroke_color("steelblue").stroke_width(8)
+    q.stroke("steelblue", 8)
     q.move_to().xy(40, 140)
     q.line_to().xy(250, 140)
     q.arrow("end", length=40, width=20)
@@ -164,7 +195,7 @@ with Scene(width=200, height=200):
     for i, style in enumerate(["triangle", "open", "stealth", "bar", "dot"]):
         y = 20 + i * 35
         p = Path()
-        p.stroke_color("steelblue").stroke_width(3)
+        p.stroke("steelblue", 3)
         p.move_to().xy(40, y)
         p.line_to().xy(140, y)
         p.arrow("end", style=style, width=20)
@@ -178,9 +209,21 @@ with Scene(width=200, height=200):
 ```ffpy frame="0"
 with Scene():
     p = Path()
-    p.stroke_color("mediumseagreen").stroke_width(4)
+    p.stroke("mediumseagreen", 4)
     p.move_to().xy(30, 100)
     p.cubic_to().xy(150, 40).c1_xy(50, -60).c2_xy(-50, -60)
     p.cubic_to().xy(270, 100).c1_xy(50, 60).c2_xy(-50, 60)
     p.crop_end(0.5)
+```
+
+`.draw(dur=, ease=)` is sugar for the common "draw itself in" animation: it snaps
+`crop_end` to `0`, then animates it to `1` over `dur`.
+
+```ffpy video="mp4"
+with Scene():
+    p = Path()
+    p.stroke("darkorange", 3)
+    p.move_to().xy(30, 100)
+    p.line_to().xy(270, 100)
+    p.draw(dur=1)
 ```

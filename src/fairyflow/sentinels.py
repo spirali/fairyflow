@@ -23,6 +23,25 @@ class DefaultMarker:
 DEFAULT = DefaultMarker()
 
 
+class OmittedMarker:
+    """Sentinel default for a structured setter's parameter whose *value type
+    itself* already includes `None` as a real, meaningful setting (e.g.
+    `ColorLike` includes `None` for "no color" - `color(None)` and
+    `stroke(None)` disable a fill/stroke, matching `Color.parse(None) ->
+    ""`). `None` can't double as "leave untouched" there the way it does for
+    `xy()`/`size()`, since it's already spoken for - `OMITTED` is the
+    "not passed" default instead, so an explicit `None` still reaches the
+    setter and is honored."""
+
+    __slots__ = ()
+
+    def __repr__(self):
+        return "OMITTED"
+
+
+OMITTED = OmittedMarker()
+
+
 class RelValue(Expr):
     """Value marker for `rel(f)`: `f` × the parent's corresponding dimension,
     resolved against the parent group when a setter consumes it. Composes with arithmetic like any `Expr`

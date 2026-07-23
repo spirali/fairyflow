@@ -1,6 +1,6 @@
 use renderer_core::glyph_cache::{PathVerb, VectorPath};
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
-use renderer_core::path_utils::build_cropped_path_verbs;
+use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{
@@ -150,17 +150,22 @@ impl RasterRenderer {
                     }
                 }
             }
-            NodeKind::Rect { node_box, style } => {
+            NodeKind::Rect {
+                node_box,
+                style,
+                radius,
+            } => {
                 let transform = transform_nodebox(node_box, parent_transform);
-                let Some(rect) = Rect::from_xywh(
-                    0.0,
-                    0.0,
-                    node_box.size.width as f32,
-                    node_box.size.height as f32,
-                ) else {
+                let w = node_box.size.width as f32;
+                let h = node_box.size.height as f32;
+                let path = if *radius > 0.0 {
+                    verbs_to_skia_path(&build_rounded_rect_verbs(w, h, *radius as f32))
+                } else {
+                    Rect::from_xywh(0.0, 0.0, w, h).map(PathBuilder::from_rect)
+                };
+                let Some(path) = path else {
                     return;
                 };
-                let path = PathBuilder::from_rect(rect);
                 fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
             }
             NodeKind::Ellipse { node_box, style } => {
@@ -516,6 +521,9 @@ fn fill_and_stroke(
         paint.anti_alias = true;
         let stroke = Stroke {
             width: style.stroke_width as f32,
+            dash: style.dash.and_then(|(on, off)| {
+                tiny_skia::StrokeDash::new(vec![on as f32, off as f32], style.dash_offset as f32)
+            }),
             ..Default::default()
         };
         pixmap.stroke_path(path, &paint, &stroke, transform, None);

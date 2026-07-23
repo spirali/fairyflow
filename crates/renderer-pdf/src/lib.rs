@@ -8,7 +8,7 @@ use krilla_svg::{SurfaceExt, SvgSettings};
 use renderer_core::glyph_cache::PathVerb;
 use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
-use renderer_core::path_utils::build_cropped_path_verbs;
+use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
 use renderer_core::transform::{
@@ -193,20 +193,26 @@ impl PdfRenderer {
                 surface.pop(); // transform
             }
 
-            NodeKind::Rect { node_box, style } => {
+            NodeKind::Rect {
+                node_box,
+                style,
+                radius,
+            } => {
                 let transform = transform_node_box(&node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
-                if let Some(rect) = KRect::from_xywh(
-                    0.0,
-                    0.0,
-                    node_box.size.width as f32,
-                    node_box.size.height as f32,
-                ) {
-                    let mut pb = PathBuilder::new();
-                    pb.push_rect(rect);
-                    if let Some(path) = pb.finish() {
-                        fill_and_stroke(surface, &path, style, parent_alpha);
-                    }
+                let w = node_box.size.width as f32;
+                let h = node_box.size.height as f32;
+                let path = if *radius > 0.0 {
+                    verbs_to_krilla_path(&build_rounded_rect_verbs(w, h, *radius as f32))
+                } else {
+                    KRect::from_xywh(0.0, 0.0, w, h).and_then(|rect| {
+                        let mut pb = PathBuilder::new();
+                        pb.push_rect(rect);
+                        pb.finish()
+                    })
+                };
+                if let Some(path) = path {
+                    fill_and_stroke(surface, &path, style, parent_alpha);
                 }
                 surface.pop();
             }
@@ -709,6 +715,8 @@ fn render_text_lines(
                     sc,
                     *span.text_style.stroke_width.value() as f32,
                     alpha,
+                    None,
+                    0.0,
                 )));
                 surface.draw_path(&path);
             }
@@ -807,7 +815,13 @@ fn color_fill(c: &Color, alpha: f32) -> Fill {
     }
 }
 
-fn color_stroke(c: &Color, width: f32, alpha: f32) -> Stroke {
+fn color_stroke(
+    c: &Color,
+    width: f32,
+    alpha: f32,
+    dash: Option<(f64, f64)>,
+    dash_offset: f32,
+) -> Stroke {
     let (r, g, b, a) = c.to_rgba_f32();
     let opacity = (a * alpha).clamp(0.0, 1.0);
     Stroke {
@@ -819,6 +833,10 @@ fn color_stroke(c: &Color, width: f32, alpha: f32) -> Stroke {
         .into(),
         opacity: NormalizedF32::new(opacity).unwrap_or(NormalizedF32::ONE),
         width,
+        dash: dash.map(|(on, off)| krilla::paint::StrokeDash {
+            array: vec![on as f32, off as f32],
+            offset: dash_offset,
+        }),
         ..Default::default()
     }
 }
@@ -836,6 +854,8 @@ fn fill_and_stroke(surface: &mut krilla::surface::Surface, path: &Path, style: &
             &style.stroke_color,
             style.stroke_width as f32,
             effective_alpha,
+            style.dash,
+            style.dash_offset as f32,
         )));
         surface.draw_path(path);
     }

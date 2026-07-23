@@ -46,7 +46,7 @@ with Scene():
         Rect().size(180, 30).color("steelblue")
         Rect().size(120, 30).color("cornflowerblue")
         Rect().size(80, 30).color("lightskyblue")
-        Rect().size(40, 30).color("aliceblue").stroke_color("steelblue").stroke_width(1)
+        Rect().size(40, 30).color("aliceblue").stroke("steelblue", 1)
 ```
 
 ---
@@ -100,7 +100,7 @@ with Scene(width=300, height=200):
         with Group().size(80, 160).column(gap=8, align=0.5):
             Rect().size(80, 48).color("mediumseagreen")
             Rect().size(80, 48).color("lightgreen")
-            Rect().size(80, 48).color("honeydew").stroke_color("mediumseagreen").stroke_width(1)
+            Rect().size(80, 48).color("honeydew").stroke("mediumseagreen", 1)
 ```
 
 ---

@@ -5,7 +5,7 @@ use tracing::{debug, trace};
 const MAX_CACHE_SIZE: usize = 2048;
 
 /// Backend-independent path verb for a glyph outline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PathVerb {
     MoveTo(f32, f32),
     LineTo(f32, f32),

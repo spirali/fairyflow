@@ -117,7 +117,7 @@ with Scene(width=300, height=160):
     with Group().size(60, 60).xy(210, 50) as b:
         Rect().size(60, 60).color("coral")
 
-    connector = Path().stroke_color("#555").stroke_width(2)
+    connector = Path().stroke("#555", 2)
     connector.move_to().pos(a.at("right"))   # right-center of a
     connector.line_to().pos(b.at("left"))    # left-center of b
 ```
@@ -136,7 +136,7 @@ with Scene(width=300, height=160):
     with Group().size(50, 50).xy(20, 55) as box:
         Rect().size(50, 50).color("steelblue")
 
-    line = Path().stroke_color("#888").stroke_width(2)
+    line = Path().stroke("#888", 2)
     line.move_to().pos(anchor.at())  # fixed end
     line.line_to().pos(box.at())     # tracks box center (the default anchor)
 
@@ -154,7 +154,7 @@ with Scene(width=300, height=160):
         Rect().size(60, 60).color("steelblue")
 
     # arrow tip sits 10 px above the top-center of box
-    arrow = Path().stroke_color("tomato").stroke_width(3)
+    arrow = Path().stroke("tomato", 3)
     arrow.move_to().pos(box.at("top")).move(0, -30)
     arrow.line_to().pos(box.at("top")).move(0, -4)
     arrow.arrow("end")
@@ -214,7 +214,7 @@ and end points respectively:
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
     # The track: an arch-shaped cubic Bézier
-    track = Path().stroke_color("#bbb").stroke_width(2)
+    track = Path().stroke("#bbb", 2)
     track.move_to().xy(30, 160)
     curve = track.cubic_to()
     curve.xy(270, 160)
@@ -231,7 +231,7 @@ start. This is useful for animating a return trip or for reversing entrance effe
 
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
-    track = Path().stroke_color("#bbb").stroke_width(2)
+    track = Path().stroke("#bbb", 2)
     track.move_to().xy(30, 160)
     curve = track.cubic_to()
     curve.xy(270, 160)
@@ -248,7 +248,7 @@ staggered procession where each traveller starts slightly after the previous one
 
 ```ffpy video="mp4"
 with Scene(width=300, height=200):
-    track = Path().stroke_color("#bbb").stroke_width(2)
+    track = Path().stroke("#bbb", 2)
     track.move_to().xy(30, 160)
     curve = track.cubic_to()
     curve.xy(270, 160)

@@ -1,0 +1,1 @@
+{"width":120.0,"height":60.0,"fill_color":"#ffffff","camera_zoom":1.0,"camera_x":60.0,"camera_y":30.0,"children":[{"id":0,"kind":"path","fill_color":"#00000000","stroke_color":"#ff8c00","stroke_width":3.0,"alpha":1.0,"dash_offset":0.0,"crop_start":0.0,"crop_end":0.041666666666666664,"children":[{"kind":"move","id":1,"x":10.0,"y":30.0},{"kind":"line","id":2,"x":110.0,"y":30.0}]}]}

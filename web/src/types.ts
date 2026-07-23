@@ -45,6 +45,10 @@ export interface RawNode {
   fill_color?: string;
   stroke_color?: string;
   stroke_width?: number;
+  dash?: [number, number];
+  dash_offset?: number;
+  // rect-specific
+  radius?: number;
   // cubic control points
   c1_x?: number;
   c1_y?: number;

@@ -81,6 +81,10 @@ pub struct Style {
     pub stroke_color: Color,
     pub stroke_width: f64,
     pub alpha: f64,
+    /// `(on, off)` pixel lengths. `None` means a solid (non-dashed) stroke.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dash: Option<(f64, f64)>,
+    pub dash_offset: f64,
 }
 
 /// Text styling that may be inherited from a parent node.
@@ -192,6 +196,8 @@ pub enum NodeKind {
         node_box: NodeBox,
         #[serde(flatten)]
         style: Style,
+        /// Corner radius in px, clamped to `min(w, h) / 2` at render time. `0.0` = square corners.
+        radius: f64,
     },
     /// Python: Ellipse(PositionMixin, SizeMixin, StyleMixin) + rotation + scale
     Ellipse {

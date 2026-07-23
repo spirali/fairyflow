@@ -38,6 +38,39 @@ pub fn build_path_verbs(commands: &[PathCommand]) -> Vec<PathVerb> {
     verbs
 }
 
+/// 4/3 * (sqrt(2) - 1) — the standard cubic-bezier quarter-circle approximation constant.
+const RRECT_KAPPA: f32 = 0.552_284_8;
+
+/// Backend-independent rounded-rect outline for a `0,0`-origin `w`×`h` box.
+/// `radius` is clamped to `[0, min(w, h) / 2]` here (not by the caller), so an
+/// oversized radius always degrades gracefully to a fully-rounded "stadium"
+/// shape instead of self-intersecting geometry.
+pub fn build_rounded_rect_verbs(w: f32, h: f32, radius: f32) -> Vec<PathVerb> {
+    let r = radius.max(0.0).min(w.min(h) / 2.0);
+    if r <= 0.0 {
+        return vec![
+            PathVerb::MoveTo(0.0, 0.0),
+            PathVerb::LineTo(w, 0.0),
+            PathVerb::LineTo(w, h),
+            PathVerb::LineTo(0.0, h),
+            PathVerb::Close,
+        ];
+    }
+    let k = r * RRECT_KAPPA;
+    vec![
+        PathVerb::MoveTo(r, 0.0),
+        PathVerb::LineTo(w - r, 0.0),
+        PathVerb::CubicTo(w - r + k, 0.0, w, r - k, w, r),
+        PathVerb::LineTo(w, h - r),
+        PathVerb::CubicTo(w, h - r + k, w - r + k, h, w - r, h),
+        PathVerb::LineTo(r, h),
+        PathVerb::CubicTo(r - k, h, 0.0, h - r + k, 0.0, h - r),
+        PathVerb::LineTo(0.0, r),
+        PathVerb::CubicTo(0.0, r - k, r - k, 0.0, r, 0.0),
+        PathVerb::Close,
+    ]
+}
+
 /// Convert `PathCommand` list to backend-independent path verbs, cropping to
 /// `[crop_start, crop_end]` (both in `[0.0, 1.0]` as fractions of total arc length).
 pub fn build_cropped_path_verbs(
@@ -286,5 +319,42 @@ impl CubicBezier {
         };
         let (left, _) = right.split(t_new.clamp(0.0, 1.0));
         left
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rounded_rect_zero_radius_is_a_plain_rect() {
+        let verbs = build_rounded_rect_verbs(40.0, 20.0, 0.0);
+        assert_eq!(
+            verbs,
+            vec![
+                PathVerb::MoveTo(0.0, 0.0),
+                PathVerb::LineTo(40.0, 0.0),
+                PathVerb::LineTo(40.0, 20.0),
+                PathVerb::LineTo(0.0, 20.0),
+                PathVerb::Close,
+            ]
+        );
+    }
+
+    #[test]
+    fn rounded_rect_normal_radius_starts_and_ends_on_the_top_edge() {
+        let verbs = build_rounded_rect_verbs(40.0, 20.0, 5.0);
+        assert_eq!(verbs.len(), 10); // move + 4x(line, cubic) + close
+        assert!(matches!(verbs[0], PathVerb::MoveTo(x, y) if x == 5.0 && y == 0.0));
+        assert!(matches!(verbs.last(), Some(PathVerb::Close)));
+    }
+
+    #[test]
+    fn rounded_rect_oversized_radius_clamps_to_half_the_shorter_side() {
+        // radius (100) far exceeds min(w, h)/2 (10) — must clamp, not
+        // self-intersect: the starting point sits at the clamped radius, not
+        // partway through the requested one.
+        let verbs = build_rounded_rect_verbs(40.0, 20.0, 100.0);
+        assert!(matches!(verbs[0], PathVerb::MoveTo(x, y) if x == 10.0 && y == 0.0));
     }
 }

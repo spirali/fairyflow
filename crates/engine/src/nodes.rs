@@ -68,6 +68,12 @@ pub struct Style {
     pub stroke_color: AttrExpr<Color>,
     pub stroke_width: AttrExpr<f64>,
     pub alpha: AttrExpr<f64>,
+    /// Both set together from the Python `stroke(dash=(on, off))` call; only
+    /// their joint presence (not `Value`-level animation) signals a dashed
+    /// stroke, so both stay ordinary `Expr<f64>` — no new `Value` impl needed.
+    pub dash_on: AttrExpr<f64>,
+    pub dash_off: AttrExpr<f64>,
+    pub dash_offset: AttrExpr<f64>,
 }
 
 /// Mirrors `TextStyleMixin` in Python. Unlike `Style`, these fields are
@@ -125,6 +131,7 @@ pub enum NodeKind {
     Rect {
         node_box: NodeBox,
         style: Style,
+        radius: AttrExpr<f64>,
     },
     /// Python: `Ellipse(PositionMixin, SizeMixin, StyleMixin)` + rotation + scale
     Ellipse {
@@ -338,6 +345,11 @@ pub(crate) struct NodeDef {
     pub fill: Option<Expr<Color>>,
     pub stroke: Option<Expr<Color>>,
     pub stroke_width: Option<Expr<f64>>,
+    pub dash_on: Option<Expr<f64>>,
+    pub dash_off: Option<Expr<f64>>,
+    pub dash_offset: Option<Expr<f64>>,
+
+    pub radius: Option<Expr<f64>>,
 
     pub crop_start: Option<Expr<f64>>,
     pub crop_end: Option<Expr<f64>>,
@@ -405,6 +417,9 @@ impl NodeDef {
             stroke_color: AttrExpr(self.stroke.take()),
             stroke_width: AttrExpr(self.stroke_width.take()),
             alpha: AttrExpr(self.alpha.take()),
+            dash_on: AttrExpr(self.dash_on.take()),
+            dash_off: AttrExpr(self.dash_off.take()),
+            dash_offset: AttrExpr(self.dash_offset.take()),
         }
     }
 
@@ -456,6 +471,7 @@ impl Node {
             Kind::Rect => NodeKind::Rect {
                 node_box: def.node_box(),
                 style: def.style(),
+                radius: AttrExpr(def.radius.take()),
             },
             Kind::Ellipse => NodeKind::Ellipse {
                 node_box: def.node_box(),

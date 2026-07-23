@@ -1,6 +1,8 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
-use crate::nodes::{AttrExpr, Camera, Node, NodeBox, NodeKind, Position, SceneDef, Style, TextStyle};
+use crate::nodes::{
+    AttrExpr, Camera, Node, NodeBox, NodeKind, Position, SceneDef, Style, TextStyle,
+};
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Value};
 use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
@@ -480,6 +482,14 @@ impl Position {
 
 impl Style {
     pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::Style> {
+        let dash = if self.dash_on.get_expr().is_some() && self.dash_off.get_expr().is_some() {
+            Some((
+                self.dash_on.eval_or(ctx, 0.0)?,
+                self.dash_off.eval_or(ctx, 0.0)?,
+            ))
+        } else {
+            None
+        };
         Ok(renderer_core::Style {
             fill_color: self
                 .fill_color
@@ -491,6 +501,8 @@ impl Style {
                 .into_inner(),
             stroke_width: self.stroke_width.eval_or(ctx, 1.0)?,
             alpha: self.alpha.eval_or(ctx, 1.0)?,
+            dash,
+            dash_offset: self.dash_offset.eval_or(ctx, 0.0)?,
         })
     }
 }
@@ -534,7 +546,12 @@ impl TextStyle {
 }
 
 impl Camera {
-    pub fn eval(&self, ctx: &EvalCtx, parent_w: f64, parent_h: f64) -> anyhow::Result<renderer_core::Camera> {
+    pub fn eval(
+        &self,
+        ctx: &EvalCtx,
+        parent_w: f64,
+        parent_h: f64,
+    ) -> anyhow::Result<renderer_core::Camera> {
         Ok(renderer_core::Camera {
             camera_zoom: self.zoom.eval_or(ctx, 1.0)?,
             camera_x: self.x.eval_or_else(ctx, |_ctx| Ok(parent_w * 0.5))?,
@@ -624,10 +641,13 @@ impl Node {
                 }
             }
             NodeKind::Rect {
-                node_box, style, ..
+                node_box,
+                style,
+                radius,
             } => renderer_core::NodeKind::Rect {
                 node_box: self.eval_node_box(node_box, ctx)?,
                 style: style.eval(ctx)?,
+                radius: radius.eval_or(ctx, 0.0)?,
             },
             NodeKind::Ellipse {
                 node_box, style, ..

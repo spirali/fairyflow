@@ -34,13 +34,13 @@ with Scene(1280, 720):
                 with Seq():
                     wait(0.01 * i)
                     with Group().xy(50 * (i % 20), (i // 20) * 50) as n:                    
-                        Rect().stroke_color("black").color("#ccc").size(40, 40)
+                        Rect().stroke("black").color("#ccc").size(40, 40)
                         Text().span(str(i + 1))
                         n.fade_in(dur=0.3)
                 numbers.append(n)
         wait(0.2)
 
-        arrow = Path().stroke_color("green").stroke_width(4)
+        arrow = Path().stroke("green", 4)
         arrow_start = arrow.move_to().xy(-150, -10)
         arrow_end = arrow.line_to().xy(-150, -50)
         arrow_head = arrow.arrow("start")
@@ -66,7 +66,7 @@ with Scene(1280, 720):
 
             with Group() as m:
                 m.pos(numbers[idx].at())
-                p = Path().stroke_color("red").stroke_width(2)
+                p = Path().stroke("red", 2)
                 a = p.move_to()
                 b = p.line_to()
                 p.move_to().pos(a.at()).move(0, -4)
@@ -214,7 +214,7 @@ with Group().size(1000, 400) as g:
             with Seq():
                 wait(0.01 * i)
                 with Group().xy(50 * (i % 20), (i // 20) * 50) as n:
-                    Rect().stroke_color("black").color("#ccc").size(40, 40)
+                    Rect().stroke("black").color("#ccc").size(40, 40)
                     Text().span(str(i + 1))
                     n.fade_in(dur=0.3)
             numbers.append(n)
@@ -251,7 +251,7 @@ outer clock to the longest child's end time (≈ 0.99 + 0.3 = 1.3 s), followed b
 ### The arrow indicator
 
 ```python
-arrow = Path().stroke_color("green").stroke_width(4)
+arrow = Path().stroke("green", 4)
 arrow_start = arrow.move_to().xy(-150, -10)
 arrow_end   = arrow.line_to().xy(-150, -50)
 arrow_head  = arrow.arrow("start")
@@ -304,7 +304,7 @@ Passing that `Position` to `.pos()` animates the path endpoint to the cell's cen
 ```python
 with Group() as m:
     m.pos(numbers[idx].at())
-    p = Path().stroke_color("red").stroke_width(2)
+    p = Path().stroke("red", 2)
     a = p.move_to()
     b = p.line_to()
     p.move_to().pos(a.at()).move(0, -4)

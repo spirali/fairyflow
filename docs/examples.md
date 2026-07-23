@@ -18,7 +18,7 @@ multiples are marked red and then hidden, leaving only the primes at the end.
 with Scene(1280, 720):
     with Group().column(40).align(y=0.6):
         with Group() as g2:
-            t = Text().span("Sieve of Eratosthenes").font_size(40).bold()
+            t = Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
             Image("docs/ff_logo.png").height(200)
         wait(0.2)        
@@ -148,7 +148,7 @@ with Scene(1280, 720):
 
     with Group().column(40).align(y=0.2) as g:
         with Group() as g2:
-            Text().span("Sieve of Eratosthenes").font_size(40).bold()
+            Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
             Image("docs/ff_logo.png").height(200)    
         g.fade_in(dur=1)
@@ -181,7 +181,7 @@ with Scene(1280, 720):
 with Scene(1280, 720):
     with Group().column(40).align(y=0.6):
         with Group() as g2:
-            Text().span("Sieve of Eratosthenes").font_size(40).bold()
+            Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
             Image("../docs/ff_logo.png").height(200)
         wait(0.2)
@@ -411,7 +411,7 @@ use the same column/row formula but shifted 300 px down to keep them within the 
 ```python
 with Group().column(40).align(y=0.2) as g:
     with Group() as g2:
-        Text().span("Sieve of Eratosthenes").font_size(40).bold()
+        Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
     with Group() as g3:
         Image("../docs/ff_logo.png").height(200)
     g.fade_in(dur=1)

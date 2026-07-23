@@ -174,7 +174,7 @@ with Scene(width=300, height=120):
         Rect().size(60, 60).color("steelblue")
 
     label = Text()
-    label.span("label").font_size(16)
+    label.span("label").font(size=16)
     label.next_to(box, "right", gap=12)   # right of box, vertically centered
 ```
 
@@ -189,7 +189,7 @@ with Scene(width=300, height=120):
         Rect().size(60, 60).color("coral")
 
     caption = Text()
-    caption.span("caption").font_size(14)
+    caption.span("caption").font(size=14)
     caption.next_to(img, "below", gap=8, align=0)   # under img, left edges aligned
 ```
 

@@ -6,6 +6,7 @@ from typing import Union
 from .types import StringLike, BoolLike, FloatLike
 from .animtime import Duration, Easing
 from .sentinels import INHERITED_VALUE
+from .ctxvars import Par
 
 from .nodes import (
     Node,
@@ -24,26 +25,38 @@ class TextStyleMethods:
     `Text`) and `InheritedTextStyleMixin` (cascading defaults — `TextGroup`/
     `TextSpan`); the methods don't care which default strategy backs them."""
 
-    def italic(self, value: BoolLike, *, dur: Duration = None, ease: Easing = None):
-        self._set_attr("italic", value, dur, ease)
-        return self
-
-    def font(self, value: StringLike, *, dur: Duration = None, ease: Easing = None):
-        self._set_attr("font", value, dur, ease)
-        return self
-
-    def font_size(self, value: FloatLike, *, dur: Duration = None, ease: Easing = None):
-        self._set_attr("font_size", value, dur, ease)
-        return self
-
-    def font_weight(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
+    def font(
+        self,
+        family: StringLike | None = None,
+        size: FloatLike | None = None,
+        *,
+        weight: FloatLike | None = None,
+        italic: BoolLike | None = None,
+        bold: bool | None = None,
+        mono: bool | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
     ):
-        self._set_attr("font_weight", value, dur, ease)
+        if bold is not None:
+            if weight is not None:
+                raise TypeError("font(): pass either weight= or bold=, not both")
+            weight = 800 if bold else 400
+        if mono is not None:
+            if family is not None:
+                raise TypeError(
+                    "font(): pass either family (positional) or mono=, not both"
+                )
+            family = "monospace" if mono else "sans-serif"
+        with Par():
+            if family is not None:
+                self._set_attr("font", family, dur, ease)
+            if size is not None:
+                self._set_attr("font_size", size, dur, ease)
+            if weight is not None:
+                self._set_attr("font_weight", weight, dur, ease)
+            if italic is not None:
+                self._set_attr("italic", italic, dur, ease)
         return self
-
-    def bold(self):
-        return self.font_weight(800)
 
 
 @beartype
@@ -283,15 +296,15 @@ def _apply_style(obj, attrs):
         if key == "color":
             obj.color(val)
         elif key in ("text-size", "font-size"):
-            obj.font_size(float(val))
+            obj.font(size=float(val))
         elif key == "bold":
-            obj.bold()
+            obj.font(bold=True)
         elif key == "italic":
-            obj.italic(True)
+            obj.font(italic=True)
         elif key == "font":
             obj.font(val)
         elif key == "font-weight":
-            obj.font_weight(float(val))
+            obj.font(weight=float(val))
 
 
 def _add_lines(parent, text_str, name=None, attrs=None):
@@ -375,11 +388,11 @@ def stext(input_text: str, *, strip: bool = True, delimiters: str = "<>"):
 
     Tag attributes are applied as styles:
       color='...'            → .color(...)
-      font-size='...'        → .font_size(...)  (also: text-size)
+      font-size='...'        → .font(size=...)  (also: text-size)
       font='...'             → .font(...)
-      font-weight='...'      → .font_weight(...)
-      bold                   → .bold()
-      italic                 → .italic(True)
+      font-weight='...'      → .font(weight=...)
+      bold                   → .font(bold=True)
+      italic                 → .font(italic=True)
 
     Examples::
 

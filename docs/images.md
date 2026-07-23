@@ -31,6 +31,15 @@ with Scene():
     Image("assets/photo.jpg", keep_aspect=False).size(200, 150)
 ```
 
+`keep_aspect` is also a runtime setter, not just a constructor argument, so it can be
+toggled after the image is created:
+
+```python
+with Scene():
+    img = Image("assets/photo.jpg").size(200, 150)
+    img.keep_aspect(False)
+```
+
 When only one dimension is given, the other is computed automatically to preserve the aspect ratio:
 
 ```python

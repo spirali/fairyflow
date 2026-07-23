@@ -1076,4 +1076,63 @@ mod tests {
         assert_eq!(explicit.camera_x, 11.0);
         assert_eq!(explicit.camera_y, 13.0);
     }
+
+    /// `Text` gained a `size`/`keep_aspect` (proposal §4.10). Uses `text` nodes
+    /// with **no** `tspan`/`tline` children so `measure_text`'s empty-lines
+    /// path (`measure_text_lines`, `text_layout.rs`) short-circuits to
+    /// `(0.0, 0.0)` before touching any font machinery — keeps this a
+    /// deterministic engine-only test independent of `Resources::init()`/
+    /// font availability (real single/both-axis aspect derivation and
+    /// descendant-scaling are covered by `tests/test_text_size.py`'s golden
+    /// renders instead, which do exercise real glyph measurement).
+    const TEXT_SIZE_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "TextSize", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "text", "x": 10, "y": 20, "w": 80, "h": 30, "keep_aspect": false},
+       {"kind": "text", "x": 0, "y": 0}
+     ]}
+  ]
+}"#;
+
+    fn text_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Text { size, .. } => (size.width, size.height),
+            other => panic!("expected a text node, got {other:?}"),
+        }
+    }
+
+    fn text_keep_aspect(scene: &renderer_core::Scene, id: u64) -> bool {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Text { keep_aspect, .. } => *keep_aspect,
+            other => panic!("expected a text node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_explicit_w_h_keep_aspect_round_trip() {
+        // `measure_text`'s thread-local layout engine touches
+        // `renderer_core::Resources::get()` on first use even for empty
+        // lines (font-context construction, not glyph shaping) - harmless
+        // and idempotent to call here regardless of system font availability.
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(TEXT_SIZE_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Node 0: both axes + keep_aspect explicit -> `get_width`/`get_height`
+        // (layout.rs) never call `auto_width`/`auto_height` at all, so the
+        // resolved box is exactly the literal values (the `get_size` wiring
+        // this slice added, `layout.rs`/`eval.rs`).
+        assert_eq!(text_wh(&scene, 0), (80.0, 30.0));
+        assert!(!text_keep_aspect(&scene, 0));
+        // Node 1: nothing set -> defaults (empty-text natural extent (0, 0),
+        // keep_aspect true).
+        assert_eq!(text_wh(&scene, 1), (0.0, 0.0));
+        assert!(text_keep_aspect(&scene, 1));
+    }
 }

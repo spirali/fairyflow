@@ -30,8 +30,8 @@ impl Node {
             | NodeKind::Ellipse { node_box, .. }
             | NodeKind::Image { node_box, .. }
             | NodeKind::Layer { node_box, .. } => Some(&node_box.size),
-            NodeKind::Text { .. }
-            | NodeKind::Move { .. }
+            NodeKind::Text { size, .. } => Some(size),
+            NodeKind::Move { .. }
             | NodeKind::Line { .. }
             | NodeKind::Cubic { .. }
             | NodeKind::TextGroup { .. }
@@ -406,12 +406,28 @@ impl Node {
                 };
                 content_w + padding.left.eval_or(ctx, 0.0)? + padding.right.eval_or(ctx, 0.0)?
             }
-            NodeKind::Text { children, .. } => {
+            NodeKind::Text { children, size, .. } => {
                 let lines = children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                renderer_core::measure_text(&lines).0 as f64
+                let (iw, ih) = renderer_core::measure_text(&lines);
+                if size
+                    .height
+                    .get_expr()
+                    .is_none_or(|e| e.is_auto_height_of(self.id))
+                {
+                    // Both dimensions are defaults → return natural width.
+                    iw as f64
+                } else {
+                    // Height is explicit → scale width to preserve aspect ratio.
+                    let h = size.height.get_expr().unwrap().eval(ctx)?;
+                    if ih == 0.0 {
+                        0.0
+                    } else {
+                        h * iw as f64 / ih as f64
+                    }
+                }
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
@@ -510,12 +526,28 @@ impl Node {
                 };
                 content_h + padding.top.eval_or(ctx, 0.0)? + padding.bottom.eval_or(ctx, 0.0)?
             }
-            NodeKind::Text { children, .. } => {
+            NodeKind::Text { children, size, .. } => {
                 let lines = children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                renderer_core::measure_text(&lines).1 as f64
+                let (iw, ih) = renderer_core::measure_text(&lines);
+                if size
+                    .width
+                    .get_expr()
+                    .is_none_or(|e| e.is_auto_width_of(self.id))
+                {
+                    // Both dimensions are defaults → return natural height.
+                    ih as f64
+                } else {
+                    // Width is explicit → scale height to preserve aspect ratio.
+                    let w = size.width.get_expr().unwrap().eval(ctx)?;
+                    if iw == 0.0 {
+                        0.0
+                    } else {
+                        w * ih as f64 / iw as f64
+                    }
+                }
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
@@ -549,15 +581,60 @@ impl Node {
     }
 }
 
-fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
-    let NodeKind::Text { children, .. } = &node.text_ancestor(ctx)?.kind else {
+/// Content-space scale + centering offset a `Text` node applies to its laid-out
+/// children when `size(w=, h=)` differs from the natural (unscaled) extent —
+/// mirrors `Image`'s `keep_aspect` fit math (`render_image`/`ImagePlacement` in
+/// the renderers). Reduces to `(1, 1, 0, 0)` whenever the box equals the natural
+/// extent (the untouched-default case), since `auto_width`/`auto_height` already
+/// resolve to that extent.
+fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64, f64, f64)> {
+    let NodeKind::Text {
+        children,
+        keep_aspect,
+        ..
+    } = &text_node.kind
+    else {
         unreachable!()
     };
     let lines = children
         .iter()
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(renderer_core::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0)))
+    let (iw, ih) = renderer_core::measure_text(&lines);
+    if iw == 0.0 || ih == 0.0 {
+        return Ok((1.0, 1.0, 0.0, 0.0));
+    }
+    let (iw, ih) = (iw as f64, ih as f64);
+    let box_w = text_node.get_width(ctx)?;
+    let box_h = text_node.get_height(ctx)?;
+    if keep_aspect.eval_or(ctx, true)? {
+        let s = (box_w / iw).min(box_h / ih);
+        Ok((s, s, (box_w - iw * s) / 2.0, (box_h - ih * s) / 2.0))
+    } else {
+        Ok((box_w / iw, box_h / ih, 0.0, 0.0))
+    }
+}
+
+/// Unscaled position of a text-run node (`TextGroup`/`TextSpan`) within its
+/// owning `Text`'s laid-out paragraph, then mapped through that `Text`'s
+/// content-fit scale/offset (`text_content_fit`) so `word.at("right")` lands
+/// on the glyph in scaled space (proposal §4.1), not the raw glyph-space one.
+fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+    let text_node = node.text_ancestor(ctx)?;
+    let NodeKind::Text { children, .. } = &text_node.kind else {
+        unreachable!()
+    };
+    let lines = children
+        .iter()
+        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let (lx, ly) =
+        renderer_core::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0));
+    let (sx, sy, off_x, off_y) = text_content_fit(text_node, ctx)?;
+    Ok((
+        (lx as f64 * sx + off_x) as f32,
+        (ly as f64 * sy + off_y) as f32,
+    ))
 }
 
 /// Per-column widths (max width of any counted child in that column) and

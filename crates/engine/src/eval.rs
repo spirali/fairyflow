@@ -677,6 +677,8 @@ impl Node {
             },
             NodeKind::Text {
                 position,
+                size,
+                keep_aspect,
                 text_style,
                 sh_language,
                 sh_theme,
@@ -684,6 +686,11 @@ impl Node {
                 ..
             } => renderer_core::NodeKind::Text {
                 position: position.eval(ctx, self)?,
+                size: renderer_core::Size {
+                    width: size.width.eval_or_else(ctx, |ctx| self.auto_width(ctx))?,
+                    height: size.height.eval_or_else(ctx, |ctx| self.auto_height(ctx))?,
+                },
+                keep_aspect: keep_aspect.eval_or(ctx, true)?,
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),

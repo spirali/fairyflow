@@ -419,6 +419,29 @@ class SizeMixin:
         return self.size(rel(1), rel(1), dur=dur, ease=ease)
 
 
+class KeepAspectMixin:
+    """Mixin that adds a `keep_aspect()` runtime setter for nodes whose
+    content is scaled to fit an explicit box (`Image`, `Text`). Boolean and
+    instant only (no `dur=`/`ease=`) — it only matters when both size axes
+    are explicit, and toggling it is a discrete fit-mode switch, not
+    something to interpolate."""
+
+    def keep_aspect(self, value: bool = True) -> Self:
+        """Set whether content is letterboxed (preserving aspect ratio) or
+        stretched to fill an explicit `size(w=, h=)` box.
+
+        Args:
+            value: ``True`` (default) letterboxes/pillarboxes and centers
+                the content, preserving its aspect ratio. ``False`` stretches
+                it to exactly fill the box.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._set_attr("keep_aspect", value)
+        return self
+
+
 AnchorName = Literal[
     "center",
     "top",
@@ -2180,6 +2203,7 @@ class Image(
     NodeWithChildren,
     PositionMixin,
     SizeMixin,
+    KeepAspectMixin,
     ZLevelMixin,
     AlphaMixin,
     RotAndScaleMixin,

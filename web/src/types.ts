@@ -33,7 +33,7 @@ export interface RawNode {
   // position (group, rect, ellipse, move, line, cubic, text, image, layer)
   x?: number;
   y?: number;
-  // size (group, rect, ellipse, image, layer)
+  // size (group, rect, ellipse, image, layer, text)
   width?: number;
   height?: number;
   // group-specific

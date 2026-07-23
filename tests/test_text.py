@@ -250,19 +250,19 @@ def test_literal_lt_slash_no_closing_gt(sc):
 def test_tgroup_inline_two_spans(test_scene):
     """Two same-style spans in a tline render exactly once each."""
     with test_scene.size(200, 40):
-        stext("hello world").xy(4, 15).font_size(16)
+        stext("hello world").xy(4, 15).font(size=16)
 
 
 def test_tgroup_inline_two_spans_colored(test_scene):
     """Two spans with different fill colors in a tline render without duplication."""
     with test_scene.size(200, 40):
-        stext("<a>hello</a> <b color='red'>world</b>").xy(4, 15).font_size(16)
+        stext("<a>hello</a> <b color='red'>world</b>").xy(4, 15).font(size=16)
 
 
 def test_tgroup_plain_and_tagged(test_scene):
     """Plain text followed by a colored tag renders as one line, not overlapping."""
     with test_scene.size(240, 40):
-        stext("cpus=2 <s color='green'>+ gpus=2</s>").xy(4, 15).font_size(16)
+        stext("cpus=2 <s color='green'>+ gpus=2</s>").xy(4, 15).font(size=16)
 
 
 def test_tgroup_three_spans(test_scene):
@@ -270,15 +270,15 @@ def test_tgroup_three_spans(test_scene):
     with test_scene.size(280, 40):
         stext(
             "<a color='red'>one</a> <b color='blue'>two</b> <c color='green'>three</c>"
-        ).xy(4, 15).font_size(16)
+        ).xy(4, 15).font(size=16)
 
 
 def test_tgroup_nested(test_scene):
     """Nested tline (outer + inner tag) does not duplicate glyphs."""
     with test_scene.size(200, 40):
-        stext("<outer>foo <inner color='orange'>bar</inner></outer>").xy(
-            4, 15
-        ).font_size(16)
+        stext("<outer>foo <inner color='orange'>bar</inner></outer>").xy(4, 15).font(
+            size=16
+        )
 
 
 # ── Text ctor / .line() tests ────────────────────────────────────────────────
@@ -359,4 +359,4 @@ def test_text_ctor_multiline(test_scene):
     """A two-line Text built via the ctor renders correctly end-to-end."""
     test_scene.pdf_tolerance = 40  # two lines of vector-drawn glyphs vs. raster AA
     with test_scene.size(200, 60):
-        Text("line one\nline two").xy(4, 15).font_size(16)
+        Text("line one\nline two").xy(4, 15).font(size=16)

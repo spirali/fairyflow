@@ -228,7 +228,7 @@ def test_next_to_text(test_scene):
     with test_scene:
         with Group().size(60, 40):
             t = Text().xy(2, 12)
-            t.span("Hi").font_size(14)
+            t.span("Hi").font(size=14)
             r = Rect().size(8, 8).color("tomato")
             r.next_to(t, "right", gap=3)
 
@@ -240,7 +240,7 @@ def test_next_to_span(test_scene):
     with test_scene:
         with Group().size(60, 40):
             t = Text().xy(2, 12)
-            span = t.span("Hi").font_size(14)
+            span = t.span("Hi").font(size=14)
             r = Rect().size(8, 8).color("tomato")
             r.next_to(span, "right", gap=3)
 

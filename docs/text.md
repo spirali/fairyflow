@@ -11,12 +11,12 @@ split on `\n` into lines:
 
 ```ffpy frame="0"
 with Scene():
-    Text("Hello, FairyFlow!").font_size(28).color("steelblue")
+    Text("Hello, FairyFlow!").font(size=28).color("steelblue")
 ```
 
 ```ffpy frame="0"
 with Scene():
-    Text("First line\nSecond line\nThird line").font_size(22).color("steelblue")
+    Text("First line\nSecond line\nThird line").font(size=22).color("steelblue")
 ```
 
 Use `.line(text="")` to start additional lines and style them individually,
@@ -24,14 +24,14 @@ and `.span(text)` to add another inline run to the *current* (last) line:
 
 ```ffpy frame="0"
 with Scene():
-    t = Text("First line").font_size(22).color("darkslateblue")
+    t = Text("First line").font(size=22).color("darkslateblue")
     t.line("Second line").color("steelblue")
     t.line("Third line").color("cornflowerblue")
 ```
 
 ```ffpy frame="0"
 with Scene():
-    t = Text("INFO ").font_size(22).font("monospace")
+    t = Text("INFO ").font("monospace", 22)
     t.span("server started").color("gray")
 ```
 
@@ -45,32 +45,36 @@ handle to a nested sub-group of runs (e.g. to name or style them together):
 with Scene():
     t = Text()
     g = t.group()
-    g.span("Bold").bold().font_size(26).color("darkred")
-    g.span("  normal  ").font_size(26).color("gray")
-    g.span("Italic").italic(True).font_size(26).color("darkblue")
+    g.span("Bold").font(size=26, bold=True).color("darkred")
+    g.span("  normal  ").font(size=26).color("gray")
+    g.span("Italic").font(size=26, italic=True).color("darkblue")
 ```
 
 ---
 
 ## Font styling
 
-All text nodes share the same set of style methods:
+All text nodes share one structured style setter,
+`.font(family=None, size=None, *, weight=, italic=, bold=, mono=, dur=, ease=)`,
+plus `.color(c)` for the text fill color:
 
-| Method | Description |
+| Parameter | Effect |
 |---|---|
-| `.font_size(px)` | Font size in pixels |
-| `.font(name)` | Font family name, e.g. `"serif"`, `"monospace"`, or font name |
-| `.bold()` | Shortcut for `.font_weight(800)` |
-| `.font_weight(w)` | Weight value (100–900) |
-| `.italic(True)` | Enable italic |
-| `.color(c)` | Text fill color |
+| `family` (positional) | Font family name, e.g. `"serif"`, `"monospace"`, or font name |
+| `size` (positional) | Font size in pixels |
+| `weight=` | Numeric weight (100–900) |
+| `bold=True` | Shortcut for `weight=800` (`bold=False` resets to `weight=400`) |
+| `mono=True` | Shortcut for `family="monospace"` (`mono=False` resets to `"sans-serif"`) |
+| `italic=` | Enable/disable italic |
+
+`bold=`/`weight=` are mutually exclusive (as are `mono=`/`family`) — passing both raises `TypeError`.
 
 ```ffpy frame="0"
 with Scene():
     t = Text()
-    t.span("Small").font_size(14).color("gray")
-    t.span("Medium").font_size(22).color("steelblue")
-    t.span("Large").font_size(36).bold().color("darkslateblue")
+    t.span("Small").font(size=14).color("gray")
+    t.span("Medium").font(size=22).color("steelblue")
+    t.span("Large").font(size=36, bold=True).color("darkslateblue")
 ```
 
 To use your own font files, add a `font_directories` key to `fairyflow.toml`. FairyFlow scans each listed directory recursively and loads all fonts it finds (`.ttf`, `.otf`, `.ttc`, `.otc`, `.woff`, `.woff2`). Paths are relative to the project root.
@@ -82,7 +86,7 @@ font_directories = ["fonts"]
 After adding fonts, refer to them by family name in `.font()`:
 
 ```python
-t.span("Custom text").font("MyFont").font_size(24)
+t.span("Custom text").font("MyFont", 24)
 ```
 
 ### Font aliases
@@ -123,12 +127,12 @@ Use a `color` attribute on any named tag to set the text color:
 
 ```ffpy frame="0"
 with Scene():
-    stext('<info color="green">INFO</info> server started').font_size(22).font("monospace")
+    stext('<info color="green">INFO</info> server started').font("monospace", 22)
 ```
 
 ```ffpy frame="0"
 with Scene():
-    stext('<span color="#e06c75" bold>ERROR</span> something went wrong').font_size(22).font("monospace")
+    stext('<span color="#e06c75" bold>ERROR</span> something went wrong').font("monospace", 22)
 ```
 
 ### Supported attributes
@@ -154,8 +158,8 @@ The tag name is still recorded via `.name()`, so you can look the span up and re
 
 ```python
 t = stext("<title>FairyFlow\n<subtitle>Animation for Python")
-t.find_node(name="title").font_size(32).bold().color("steelblue")
-t.find_node(name="subtitle").font_size(18).color("gray")
+t.find_node(name="title").font(size=32, bold=True).color("steelblue")
+t.find_node(name="subtitle").font(size=18).color("gray")
 ```
 
 ### Literal `<` characters

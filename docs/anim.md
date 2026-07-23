@@ -83,7 +83,7 @@ with Scene(width=320, height=260):
     rects = []
     for i, name in enumerate(easings):
         y = 20 + i * 48
-        Text().xy(4, y).span(name).font_size(14).color("gray")
+        Text().xy(4, y).span(name).font(size=14).color("gray")
         r = Rect().size(18, 18).color("steelblue").xy(70, y - 2)
         rects.append(r)
     wait(0.3)
@@ -335,7 +335,7 @@ with Scene():
     with Group().size(200, 60) as g:
         Rect().size(200, 60).color("cornflowerblue")
         t = Text()
-        t.span("Revealed!").font_size(22).bold().color("white")
+        t.span("Revealed!").font(size=22, bold=True).color("white")
         t.xy(40, 18)
     g.clip(w=0)               # start fully hidden
     g.clip(w=1, dur=1.2)      # reveal left-to-right over 1.2 s
@@ -353,7 +353,7 @@ with Scene():
     with Group().size(200, 60).align(0.5, 0.5) as g:
         Rect().size(200, 60).color("cornflowerblue")
         t = Text()
-        t.span("reveal / hide").font_size(14).bold().color("white")
+        t.span("reveal / hide").font(size=14, bold=True).color("white")
         t.xy(18, 22)
     g.reveal("right", dur=1)   # expand clip from left to right
     wait(0.4)

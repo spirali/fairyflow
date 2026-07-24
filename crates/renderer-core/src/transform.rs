@@ -1,11 +1,12 @@
 use crate::{Camera, Node, NodeBox, NodeKind, Position, Size};
+use serde::Serialize;
 
 /// Portable 2D affine transform.
 ///
 /// A point `(x, y)` maps to `(x*a + y*c + e, x*b + y*d + f)`.
 /// This is the standard 2D affine matrix stored in column-major order, matching
 /// the convention used by both `tiny_skia::Transform` and `krilla::geom::Transform`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize)]
 pub struct AffineTransform {
     pub a: f32,
     pub b: f32,
@@ -16,6 +17,15 @@ pub struct AffineTransform {
 }
 
 impl AffineTransform {
+    /// Map a point through this transform: `(x*a + y*c + e, x*b + y*d + f)`,
+    /// per the struct's own documented convention.
+    pub fn apply(&self, x: f32, y: f32) -> (f32, f32) {
+        (
+            x * self.a + y * self.c + self.e,
+            x * self.b + y * self.d + self.f,
+        )
+    }
+
     pub fn identity() -> Self {
         Self {
             a: 1.,
@@ -140,5 +150,61 @@ pub fn node_z_level(node: &Node) -> f64 {
         | NodeKind::Image { node_box, .. }
         | NodeKind::Text { node_box, .. } => *node_box.z_level.value(),
         NodeKind::Path { z_level, .. } => *z_level.value(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_close(a: (f32, f32), b: (f32, f32)) {
+        assert!(
+            (a.0 - b.0).abs() < 1e-4 && (a.1 - b.1).abs() < 1e-4,
+            "expected {b:?}, got {a:?}"
+        );
+    }
+
+    #[test]
+    fn apply_identity_is_a_no_op() {
+        let t = AffineTransform::identity();
+        assert_close(t.apply(3.0, -4.0), (3.0, -4.0));
+    }
+
+    #[test]
+    fn apply_translate_shifts_the_point() {
+        let t = AffineTransform::from_translate(10.0, -5.0);
+        assert_close(t.apply(1.0, 2.0), (11.0, -3.0));
+    }
+
+    #[test]
+    fn apply_rotate_90_degrees_swaps_and_negates_axes() {
+        // parley/tiny-skia convention: +90° rotates +x toward +y.
+        let t = AffineTransform::from_rotate_degrees(90.0);
+        assert_close(t.apply(1.0, 0.0), (0.0, 1.0));
+    }
+
+    #[test]
+    fn apply_scale_multiplies_each_axis_independently() {
+        let t = AffineTransform::from_scale(2.0, 3.0);
+        assert_close(t.apply(4.0, 5.0), (8.0, 15.0));
+    }
+
+    #[test]
+    fn apply_matches_positional_transform_around_a_pivot() {
+        // A point exactly at the pivot must stay fixed under any
+        // rotation/scale, then land at `position + pivot` (positional_transform's
+        // documented chain: translate(-pivot) -> scale -> rotate -> translate(pos+pivot)).
+        let t = positional_transform(
+            Position { x: 100.0, y: 50.0 },
+            Size {
+                width: 2.0,
+                height: 3.0,
+            },
+            90.0,
+            10.0,
+            20.0,
+            AffineTransform::identity(),
+        );
+        assert_close(t.apply(10.0, 20.0), (110.0, 70.0));
     }
 }

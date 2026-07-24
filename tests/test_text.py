@@ -727,3 +727,115 @@ def test_next_to_targeting_a_placeable_span(test_scene):
         span = t.span("target")
         r = Rect().size(8, 8).fill("tomato")
         r.next_to(span, "right", gap=3)
+
+
+# ── Per-run transforms: TextGroup/TextSpan .rotate()/.scale()/.pivot() ──────
+# proposal §4.1/§4.10: "text lines and spans... gain rotate()/scale() about
+# their own measured box — spin or grow a word in place." Composes with
+# item 16's placeable position (.xy()/.move()) via two independent cascades.
+
+
+def test_span_rotate_scale_pivot_serializes():
+    s = Scene(100, 100)
+    with s:
+        span = Text().span("hi")
+        span.rotate(45).scale(2).pivot(x=0, y=0)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert node["rotation"] == 45
+    assert node["scale_x"] == 2
+    assert node["scale_y"] == 2
+    assert node["pivot_x"] == 0
+    assert node["pivot_y"] == 0
+
+
+def test_span_rotate_absent_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text().span("hi")
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert "rotation" not in node
+    assert "scale_x" not in node
+    assert "pivot_x" not in node
+
+
+def test_tgroup_scale_serializes():
+    s = Scene(100, 100)
+    with s:
+        t = Text()
+        line = t.line()
+        line.span("hi")
+        line.scale(1.5)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert node["scale_x"] == 1.5
+    assert node["scale_y"] == 1.5
+
+
+def test_span_has_no_size_or_z():
+    # RotAndScaleMixin doesn't drag in SizeMixin/ZLevelMixin — a run's extent
+    # is always its measured glyphs, and paragraph order is draw order.
+    s = Scene(100, 100)
+    with s:
+        span = Text().span("hi")
+    assert not hasattr(span, "size")
+    assert not hasattr(span, "z")
+
+
+def test_word_spins_in_place(test_scene):
+    with test_scene.size(150, 150):
+        t = Text().font(size=20).xy(20, 60).fill("black")
+        t.span("spin ")
+        word = t.span("me")
+        word.fill("darkred")
+        word.rotate(30)
+
+
+def test_word_grows_from_corner_pivot(test_scene):
+    with test_scene.size(150, 150):
+        t = Text().font(size=16).xy(20, 60).fill("black")
+        t.span("grow ")
+        word = t.span("me")
+        word.fill("darkblue")
+        word.pivot("top_left")
+        word.scale(2.0)
+
+
+def test_word_spins_and_moves(test_scene):
+    """`.rotate()` and `.xy()` on the same span compose: spin in place
+    (around the span's own natural position/pivot), then translate by the
+    override delta — the two cascades resolve independently but stack."""
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(300, 200):
+        t = Text().font(size=20).xy(20, 40).fill("black")
+        t.span("spin and move ")
+        word = t.span("me")
+        word.fill("darkred")
+        word.rotate(45)
+        word.xy(180, 30)
+
+
+def test_tgroup_rotates_as_a_rigid_unit(test_scene):
+    """A rotated `TextGroup` line spins every descendant span that doesn't
+    have its own closer transform, as one rigid unit."""
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(200, 150):
+        t = Text().font(size=16).xy(60, 20).fill("black")
+        t.line("Untouched line")
+        line2 = t.line()
+        line2.span("Rotated ").fill("darkblue")
+        line2.span("line")
+        line2.rotate(15)
+
+
+def test_span_own_transform_wins_over_ancestor_group(test_scene):
+    """A span's own rotate/scale takes precedence over its parent group's,
+    matching the "nearest self-or-ancestor wins" cascade rule used for
+    position override."""
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(200, 150):
+        t = Text().font(size=16).xy(20, 20).fill("black")
+        line = t.line()
+        line.span("Second ").fill("darkblue")
+        special = line.span("line")
+        special.fill("darkred")
+        line.rotate(20)
+        special.scale(1.8)

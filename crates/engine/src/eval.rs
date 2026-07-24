@@ -789,18 +789,6 @@ impl Node {
         }
     }
 
-    /// Layout-only variant of `eval_as_text_child`: never computes a leaf
-    /// span's `override_offset`. Used internally by measurement helpers
-    /// (`auto_width`/`auto_height`/`text_content_fit`/`text_default_pos`,
-    /// `layout.rs`) so that resolving an override's delta — which itself
-    /// needs the block's *natural*, un-overridden layout — never recurses
-    /// back into the very override computation it's in the middle of
-    /// resolving. Without this split, `text_default_pos` re-evaluating an
-    /// overridden span's ancestor block (to measure its natural position)
-    /// would call `eval_as_text_span` on that same span again, which would
-    /// call `text_default_pos` again, unboundedly (a real stack overflow,
-    /// caught by hand while smoke-testing, not by a test — see the Testing
-    /// section for the regression test this earned).
     pub(crate) fn eval_as_text_child_for_layout(
         &self,
         ctx: &EvalCtx,
@@ -819,7 +807,7 @@ impl Node {
     pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextGroup> {
         match &self.kind {
             NodeKind::TextGroup {
-                position: _,
+                node_box: _,
                 text_style,
                 text_align,
                 children,
@@ -844,7 +832,7 @@ impl Node {
     ) -> anyhow::Result<renderer_core::TextGroup> {
         match &self.kind {
             NodeKind::TextGroup {
-                position: _,
+                node_box: _,
                 text_style,
                 text_align,
                 children,
@@ -882,10 +870,19 @@ impl Node {
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextSpan> {
         match &self.kind {
             NodeKind::TextSpan {
-                position: _,
+                node_box: _,
                 text_style,
                 text,
             } => {
+                // Two independent cascades (see `nearest_position_override_delta`/
+                // `nearest_run_transform_component`, `layout.rs`), kept as two
+                // separate fields rather than pre-composed here: `override_offset`
+                // is in *final* (fit-scaled) space and needs a renderer-side
+                // `/fit_scale` conversion to raw glyph space before it can be
+                // composed with `override_transform` (already raw) — composing
+                // them here, before that conversion, would silently mix units
+                // once rotation is involved (concat's cross terms aren't a
+                // no-op once `override_transform` has a nonzero rotation).
                 let dx = crate::layout::nearest_position_override_delta(
                     ctx,
                     self,
@@ -900,11 +897,13 @@ impl Node {
                     (None, None) => None,
                     _ => Some((dx.unwrap_or(0.0) as f32, dy.unwrap_or(0.0) as f32)),
                 };
+                let override_transform = crate::layout::nearest_run_transform_component(ctx, self)?;
                 Ok(renderer_core::TextSpan {
                     id: self.id.as_u64(),
                     text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
                     text_style: text_style.eval_as_inheritable(ctx, self)?,
                     override_offset,
+                    override_transform,
                 })
             }
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
@@ -912,17 +911,17 @@ impl Node {
     }
 
     /// Layout-only variant of `eval_as_text_span` — see
-    /// `eval_as_text_child_for_layout`. `override_offset` is always `None`:
-    /// this path exists specifically to compute a span's *natural* position,
-    /// so it must never itself consult (or recurse into) override
-    /// resolution.
+    /// `eval_as_text_child_for_layout`. `override_offset`/`override_transform`
+    /// are always `None`: this path exists specifically to compute a span's
+    /// *natural* position, so it must never itself consult (or recurse into)
+    /// override resolution.
     fn eval_as_text_span_for_layout(
         &self,
         ctx: &EvalCtx,
     ) -> anyhow::Result<renderer_core::TextSpan> {
         match &self.kind {
             NodeKind::TextSpan {
-                position: _,
+                node_box: _,
                 text_style,
                 text,
             } => Ok(renderer_core::TextSpan {
@@ -930,6 +929,7 @@ impl Node {
                 text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
                 override_offset: None,
+                override_transform: None,
             }),
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }

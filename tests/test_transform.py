@@ -47,14 +47,6 @@ def test_image_layer_rotate_serializes(sc):
     assert layer_node["rotation"] == 20
 
 
-def test_text_span_has_no_rotate(sc):
-    from fairyflow import Text
-
-    span = Text().span("hi")
-    assert not hasattr(span, "rotate")
-    assert isinstance(span, TextSpan)
-
-
 def test_path_move_has_no_rotate(sc):
     p = FFPath()
     handle = p.move_to(5, 7)

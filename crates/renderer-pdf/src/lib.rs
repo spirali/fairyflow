@@ -10,7 +10,7 @@ use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
 use renderer_core::resources::Resources;
-use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
+use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
     AffineTransform, camera_transform, node_z_level, positional_transform, transform_node_box,
 };
@@ -270,18 +270,21 @@ impl PdfRenderer {
                 position,
                 size,
                 keep_aspect,
+                wrap,
+                text_align,
                 text_style: _,
                 sh_language,
                 sh_theme,
                 lines,
                 z_level: _,
             } => {
-                let (nat_w, nat_h) = renderer_core::measure_text(lines);
+                let laid_out =
+                    renderer_core::layout_text(lines, wrap.map(|w| w as f32), *text_align);
                 let (sx, sy, off_x, off_y) = text_fit_scale(
                     size.width as f32,
                     size.height as f32,
-                    nat_w,
-                    nat_h,
+                    laid_out.width,
+                    laid_out.height,
                     *keep_aspect,
                 );
                 let transform = positional_transform(
@@ -302,6 +305,7 @@ impl PdfRenderer {
                 render_text_lines(
                     surface,
                     lines,
+                    &laid_out.lines,
                     parent_alpha,
                     sh_language.as_ref().map(|s| s.as_str()),
                     sh_theme.as_ref().map(|s| s.as_str()),
@@ -629,6 +633,7 @@ impl PdfRenderer {
 fn render_text_lines(
     surface: &mut krilla::surface::Surface,
     lines: &[TextChild],
+    cached_lines: &[Arc<renderer_core::glyph_cache::CachedLine>],
     parent_alpha: f32,
     sh_language: Option<&str>,
     sh_theme: Option<&str>,
@@ -669,14 +674,12 @@ fn render_text_lines(
     });
 
     let mut y_cursor = 0.0f32;
-    for (line_idx, line) in lines.iter().enumerate() {
+    for (line_idx, (line, cached)) in lines.iter().zip(cached_lines.iter()).enumerate() {
         let mut spans: Vec<&TextSpan> = Vec::new();
         collect_spans(line, &mut spans);
         if spans.is_empty() {
             continue;
         }
-
-        let cached = get_or_build_line(&spans);
 
         let zwnj_ranges: Vec<(std::ops::Range<usize>, usize)> = if sh_ctx.is_some() {
             let (_, r) = build_span_text(&spans);

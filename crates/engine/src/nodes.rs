@@ -169,6 +169,13 @@ pub enum NodeKind {
         position: Position,
         size: Size,
         keep_aspect: AttrExpr<bool>,
+        /// Maximum line width, in unscaled layout units, before wrapping.
+        /// Absent (not `AttrExpr`-wrapped default handling) means wrapping is
+        /// off — there's no "auto" fallback expression the way `width`/`height`
+        /// have, so this is genuine absence rather than an unresolved default.
+        wrap: AttrExpr<f64>,
+        /// Block-default alignment; `None` resolves to `Left` at eval time.
+        text_align: Option<renderer_core::TextAlign>,
         text_style: TextStyle,
         z_level: AttrExpr<f64>,
         sh_language: Option<Arc<String>>,
@@ -178,6 +185,9 @@ pub enum NodeKind {
     /// Group containing instance of other TextGroups or TextSpans.
     TextGroup {
         text_style: TextStyle,
+        /// Per-line alignment override; `None` inherits the owning `Text`
+        /// block's own `text_align`.
+        text_align: Option<renderer_core::TextAlign>,
         children: Vec<NodeId>,
     },
     /// A text run with a concrete string value
@@ -389,6 +399,8 @@ pub(crate) struct NodeDef {
     pub text: Option<Expr<Arc<String>>>,
     pub sh_language: Option<Arc<String>>,
     pub sh_theme: Option<Arc<String>>,
+    pub wrap: Option<Expr<f64>>,
+    pub text_align: Option<renderer_core::TextAlign>,
 
     pub file: Option<Expr<Arc<String>>>,
     pub keep_aspect: Option<Expr<bool>>,
@@ -524,6 +536,8 @@ impl Node {
                     position,
                     size,
                     keep_aspect: AttrExpr(def.keep_aspect.take()),
+                    wrap: AttrExpr(def.wrap.take()),
+                    text_align: def.text_align.take(),
                     text_style: def.text_style(),
                     z_level,
                     sh_language: def.sh_language.take(),
@@ -533,6 +547,7 @@ impl Node {
             }
             Kind::TextGroup => NodeKind::TextGroup {
                 text_style: def.text_style(),
+                text_align: def.text_align.take(),
                 children,
             },
             Kind::TextSpan => NodeKind::TextSpan {

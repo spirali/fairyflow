@@ -406,12 +406,19 @@ impl Node {
                 };
                 content_w + padding.left.eval_or(ctx, 0.0)? + padding.right.eval_or(ctx, 0.0)?
             }
-            NodeKind::Text { children, size, .. } => {
+            NodeKind::Text {
+                children,
+                size,
+                wrap,
+                text_align,
+                ..
+            } => {
                 let lines = children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                let (iw, ih) = renderer_core::measure_text(&lines);
+                let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
+                let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
                 if size
                     .height
                     .get_expr()
@@ -431,7 +438,7 @@ impl Node {
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
-                renderer_core::measure_text(&[child]).0 as f64
+                renderer_core::measure_text(&[child], None, renderer_core::TextAlign::Left).0 as f64
             }
             NodeKind::Image { path, node_box, .. } => {
                 let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
@@ -526,12 +533,19 @@ impl Node {
                 };
                 content_h + padding.top.eval_or(ctx, 0.0)? + padding.bottom.eval_or(ctx, 0.0)?
             }
-            NodeKind::Text { children, size, .. } => {
+            NodeKind::Text {
+                children,
+                size,
+                wrap,
+                text_align,
+                ..
+            } => {
                 let lines = children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                let (iw, ih) = renderer_core::measure_text(&lines);
+                let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
+                let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
                 if size
                     .width
                     .get_expr()
@@ -551,7 +565,7 @@ impl Node {
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
                 let child = self.eval_as_text_child(ctx)?;
-                renderer_core::measure_text(&[child]).1 as f64
+                renderer_core::measure_text(&[child], None, renderer_core::TextAlign::Left).1 as f64
             }
             NodeKind::Image { path, node_box, .. } => {
                 let path_val = path.eval_or(ctx, std::sync::Arc::new(String::new()))?;
@@ -591,6 +605,8 @@ fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64
     let NodeKind::Text {
         children,
         keep_aspect,
+        wrap,
+        text_align,
         ..
     } = &text_node.kind
     else {
@@ -600,7 +616,8 @@ fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64
         .iter()
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    let (iw, ih) = renderer_core::measure_text(&lines);
+    let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
+    let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
     if iw == 0.0 || ih == 0.0 {
         return Ok((1.0, 1.0, 0.0, 0.0));
     }
@@ -621,20 +638,43 @@ fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64
 /// on the glyph in scaled space (proposal §4.1), not the raw glyph-space one.
 fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     let text_node = node.text_ancestor(ctx)?;
-    let NodeKind::Text { children, .. } = &text_node.kind else {
+    let NodeKind::Text {
+        children,
+        wrap,
+        text_align,
+        ..
+    } = &text_node.kind
+    else {
         unreachable!()
     };
     let lines = children
         .iter()
         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    let (lx, ly) =
-        renderer_core::measure_text_node_pos(&lines, node.id.as_u64()).unwrap_or((0.0, 0.0));
+    let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
+    let (lx, ly) = renderer_core::measure_text_node_pos(&lines, node.id.as_u64(), wrap_px, align)
+        .unwrap_or((0.0, 0.0));
     let (sx, sy, off_x, off_y) = text_content_fit(text_node, ctx)?;
     Ok((
         (lx as f64 * sx + off_x) as f32,
         (ly as f64 * sy + off_y) as f32,
     ))
+}
+
+/// Resolve a `Text` node's own `wrap`/`text_align` to the concrete values
+/// `renderer_core::layout_text` (and friends) expect: `wrap` in `f32` pixels
+/// (absent = wrapping off), `text_align` defaulting to `Left`.
+fn resolve_text_wrap_align(
+    wrap: &crate::nodes::AttrExpr<f64>,
+    text_align: Option<renderer_core::TextAlign>,
+    ctx: &EvalCtx,
+) -> anyhow::Result<(Option<f32>, renderer_core::TextAlign)> {
+    let wrap_px = wrap
+        .get_expr()
+        .map(|e| e.eval(ctx))
+        .transpose()?
+        .map(|w| w as f32);
+    Ok((wrap_px, text_align.unwrap_or_default()))
 }
 
 /// Per-column widths (max width of any counted child in that column) and

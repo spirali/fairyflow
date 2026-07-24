@@ -1,11 +1,12 @@
 import re
 from dataclasses import dataclass, field
 from beartype import beartype
-from typing import Union
+from typing import Union, Literal, Self
 
 from .types import StringLike, BoolLike, FloatLike
 from .animtime import Duration, Easing
-from .sentinels import INHERITED_VALUE
+from .avalue import AnimatedValue
+from .sentinels import INHERITED_VALUE, DEFAULT, DefaultMarker, RelValue, resolve_rel
 from .ctxvars import Par
 
 from .nodes import (
@@ -19,6 +20,9 @@ from .nodes import (
     InheritedStyleMixin,
     ZLevelMixin,
 )
+
+
+TextAlignMode = Literal["left", "center", "right", "justify"]
 
 
 @beartype
@@ -108,6 +112,7 @@ class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
 
     def __init__(self, parent):
         super().__init__(put_in_context=False, parent=parent)
+        self._text_align = None
 
     def span(self, text: StringLike):
         span = TextSpan(self, text)
@@ -118,6 +123,24 @@ class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
         group = TextGroup(self)
         self._children.append(group)
         return group
+
+    def text_align(self, mode: TextAlignMode) -> Self:
+        """Override this line's alignment, independent of the block default.
+
+        Args:
+            mode: ``"left"``, ``"center"``, ``"right"``, or ``"justify"``.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._text_align = mode
+        return self
+
+    def serialize(self, serializer):
+        result = super().serialize(serializer)
+        if self._text_align is not None:
+            result["text_align"] = self._text_align
+        return result
 
 
 class Text(
@@ -136,6 +159,7 @@ class Text(
         self._add_attr("keep_aspect", True)
         self.sh_language = None
         self.sh_theme = None
+        self._text_align = None
         self._current_line = None
         if text:
             for part in text.split("\n"):
@@ -147,6 +171,48 @@ class Text(
         """
         self.sh_language = language
         self.sh_theme = theme
+        return self
+
+    def wrap(self, width: FloatLike | RelValue | DefaultMarker) -> Self:
+        """Wrap lines at a maximum width, in unscaled layout units (i.e.
+        before any `size()` fit-scaling is applied).
+
+        Args:
+            width: Maximum line width in pixels, or `rel(f)` for `f` times
+                the parent's width. ``DEFAULT`` turns wrapping back off —
+                unlike `x(DEFAULT)`/`size(w=DEFAULT)`, there's no engine-side
+                "auto wrap" to fall back to, so this removes the attribute
+                entirely rather than writing a default-referencing expression.
+
+        Returns:
+            self, for method chaining.
+        """
+        if width is DEFAULT:
+            self._attrs.pop("wrap", None)
+        else:
+            # No `_ATTR_DEFAULTS["wrap"]` entry exists (nothing to fall back
+            # to), so this bypasses `_set_attr`/`_ensure_attr` — which always
+            # need a default for a first-time attribute — the same way
+            # `_add_attr` does, except re-assignable since `wrap()` can be
+            # called more than once (never animated, so each call fully
+            # replaces the prior value; no dur=/ease=).
+            self._attrs["wrap"] = AnimatedValue(
+                resolve_rel(width, self, "width"), self._start
+            )
+        return self
+
+    def text_align(self, mode: TextAlignMode) -> Self:
+        """Set the block-default paragraph alignment.
+
+        Args:
+            mode: ``"left"`` (default), ``"center"``, ``"right"``, or
+                ``"justify"``. A `TextGroup` line can override this via its
+                own `text_align()`.
+
+        Returns:
+            self, for method chaining.
+        """
+        self._text_align = mode
         return self
 
     def line(self, text: StringLike = "") -> Union[TextSpan, TextGroup]:
@@ -211,6 +277,8 @@ class Text(
             result["sh_language"] = self.sh_language
         if self.sh_theme is not None:
             result["sh_theme"] = self.sh_theme
+        if self._text_align is not None:
+            result["text_align"] = self._text_align
         return result
 
 

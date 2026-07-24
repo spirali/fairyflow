@@ -155,6 +155,69 @@ laid-out result; line breaks never move.
 
 ---
 
+## Wrapping and alignment
+
+By default a line never breaks on its own — it's exactly as wide as its text. Call
+`.wrap(width)` to break a line automatically at word boundaries once it would exceed
+`width` (measured before any `.size()` scaling, in the same unscaled layout units as
+`.font(size=)`):
+
+```ffpy frame="0"
+with Scene():
+    Text("The quick brown fox jumps over the lazy dog").font(size=16).wrap(160)
+```
+
+`.text_align(mode)` sets how the block's lines are positioned relative to each other —
+`"left"` (default), `"center"`, `"right"`, or `"justify"`:
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi\nA longer second line").font(size=16).wrap(220).text_align("center")
+```
+
+```ffpy frame="0"
+with Scene():
+    Text("Hi\nA longer second line").font(size=16).wrap(220).text_align("right")
+```
+
+`"justify"` stretches inter-word spacing so every line except the last fills the wrap
+width exactly:
+
+```ffpy frame="0"
+with Scene():
+    Text("The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.").font(size=16).wrap(
+        220
+    ).text_align("justify")
+```
+
+Call `.text_align()` on an individual `TextGroup` line to override the block's default
+for just that line. `.line()` with no text starts an empty group — keep a reference to
+it (rather than to `.span()`'s return value) to call `.text_align()` on it:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=16).wrap(220).text_align("left")
+    t.line("This is just a very long line")
+    right_line = t.line()
+    right_line.span("Right aligned")
+    right_line.text_align("right")
+    right_line = t.line()
+    right_line.span("Center aligned")
+    right_line.text_align("center")
+```
+
+`.wrap()` and `.size()` compose the same way `.font(size=)` and `.size()` do: `.size()`
+fits the box to the *wrapped* measured extent, not the wrap width itself.
+
+`.wrap()` resets with `DEFAULT` (there is no "auto wrap" default to fall back to — it's
+either on with an explicit width, or off entirely):
+
+```python
+t.wrap(DEFAULT)  # turns wrapping back off
+```
+
+---
+
 ## Positioning
 
 `Text` supports `.xy()`, `.align()`, and `.move()` for placement — see [Positioning](positioning.md) for details.

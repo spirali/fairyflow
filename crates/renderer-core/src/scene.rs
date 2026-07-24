@@ -87,6 +87,18 @@ pub struct Style {
     pub dash_offset: f64,
 }
 
+/// Paragraph alignment for a `Text` block or a per-line `TextGroup` override.
+/// Mirrors `TextAlignMode` in Python (api-v2-proposal.md §4.10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
 /// Text styling that may be inherited from a parent node.
 /// Fields are omitted from serialization when they are inherited (not overridden).
 #[derive(Debug, Clone, Serialize)]
@@ -134,6 +146,10 @@ pub struct TextGroup {
     pub id: u64,
     #[serde(flatten)]
     pub text_style: TextStyle,
+    /// Per-line alignment override; `None` inherits the owning `Text` block's
+    /// own `text_align`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_align: Option<TextAlign>,
     pub children: Vec<TextChild>,
 }
 
@@ -229,6 +245,14 @@ pub enum NodeKind {
         #[serde(flatten)]
         size: Size,
         keep_aspect: bool,
+        /// Maximum line width, in unscaled layout units, before wrapping.
+        /// `None` disables wrapping (a paragraph is exactly one visual row
+        /// per logical line, as before this field existed).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        wrap: Option<f64>,
+        /// Resolved block-default alignment (never absent — `Left` when
+        /// `Text.text_align()` was never called).
+        text_align: TextAlign,
         #[serde(flatten)]
         text_style: TextStyle,
         #[serde(skip_serializing_if = "Option::is_none")]

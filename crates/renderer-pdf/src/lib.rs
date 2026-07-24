@@ -643,24 +643,35 @@ fn render_text_lines(
     // See renderer-skia's `render_text_lines` for the derivation: a placeable
     // run's `override_offset` is a final-space delta; dividing by the
     // block's uniform fit-scale converts it to the raw glyph-space this
-    // function paints in.
+    // function paints in. `override_transform` (rotate/scale/pivot) is
+    // already raw and composes *after* that conversion, never before
+    // (mixing final- and raw-space quantities via `concat`'s cross terms
+    // once rotation is involved would otherwise be wrong).
     let (fit_sx, fit_sy) = fit_scale;
-    let raw_offset = |span: &TextSpan| -> (f32, f32) {
-        let Some((dx, dy)) = span.override_offset else {
-            return (0.0, 0.0);
-        };
-        (
-            if fit_sx.abs() > 1e-6 {
-                dx / fit_sx
-            } else {
-                0.0
-            },
-            if fit_sy.abs() > 1e-6 {
-                dy / fit_sy
-            } else {
-                0.0
-            },
-        )
+    let raw_local_transform = |span: &TextSpan| -> AffineTransform {
+        let raw_dx = span
+            .override_offset
+            .map(|(dx, _)| {
+                if fit_sx.abs() > 1e-6 {
+                    dx / fit_sx
+                } else {
+                    0.0
+                }
+            })
+            .unwrap_or(0.0);
+        let raw_dy = span
+            .override_offset
+            .map(|(_, dy)| {
+                if fit_sy.abs() > 1e-6 {
+                    dy / fit_sy
+                } else {
+                    0.0
+                }
+            })
+            .unwrap_or(0.0);
+        span.override_transform
+            .unwrap_or_else(AffineTransform::identity)
+            .concat(AffineTransform::from_translate(raw_dx, raw_dy))
     };
     // Build syntax-highlight context if requested.
     let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh_language.map(|lang| {
@@ -757,12 +768,13 @@ fn render_text_lines(
             };
 
             // Build glyph path shifted by y_cursor plus any placeable-run override.
-            let (dx, dy) = raw_offset(span);
+            let local =
+                raw_local_transform(span).concat(AffineTransform::from_translate(0.0, y_cursor));
             let verbs: Vec<PathVerb> = glyph
                 .path
                 .verbs
                 .iter()
-                .map(|v| shift_verb(v, dx, y_cursor + dy))
+                .map(|v| shift_verb(v, &local))
                 .collect();
             let Some(path) = verbs_to_krilla_path(&verbs) else {
                 continue;
@@ -832,17 +844,31 @@ fn verbs_to_krilla_path(verbs: &[PathVerb]) -> Option<Path> {
     pb.finish()
 }
 
-/// Shift the y-coordinate of a glyph path verb by `dy` (for multi-line text layout).
-/// Shift a path verb by `(dx, dy)` — `dx` is only ever non-zero for an
-/// overridden run's horizontal delta; `dy` carries the per-line stacking
-/// cursor plus (for an overridden run) its raw-space vertical delta.
-fn shift_verb(v: &PathVerb, dx: f32, dy: f32) -> PathVerb {
+/// Map a glyph path verb's points through `local` — carries the per-line
+/// stacking cursor (a pure translation) and, for an overridden run, its
+/// raw-space position/rotate/scale/pivot delta. Applying an affine map to a
+/// Bezier curve's control points is equivalent to applying it to the curve
+/// itself, so this is exact, not an approximation.
+fn shift_verb(v: &PathVerb, local: &AffineTransform) -> PathVerb {
     match *v {
-        PathVerb::MoveTo(x, y) => PathVerb::MoveTo(x + dx, y + dy),
-        PathVerb::LineTo(x, y) => PathVerb::LineTo(x + dx, y + dy),
-        PathVerb::QuadTo(cx, cy, x, y) => PathVerb::QuadTo(cx + dx, cy + dy, x + dx, y + dy),
+        PathVerb::MoveTo(x, y) => {
+            let (x, y) = local.apply(x, y);
+            PathVerb::MoveTo(x, y)
+        }
+        PathVerb::LineTo(x, y) => {
+            let (x, y) = local.apply(x, y);
+            PathVerb::LineTo(x, y)
+        }
+        PathVerb::QuadTo(cx, cy, x, y) => {
+            let (cx, cy) = local.apply(cx, cy);
+            let (x, y) = local.apply(x, y);
+            PathVerb::QuadTo(cx, cy, x, y)
+        }
         PathVerb::CubicTo(c0x, c0y, c1x, c1y, x, y) => {
-            PathVerb::CubicTo(c0x + dx, c0y + dy, c1x + dx, c1y + dy, x + dx, y + dy)
+            let (c0x, c0y) = local.apply(c0x, c0y);
+            let (c1x, c1y) = local.apply(c1x, c1y);
+            let (x, y) = local.apply(x, y);
+            PathVerb::CubicTo(c0x, c0y, c1x, c1y, x, y)
         }
         PathVerb::Close => PathVerb::Close,
     }

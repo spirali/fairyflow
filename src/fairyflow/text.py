@@ -95,7 +95,7 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
 
 
 @beartype
-class TextSpan(Node, InheritedTextStyleMixin, PositionMixin):
+class TextSpan(Node, InheritedTextStyleMixin, PositionMixin, RotAndScaleMixin):
     kind = "tspan"
 
     def __init__(self, parent, text: StringLike):
@@ -107,7 +107,9 @@ class TextSpan(Node, InheritedTextStyleMixin, PositionMixin):
 
 
 @beartype
-class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionMixin):
+class TextGroup(
+    NodeWithChildren, InheritedTextStyleMixin, PositionMixin, RotAndScaleMixin
+):
     kind = "tline"
 
     def __init__(self, parent):

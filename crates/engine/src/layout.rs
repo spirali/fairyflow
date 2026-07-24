@@ -2,7 +2,9 @@ use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use crate::nodes::{Layout, Node, NodeKind, Position, Size};
 use crate::values::Eval;
-use renderer_core::Position as RcPosition;
+use renderer_core::{
+    AffineTransform, Position as RcPosition, Size as RcSize, positional_transform,
+};
 
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
@@ -12,16 +14,26 @@ impl Node {
             | NodeKind::Ellipse { node_box, .. }
             | NodeKind::Image { node_box, .. }
             | NodeKind::Layer { node_box, .. }
-            | NodeKind::Text { node_box, .. } => Some(&node_box.position),
+            | NodeKind::Text { node_box, .. }
+            | NodeKind::TextGroup { node_box, .. }
+            | NodeKind::TextSpan { node_box, .. } => Some(&node_box.position),
             NodeKind::Move { position, .. }
             | NodeKind::Line { position, .. }
-            | NodeKind::Cubic { position, .. }
-            | NodeKind::TextGroup { position, .. }
-            | NodeKind::TextSpan { position, .. } => Some(position),
+            | NodeKind::Cubic { position, .. } => Some(position),
             NodeKind::Path { .. } | NodeKind::Close => None,
         }
     }
 
+    /// `TextGroup`/`TextSpan` carry a `NodeBox` (reused wholesale, see the
+    /// type's doc comment) but deliberately stay out of this — `size`/
+    /// `z_level` aren't meaningful for a text run (no settable size; paragraph
+    /// order is draw order), and routing them through here would also pull
+    /// them into `NodeKind::node_box()`-driven rotation-aware AABB/world-bounds
+    /// code (`aabb_offset`/`collect_world_bounds`) that hasn't been reasoned
+    /// through for the text-run coordinate-space subtleties (`get_x`/`get_y`
+    /// resolve in final/fit-scaled space via `text_default_pos`, while
+    /// `auto_width`/`auto_height` resolve in raw/natural space) — out of scope
+    /// for this slice.
     pub fn get_size(&self) -> Option<&Size> {
         match &self.kind {
             NodeKind::Group { node_box, .. }
@@ -633,11 +645,15 @@ fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64
     }
 }
 
-/// Unscaled position of a text-run node (`TextGroup`/`TextSpan`) within its
-/// owning `Text`'s laid-out paragraph, then mapped through that `Text`'s
-/// content-fit scale/offset (`text_content_fit`) so `word.at("right")` lands
-/// on the glyph in scaled space (proposal §4.1), not the raw glyph-space one.
-fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+/// Raw, pre-fit-scale position of a text-run node (`TextGroup`/`TextSpan`)
+/// within its owning `Text`'s laid-out paragraph — the same coordinate space
+/// `auto_width`/`auto_height` already measure a run's own natural box in
+/// (`renderer_core::measure_text`, no `text_content_fit` mapping applied).
+/// Split out from `text_default_pos` so callers that need to compose this
+/// with other *raw*-space quantities (a run's own pivot, `layout.rs`'s
+/// `nearest_run_transform_component`) don't accidentally mix it with
+/// `text_default_pos`'s final/fit-scaled result — the two are different units.
+fn text_raw_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     let text_node = node.text_ancestor(ctx)?;
     let NodeKind::Text {
         children,
@@ -653,8 +669,19 @@ fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
         .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
     let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
-    let (lx, ly) = renderer_core::measure_text_node_pos(&lines, node.id.as_u64(), wrap_px, align)
-        .unwrap_or((0.0, 0.0));
+    Ok(
+        renderer_core::measure_text_node_pos(&lines, node.id.as_u64(), wrap_px, align)
+            .unwrap_or((0.0, 0.0)),
+    )
+}
+
+/// Unscaled position of a text-run node (`TextGroup`/`TextSpan`) within its
+/// owning `Text`'s laid-out paragraph, then mapped through that `Text`'s
+/// content-fit scale/offset (`text_content_fit`) so `word.at("right")` lands
+/// on the glyph in scaled space (proposal §4.1), not the raw glyph-space one.
+fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
+    let text_node = node.text_ancestor(ctx)?;
+    let (lx, ly) = text_raw_pos(node, ctx)?;
     let (sx, sy, off_x, off_y) = text_content_fit(text_node, ctx)?;
     Ok((
         (lx as f64 * sx + off_x) as f32,
@@ -686,7 +713,9 @@ pub(crate) fn nearest_position_override_delta(
     let mut current = leaf;
     loop {
         let position = match &current.kind {
-            NodeKind::TextGroup { position, .. } | NodeKind::TextSpan { position, .. } => position,
+            NodeKind::TextGroup { node_box, .. } | NodeKind::TextSpan { node_box, .. } => {
+                &node_box.position
+            }
             _ => return Ok(None),
         };
         let expr = match axis {
@@ -701,6 +730,55 @@ pub(crate) fn nearest_position_override_delta(
                 PosAxis::Y => ny as f64,
             };
             return Ok(Some(explicit - natural));
+        }
+        match current.parent {
+            Some(parent_id) => current = ctx.node(parent_id)?,
+            None => return Ok(None),
+        }
+    }
+}
+
+pub(crate) fn nearest_run_transform_component(
+    ctx: &EvalCtx,
+    leaf: &Node,
+) -> anyhow::Result<Option<AffineTransform>> {
+    let mut current = leaf;
+    loop {
+        let node_box = match &current.kind {
+            NodeKind::TextGroup { node_box, .. } | NodeKind::TextSpan { node_box, .. } => node_box,
+            _ => return Ok(None),
+        };
+        let has_transform = node_box.rotation.get_expr().is_some()
+            || node_box.scale_x.get_expr().is_some()
+            || node_box.scale_y.get_expr().is_some()
+            || node_box.pivot_x.get_expr().is_some()
+            || node_box.pivot_y.get_expr().is_some();
+        if has_transform {
+            let w = current.auto_width(ctx)?;
+            let h = current.auto_height(ctx)?;
+            // Raw space, not `text_default_pos`'s final/fit-scaled space —
+            // must match `w`/`h` (also raw, via `auto_width`/`auto_height`)
+            // since this whole transform is applied to raw glyph coordinates
+            // before the block's shared fit-scale is applied (see the
+            // renderers' `render_text_lines`).
+            let (nx, ny) = text_raw_pos(current, ctx)?;
+            let rotation = node_box.rotation.eval_or(ctx, 0.0)?;
+            let scale_x = node_box.scale_x.eval_or(ctx, 1.0)?;
+            let scale_y = node_box.scale_y.eval_or(ctx, 1.0)?;
+            let pivot_x = node_box.pivot_x.eval_or(ctx, w * 0.5)?;
+            let pivot_y = node_box.pivot_y.eval_or(ctx, h * 0.5)?;
+            let local = AffineTransform::from_translate(-nx, -ny).concat(positional_transform(
+                RcPosition::new(nx as f64, ny as f64),
+                RcSize {
+                    width: scale_x,
+                    height: scale_y,
+                },
+                rotation,
+                pivot_x as f32,
+                pivot_y as f32,
+                AffineTransform::identity(),
+            ));
+            return Ok(Some(local));
         }
         match current.parent {
             Some(parent_id) => current = ctx.node(parent_id)?,

@@ -1279,4 +1279,82 @@ mod tests {
         // override) would make these equal.
         assert!((dx4, dy4) != (dx5, dy5));
     }
+
+    /// Per-run `rotate()`/`scale()`/`pivot()` (item 17, proposal §4.1/§4.10):
+    /// a `tline`'s rotation cascades to a child `tspan` with no transform of
+    /// its own, but a *different* child `tspan` with its own `scale_x`/
+    /// `scale_y` wins over the parent's rotation for its own subtree — same
+    /// nearest-self-or-ancestor cascade rule as `override_offset`, but
+    /// resolved by a separate walk (`nearest_run_transform_component`,
+    /// `layout.rs`) since these five attributes travel together rather than
+    /// per-axis. Also exercises the same recursion-safety path
+    /// `placeable_run_override_cascades_to_nearest_self_or_ancestor` guards
+    /// (resolving a winner's natural box/position must never recurse back
+    /// into override resolution) for the *transform* cascade specifically —
+    /// completing without hanging/crashing is itself part of what this test
+    /// checks.
+    const PER_RUN_TRANSFORM_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PerRunTransform", "width": 300, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "text", "x": 20, "y": 30, "font_size": 18, "children": [1, 4]},
+       {"kind": "tline", "rotation": 30, "children": [2, 3]},
+       {"kind": "tspan", "text": "untouched"},
+       {"kind": "tspan", "text": "scaled", "scale_x": 2, "scale_y": 2},
+       {"kind": "tspan", "text": "Line two"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn per_run_transform_cascades_to_nearest_self_or_ancestor() {
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(PER_RUN_TRANSFORM_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        let renderer_core::NodeKind::Text { lines, .. } =
+            &find_node(&scene.children, 0).unwrap().kind
+        else {
+            panic!("expected a text node");
+        };
+
+        // Span 2: no transform of its own, but its parent tline has
+        // `rotation: 30` -> inherits the group's transform.
+        let span2 = find_text_span(lines, 2).expect("span 2 present");
+        let xform2 = span2
+            .override_transform
+            .expect("span 2 inherits group rotation");
+        assert!(
+            [xform2.a, xform2.b, xform2.c, xform2.d, xform2.e, xform2.f]
+                .iter()
+                .all(|v| v.is_finite())
+        );
+
+        // Span 3: has its own `scale_x`/`scale_y` -> wins over the parent
+        // tline's rotation for its own subtree.
+        let span3 = find_text_span(lines, 3).expect("span 3 present");
+        let xform3 = span3
+            .override_transform
+            .expect("span 3 has its own transform");
+        assert!(
+            [xform3.a, xform3.b, xform3.c, xform3.d, xform3.e, xform3.f]
+                .iter()
+                .all(|v| v.is_finite())
+        );
+
+        // A bug that always cascaded to the outermost ancestor (ignoring a
+        // closer override) would make these two transforms equal.
+        assert_ne!(
+            (xform2.a, xform2.b, xform2.c, xform2.d),
+            (xform3.a, xform3.b, xform3.c, xform3.d),
+        );
+
+        // Span 4: an unrelated top-level line, no transform anywhere in its
+        // ancestor chain -> untouched.
+        let span4 = find_text_span(lines, 4).expect("span 4 present");
+        assert!(span4.override_transform.is_none());
+    }
 }

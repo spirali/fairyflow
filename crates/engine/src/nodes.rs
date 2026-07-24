@@ -184,11 +184,16 @@ pub enum NodeKind {
     },
     /// Group containing instance of other TextGroups or TextSpans.
     TextGroup {
-        /// Placeable override — absent means the paragraph-layout position
-        /// (no reflow of siblings either way). Position only: no size (a run's
-        /// extent is always its measured glyphs) and no z (paragraph order is
-        /// draw order).
-        position: Position,
+        /// Reuses the same `NodeBox` shape as every other node — but only
+        /// `position` (item 16's placeable-run override) and
+        /// `rotation`/`scale_*`/`pivot_*` (per-run transform override) are
+        /// ever consulted, by `nearest_position_override_delta`/
+        /// `nearest_run_transform_component` (`layout.rs`). `size`/`z_level`
+        /// are parsed (accepting `w`/`h`/`z` on the wire without erroring)
+        /// but never read: a run's extent is always its measured glyphs
+        /// (no settable size), and paragraph order is draw order (no z on
+        /// text runs).
+        node_box: NodeBox,
         text_style: TextStyle,
         /// Per-line alignment override; `None` inherits the owning `Text`
         /// block's own `text_align`.
@@ -197,8 +202,8 @@ pub enum NodeKind {
     },
     /// A text run with a concrete string value
     TextSpan {
-        /// Placeable override — see `TextGroup::position`.
-        position: Position,
+        /// See `TextGroup::node_box`.
+        node_box: NodeBox,
         text_style: TextStyle,
         text: AttrExpr<Arc<String>>,
     },
@@ -547,13 +552,13 @@ impl Node {
                 children,
             },
             Kind::TextGroup => NodeKind::TextGroup {
-                position: def.position(),
+                node_box: def.node_box(),
                 text_style: def.text_style(),
                 text_align: def.text_align.take(),
                 children,
             },
             Kind::TextSpan => NodeKind::TextSpan {
-                position: def.position(),
+                node_box: def.node_box(),
                 text_style: def.text_style(),
                 text: AttrExpr(def.text.take()),
             },

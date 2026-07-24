@@ -274,8 +274,55 @@ with Scene():
     line2.xy(60, 100)
 ```
 
-Per-run `.rotate()`/`.scale()`/`.pivot()` (spinning or growing one word in place) is
-not yet supported — only the block-level transforms above.
+A line or run also supports `.rotate()`/`.scale()`/`.scale_x()`/`.scale_y()`/
+`.pivot()` — spinning or growing it about its own measured box, in place:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=20).xy(20, 40).fill("black")
+    t.span("spin ")
+    word = t.span("me")
+    word.fill("darkred")
+    word.rotate(30)
+```
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=16).xy(20, 40).fill("black")
+    t.span("grow ")
+    word = t.span("me")
+    word.fill("darkblue")
+    word.pivot("top_left")
+    word.scale(2.0)
+```
+
+Rotate/scale/pivot resolve independently of `.xy()`/`.move()` (their own nearest-
+self-or-ancestor cascade), so a run can spin in place *and* fly elsewhere at the same
+time — the run spins about its own natural position first, then the position override
+carries it to its new spot:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=20).xy(20, 40).fill("black")
+    t.span("spin and move ")
+    word = t.span("me")
+    word.fill("darkred")
+    word.rotate(45)
+    word.xy(180, 30)
+```
+
+Like position, a `TextGroup` line's transform applies to every descendant run that
+doesn't have its own closer override, as one rigid unit:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=16).xy(60, 20).fill("black")
+    t.line("Untouched line")
+    line2 = t.line()
+    line2.span("Rotated ").fill("darkblue")
+    line2.span("line")
+    line2.rotate(15)
+```
 
 ## stext
 

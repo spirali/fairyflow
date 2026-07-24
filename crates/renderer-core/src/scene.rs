@@ -128,14 +128,25 @@ pub struct TextSpan {
     pub text: Arc<String>,
     #[serde(flatten)]
     pub text_style: TextStyle,
-    /// Placeable-run override delta `(dx, dy)`, already resolved against the
+    /// Placeable-run position-override delta `(dx, dy)`, resolved against the
     /// nearest self-or-ancestor `TextGroup`/`TextSpan` with an explicit
     /// `x`/`y` — in the same final (fit-scaled) coordinate space `.at()`
-    /// queries use. `None` for the overwhelming common case (no override
+    /// queries use. `None` for the common case (no position override
     /// anywhere in this span's ancestor chain); renderers convert to raw
-    /// glyph-space via the block's own fit-scale before painting.
+    /// glyph-space via the block's own fit-scale before composing with
+    /// `override_transform` below.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_offset: Option<(f32, f32)>,
+    /// Placeable-run rotate/scale/pivot override, resolved against the
+    /// nearest self-or-ancestor with any of `rotation`/`scale_*`/`pivot_*`
+    /// explicitly set (independently of `override_offset` above — see
+    /// `nearest_run_transform_component`, `layout.rs`). Already in raw,
+    /// pre-fit-scale glyph space (rotation/scale are resolution-independent
+    /// ratios, so — unlike `override_offset` — this needs no renderer-side
+    /// conversion). `None` for the common case (no transform override
+    /// anywhere in this span's ancestor chain).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_transform: Option<crate::AffineTransform>,
 }
 
 /// A node in the text tree — either a nested group or a leaf span.

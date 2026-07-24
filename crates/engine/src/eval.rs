@@ -293,8 +293,9 @@ fn z_level_of(kind: &NodeKind) -> Option<&AttrExpr<f64>> {
         | NodeKind::Rect { node_box, .. }
         | NodeKind::Ellipse { node_box, .. }
         | NodeKind::Image { node_box, .. }
-        | NodeKind::Layer { node_box, .. } => Some(&node_box.z_level),
-        NodeKind::Path { z_level, .. } | NodeKind::Text { z_level, .. } => Some(z_level),
+        | NodeKind::Layer { node_box, .. }
+        | NodeKind::Text { node_box, .. } => Some(&node_box.z_level),
+        NodeKind::Path { z_level, .. } => Some(z_level),
         _ => None,
     }
 }
@@ -676,8 +677,7 @@ impl Node {
                     .collect::<anyhow::Result<Vec<_>>>()?,
             },
             NodeKind::Text {
-                position,
-                size,
+                node_box,
                 keep_aspect,
                 wrap,
                 text_align,
@@ -685,20 +685,14 @@ impl Node {
                 sh_language,
                 sh_theme,
                 children,
-                ..
             } => renderer_core::NodeKind::Text {
-                position: position.eval(ctx, self)?,
-                size: renderer_core::Size {
-                    width: size.width.eval_or_else(ctx, |ctx| self.auto_width(ctx))?,
-                    height: size.height.eval_or_else(ctx, |ctx| self.auto_height(ctx))?,
-                },
+                node_box: self.eval_node_box(node_box, ctx)?,
                 keep_aspect: keep_aspect.eval_or(ctx, true)?,
                 wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
                 text_align: text_align.unwrap_or_default(),
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),
-                z_level: eval_z(ctx, self)?,
                 lines: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
@@ -795,9 +789,37 @@ impl Node {
         }
     }
 
+    /// Layout-only variant of `eval_as_text_child`: never computes a leaf
+    /// span's `override_offset`. Used internally by measurement helpers
+    /// (`auto_width`/`auto_height`/`text_content_fit`/`text_default_pos`,
+    /// `layout.rs`) so that resolving an override's delta — which itself
+    /// needs the block's *natural*, un-overridden layout — never recurses
+    /// back into the very override computation it's in the middle of
+    /// resolving. Without this split, `text_default_pos` re-evaluating an
+    /// overridden span's ancestor block (to measure its natural position)
+    /// would call `eval_as_text_span` on that same span again, which would
+    /// call `text_default_pos` again, unboundedly (a real stack overflow,
+    /// caught by hand while smoke-testing, not by a test — see the Testing
+    /// section for the regression test this earned).
+    pub(crate) fn eval_as_text_child_for_layout(
+        &self,
+        ctx: &EvalCtx,
+    ) -> anyhow::Result<renderer_core::TextChild> {
+        match &self.kind {
+            NodeKind::TextGroup { .. } => Ok(renderer_core::TextChild::Group(
+                self.eval_as_text_group_for_layout(ctx)?,
+            )),
+            NodeKind::TextSpan { .. } => Ok(renderer_core::TextChild::Span(
+                self.eval_as_text_span_for_layout(ctx)?,
+            )),
+            _ => anyhow::bail!("expected tline or tspan node, got {:?}", self.id),
+        }
+    }
+
     pub fn eval_as_text_group(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextGroup> {
         match &self.kind {
             NodeKind::TextGroup {
+                position: _,
                 text_style,
                 text_align,
                 children,
@@ -808,6 +830,31 @@ impl Node {
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+            }),
+            _ => anyhow::bail!("expected tline node, got {:?}", self.id),
+        }
+    }
+
+    /// Layout-only variant of `eval_as_text_group` — see
+    /// `eval_as_text_child_for_layout`.
+    fn eval_as_text_group_for_layout(
+        &self,
+        ctx: &EvalCtx,
+    ) -> anyhow::Result<renderer_core::TextGroup> {
+        match &self.kind {
+            NodeKind::TextGroup {
+                position: _,
+                text_style,
+                text_align,
+                children,
+            } => Ok(renderer_core::TextGroup {
+                id: self.id.as_u64(),
+                text_style: text_style.eval_as_inheritable(ctx, self)?,
+                text_align: *text_align,
+                children: children
+                    .iter()
+                    .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?,
             }),
             _ => anyhow::bail!("expected tline node, got {:?}", self.id),
@@ -834,10 +881,55 @@ impl Node {
 
     pub fn eval_as_text_span(&self, ctx: &EvalCtx) -> anyhow::Result<renderer_core::TextSpan> {
         match &self.kind {
-            NodeKind::TextSpan { text_style, text } => Ok(renderer_core::TextSpan {
+            NodeKind::TextSpan {
+                position: _,
+                text_style,
+                text,
+            } => {
+                let dx = crate::layout::nearest_position_override_delta(
+                    ctx,
+                    self,
+                    crate::layout::PosAxis::X,
+                )?;
+                let dy = crate::layout::nearest_position_override_delta(
+                    ctx,
+                    self,
+                    crate::layout::PosAxis::Y,
+                )?;
+                let override_offset = match (dx, dy) {
+                    (None, None) => None,
+                    _ => Some((dx.unwrap_or(0.0) as f32, dy.unwrap_or(0.0) as f32)),
+                };
+                Ok(renderer_core::TextSpan {
+                    id: self.id.as_u64(),
+                    text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    override_offset,
+                })
+            }
+            _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
+        }
+    }
+
+    /// Layout-only variant of `eval_as_text_span` — see
+    /// `eval_as_text_child_for_layout`. `override_offset` is always `None`:
+    /// this path exists specifically to compute a span's *natural* position,
+    /// so it must never itself consult (or recurse into) override
+    /// resolution.
+    fn eval_as_text_span_for_layout(
+        &self,
+        ctx: &EvalCtx,
+    ) -> anyhow::Result<renderer_core::TextSpan> {
+        match &self.kind {
+            NodeKind::TextSpan {
+                position: _,
+                text_style,
+                text,
+            } => Ok(renderer_core::TextSpan {
                 id: self.id.as_u64(),
                 text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
+                override_offset: None,
             }),
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }

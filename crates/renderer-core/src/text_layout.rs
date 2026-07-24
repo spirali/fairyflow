@@ -521,6 +521,7 @@ mod tests {
             id,
             text: Arc::new(text.to_string()),
             text_style: test_style(),
+            override_offset: None,
         }
     }
 

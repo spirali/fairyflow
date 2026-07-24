@@ -196,8 +196,7 @@ impl RasterRenderer {
                 }
             }
             NodeKind::Text {
-                position,
-                size,
+                node_box,
                 keep_aspect,
                 wrap,
                 text_align,
@@ -209,16 +208,17 @@ impl RasterRenderer {
                 let laid_out =
                     renderer_core::layout_text(lines, wrap.map(|w| w as f32), *text_align);
                 let (sx, sy, off_x, off_y) = text_fit_scale(
-                    size.width as f32,
-                    size.height as f32,
+                    node_box.size.width as f32,
+                    node_box.size.height as f32,
                     laid_out.width,
                     laid_out.height,
                     *keep_aspect,
                 );
-                let transform = positional_transform(
+                let box_transform = transform_nodebox(node_box, parent_transform);
+                let content_transform = positional_transform(
                     Position {
-                        x: position.x + off_x as f64,
-                        y: position.y + off_y as f64,
+                        x: off_x as f64,
+                        y: off_y as f64,
                     },
                     Size {
                         width: sx as f64,
@@ -227,7 +227,7 @@ impl RasterRenderer {
                     0.0,
                     0.0,
                     0.0,
-                    parent_transform,
+                    box_transform,
                 );
                 let sh = sh_language.as_ref().map(|lang| {
                     let theme = sh_theme
@@ -236,7 +236,15 @@ impl RasterRenderer {
                         .unwrap_or("InspiredGitHub");
                     (lang.as_str(), theme)
                 });
-                self.render_text_lines(lines, &laid_out.lines, pixmap, transform, parent_alpha, sh);
+                self.render_text_lines(
+                    lines,
+                    &laid_out.lines,
+                    pixmap,
+                    content_transform,
+                    parent_alpha,
+                    sh,
+                    (sx, sy),
+                );
             }
             NodeKind::Image {
                 node_box,
@@ -267,6 +275,7 @@ impl RasterRenderer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_text_lines(
         &self,
         lines: &[TextChild],
@@ -275,7 +284,33 @@ impl RasterRenderer {
         parent_transform: Transform,
         parent_alpha: f32,
         sh: Option<(&str, &str)>,
+        fit_scale: (f32, f32),
     ) {
+        // A placeable run's `override_offset` is a delta in the block's final
+        // (fit-scaled) coordinate space — the same space `.at()` queries use —
+        // but glyph paths are built in raw, pre-fit-scale space, with the
+        // uniform `fit_scale` applied once via `parent_transform`. A uniform
+        // scale means offsets cancel in a delta, so dividing by `fit_scale` is
+        // the exact (and only) conversion needed; guard near-zero the same way
+        // `text_fit_scale` guards a degenerate natural extent.
+        let (fit_sx, fit_sy) = fit_scale;
+        let raw_offset = |span: &TextSpan| -> (f32, f32) {
+            let Some((dx, dy)) = span.override_offset else {
+                return (0.0, 0.0);
+            };
+            (
+                if fit_sx.abs() > 1e-6 {
+                    dx / fit_sx
+                } else {
+                    0.0
+                },
+                if fit_sy.abs() > 1e-6 {
+                    dy / fit_sy
+                } else {
+                    0.0
+                },
+            )
+        };
         let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh.map(|(lang, theme)| {
             let mut full_text = String::new();
             let span_starts: Vec<Vec<usize>> = lines
@@ -371,7 +406,8 @@ impl RasterRenderer {
                     }
                 };
 
-                let Some(path) = vector_path_to_skia(&glyph.path, y_cursor) else {
+                let (dx, dy) = raw_offset(span);
+                let Some(path) = vector_path_to_skia(&glyph.path, dx, y_cursor + dy) else {
                     continue;
                 };
 
@@ -544,17 +580,27 @@ fn fill_and_stroke(
     }
 }
 
-/// Convert a `VectorPath` to a tiny-skia `Path`, shifting all points down by `y_offset`.
-fn vector_path_to_skia(vp: &VectorPath, y_offset: f32) -> Option<tiny_skia::Path> {
+/// Convert a `VectorPath` to a tiny-skia `Path`, shifting all points by
+/// `(x_offset, y_offset)` — `y_offset` carries the per-line stacking cursor
+/// plus (for an overridden run) its raw-space vertical delta; `x_offset` is
+/// only ever non-zero for an overridden run's horizontal delta.
+fn vector_path_to_skia(vp: &VectorPath, x_offset: f32, y_offset: f32) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
     for verb in &vp.verbs {
         match verb {
-            PathVerb::MoveTo(x, y) => pb.move_to(*x, y + y_offset),
-            PathVerb::LineTo(x, y) => pb.line_to(*x, y + y_offset),
-            PathVerb::QuadTo(cx, cy, x, y) => pb.quad_to(*cx, cy + y_offset, *x, y + y_offset),
-            PathVerb::CubicTo(cx0, cy0, cx1, cy1, x, y) => {
-                pb.cubic_to(*cx0, cy0 + y_offset, *cx1, cy1 + y_offset, *x, y + y_offset)
+            PathVerb::MoveTo(x, y) => pb.move_to(x + x_offset, y + y_offset),
+            PathVerb::LineTo(x, y) => pb.line_to(x + x_offset, y + y_offset),
+            PathVerb::QuadTo(cx, cy, x, y) => {
+                pb.quad_to(cx + x_offset, cy + y_offset, x + x_offset, y + y_offset)
             }
+            PathVerb::CubicTo(cx0, cy0, cx1, cy1, x, y) => pb.cubic_to(
+                cx0 + x_offset,
+                cy0 + y_offset,
+                cx1 + x_offset,
+                cy1 + y_offset,
+                x + x_offset,
+                y + y_offset,
+            ),
             PathVerb::Close => pb.close(),
         }
     }

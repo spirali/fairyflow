@@ -267,8 +267,7 @@ impl PdfRenderer {
             }
 
             NodeKind::Text {
-                position,
-                size,
+                node_box,
                 keep_aspect,
                 wrap,
                 text_align,
@@ -276,21 +275,21 @@ impl PdfRenderer {
                 sh_language,
                 sh_theme,
                 lines,
-                z_level: _,
             } => {
                 let laid_out =
                     renderer_core::layout_text(lines, wrap.map(|w| w as f32), *text_align);
                 let (sx, sy, off_x, off_y) = text_fit_scale(
-                    size.width as f32,
-                    size.height as f32,
+                    node_box.size.width as f32,
+                    node_box.size.height as f32,
                     laid_out.width,
                     laid_out.height,
                     *keep_aspect,
                 );
-                let transform = positional_transform(
+                let box_transform = transform_node_box(node_box, parent_transform);
+                let content_transform = positional_transform(
                     Position {
-                        x: position.x + off_x as f64,
-                        y: position.y + off_y as f64,
+                        x: off_x as f64,
+                        y: off_y as f64,
                     },
                     Size {
                         width: sx as f64,
@@ -299,9 +298,9 @@ impl PdfRenderer {
                     0.0,
                     0.0,
                     0.0,
-                    parent_transform,
+                    box_transform,
                 );
-                surface.push_transform(&to_krilla_transform(transform));
+                surface.push_transform(&to_krilla_transform(content_transform));
                 render_text_lines(
                     surface,
                     lines,
@@ -309,6 +308,7 @@ impl PdfRenderer {
                     parent_alpha,
                     sh_language.as_ref().map(|s| s.as_str()),
                     sh_theme.as_ref().map(|s| s.as_str()),
+                    (sx, sy),
                 );
                 surface.pop();
             }
@@ -630,6 +630,7 @@ impl PdfRenderer {
 
 // ── Text rendering (mirrors renderer-skia logic) ──────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn render_text_lines(
     surface: &mut krilla::surface::Surface,
     lines: &[TextChild],
@@ -637,7 +638,30 @@ fn render_text_lines(
     parent_alpha: f32,
     sh_language: Option<&str>,
     sh_theme: Option<&str>,
+    fit_scale: (f32, f32),
 ) {
+    // See renderer-skia's `render_text_lines` for the derivation: a placeable
+    // run's `override_offset` is a final-space delta; dividing by the
+    // block's uniform fit-scale converts it to the raw glyph-space this
+    // function paints in.
+    let (fit_sx, fit_sy) = fit_scale;
+    let raw_offset = |span: &TextSpan| -> (f32, f32) {
+        let Some((dx, dy)) = span.override_offset else {
+            return (0.0, 0.0);
+        };
+        (
+            if fit_sx.abs() > 1e-6 {
+                dx / fit_sx
+            } else {
+                0.0
+            },
+            if fit_sy.abs() > 1e-6 {
+                dy / fit_sy
+            } else {
+                0.0
+            },
+        )
+    };
     // Build syntax-highlight context if requested.
     let sh_ctx: Option<(Vec<Vec<usize>>, highlight::SyntaxColors)> = sh_language.map(|lang| {
         let theme = sh_theme.unwrap_or("InspiredGitHub");
@@ -732,12 +756,13 @@ fn render_text_lines(
                 }
             };
 
-            // Build glyph path shifted by y_cursor.
+            // Build glyph path shifted by y_cursor plus any placeable-run override.
+            let (dx, dy) = raw_offset(span);
             let verbs: Vec<PathVerb> = glyph
                 .path
                 .verbs
                 .iter()
-                .map(|v| shift_verb_y(v, y_cursor))
+                .map(|v| shift_verb(v, dx, y_cursor + dy))
                 .collect();
             let Some(path) = verbs_to_krilla_path(&verbs) else {
                 continue;
@@ -808,13 +833,16 @@ fn verbs_to_krilla_path(verbs: &[PathVerb]) -> Option<Path> {
 }
 
 /// Shift the y-coordinate of a glyph path verb by `dy` (for multi-line text layout).
-fn shift_verb_y(v: &PathVerb, dy: f32) -> PathVerb {
+/// Shift a path verb by `(dx, dy)` — `dx` is only ever non-zero for an
+/// overridden run's horizontal delta; `dy` carries the per-line stacking
+/// cursor plus (for an overridden run) its raw-space vertical delta.
+fn shift_verb(v: &PathVerb, dx: f32, dy: f32) -> PathVerb {
     match *v {
-        PathVerb::MoveTo(x, y) => PathVerb::MoveTo(x, y + dy),
-        PathVerb::LineTo(x, y) => PathVerb::LineTo(x, y + dy),
-        PathVerb::QuadTo(cx, cy, x, y) => PathVerb::QuadTo(cx, cy + dy, x, y + dy),
+        PathVerb::MoveTo(x, y) => PathVerb::MoveTo(x + dx, y + dy),
+        PathVerb::LineTo(x, y) => PathVerb::LineTo(x + dx, y + dy),
+        PathVerb::QuadTo(cx, cy, x, y) => PathVerb::QuadTo(cx + dx, cy + dy, x + dx, y + dy),
         PathVerb::CubicTo(c0x, c0y, c1x, c1y, x, y) => {
-            PathVerb::CubicTo(c0x, c0y + dy, c1x, c1y + dy, x, y + dy)
+            PathVerb::CubicTo(c0x + dx, c0y + dy, c1x + dx, c1y + dy, x + dx, y + dy)
         }
         PathVerb::Close => PathVerb::Close,
     }

@@ -1100,7 +1100,9 @@ mod tests {
     fn text_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
         let node = find_node(&scene.children, id).unwrap();
         match &node.kind {
-            renderer_core::NodeKind::Text { size, .. } => (size.width, size.height),
+            renderer_core::NodeKind::Text { node_box, .. } => {
+                (node_box.size.width, node_box.size.height)
+            }
             other => panic!("expected a text node, got {other:?}"),
         }
     }
@@ -1134,5 +1136,147 @@ mod tests {
         // keep_aspect true).
         assert_eq!(text_wh(&scene, 1), (0.0, 0.0));
         assert!(text_keep_aspect(&scene, 1));
+    }
+
+    /// `Text` gained `rotate()`/`scale()`/`pivot()` (item 16, proposal §4.1's
+    /// transform tier) by adopting a real `NodeBox` (previously deliberately
+    /// absent, per item 14's "Text doesn't get a NodeBox" decision). Same
+    /// childless-`text`-node trick as `text_explicit_w_h_keep_aspect_round_trip`
+    /// to stay independent of font machinery.
+    const TEXT_TRANSFORM_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "TextTransform", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0, 1],
+     "nodes": [
+       {"kind": "text", "x": 10, "y": 20, "w": 80, "h": 30,
+        "rotation": 45, "scale_x": 2, "scale_y": 3, "pivot_x": 5, "pivot_y": 6},
+       {"kind": "text", "x": 0, "y": 0}
+     ]}
+  ]
+}"#;
+
+    fn text_node_box(scene: &renderer_core::Scene, id: u64) -> &renderer_core::NodeBox {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Text { node_box, .. } => node_box,
+            other => panic!("expected a text node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_node_box_rotation_scale_pivot_round_trip() {
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(TEXT_TRANSFORM_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // Node 0: every transform field explicit -> round-trips exactly,
+        // same as Rect/Image already do via the shared `eval_node_box`.
+        let node_box = text_node_box(&scene, 0);
+        assert_eq!(node_box.rotation, 45.0);
+        assert_eq!(node_box.scale_x, 2.0);
+        assert_eq!(node_box.scale_y, 3.0);
+        assert_eq!(node_box.pivot_x, 5.0);
+        assert_eq!(node_box.pivot_y, 6.0);
+        // Node 1: nothing set -> identity rotation/scale, pivot defaults to
+        // the box's own center (w*0.5, h*0.5) — here (0, 0) since w/h are
+        // both 0 (empty text, untouched size default).
+        let node_box = text_node_box(&scene, 1);
+        assert_eq!(node_box.rotation, 0.0);
+        assert_eq!(node_box.scale_x, 1.0);
+        assert_eq!(node_box.scale_y, 1.0);
+        assert_eq!(node_box.pivot_x, 0.0);
+        assert_eq!(node_box.pivot_y, 0.0);
+    }
+
+    /// Placeable text runs (item 16, proposal §4.1/§4.10): `tline`/`tspan`
+    /// gain a real, wire-honored `x`/`y` that overrides the paragraph-layout
+    /// position without reflowing siblings. Three lines: one untouched, one
+    /// whose `tline` has an override that should cascade to its one
+    /// unoverridden child span, and one whose `tspan` has its *own* override
+    /// that must win over its parent `tline`'s (nearest self-or-ancestor,
+    /// not "outermost ancestor"). Real font shaping is required (natural
+    /// position comes from actual glyph layout), so this needs
+    /// `Resources::init()`, unlike the two tests above.
+    ///
+    /// This is also the regression test for a real stack overflow found by
+    /// hand while smoke-testing (not by a prior failing test): resolving an
+    /// override's delta needs the block's *natural* layout, which — before
+    /// the `eval_as_text_child_for_layout` split (`eval.rs`) — was computed
+    /// by re-evaluating the whole block including the very span being
+    /// resolved, recursing forever. If that split regresses, this test hangs
+    /// or crashes rather than failing an assertion.
+    const PLACEABLE_RUNS_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "PlaceableRuns", "width": 300, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "text", "x": 20, "y": 30, "font_size": 18, "children": [1, 2]},
+       {"kind": "tline", "children": [3]},
+       {"kind": "tline", "x": 150, "y": 150, "children": [4, 5]},
+       {"kind": "tspan", "text": "Line one stays put"},
+       {"kind": "tspan", "text": "Second "},
+       {"kind": "tspan", "text": "line", "x": 10, "y": 10}
+     ]}
+  ]
+}"#;
+
+    fn find_text_span(
+        children: &[renderer_core::TextChild],
+        id: u64,
+    ) -> Option<&renderer_core::TextSpan> {
+        for child in children {
+            match child {
+                renderer_core::TextChild::Span(s) if s.id == id => return Some(s),
+                renderer_core::TextChild::Span(_) => {}
+                renderer_core::TextChild::Group(g) => {
+                    if let Some(found) = find_text_span(&g.children, id) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn placeable_run_override_cascades_to_nearest_self_or_ancestor() {
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(PLACEABLE_RUNS_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        let renderer_core::NodeKind::Text { lines, .. } =
+            &find_node(&scene.children, 0).unwrap().kind
+        else {
+            panic!("expected a text node");
+        };
+
+        // Span 3: no override anywhere in its ancestor chain -> untouched.
+        let span3 = find_text_span(lines, 3).expect("span 3 present");
+        assert_eq!(span3.override_offset, None);
+
+        // Span 4: no override of its own, but its parent tline has one ->
+        // inherits the group's delta. Finite (not NaN/inf) confirms the
+        // walk-up actually found and resolved a winner rather than, say,
+        // dividing by a degenerate natural extent.
+        let span4 = find_text_span(lines, 4).expect("span 4 present");
+        let (dx4, dy4) = span4
+            .override_offset
+            .expect("span 4 inherits group override");
+        assert!(dx4.is_finite() && dy4.is_finite());
+
+        // Span 5: has its own override -> wins over the parent group's.
+        let span5 = find_text_span(lines, 5).expect("span 5 present");
+        let (dx5, dy5) = span5.override_offset.expect("span 5 has its own override");
+        assert!(dx5.is_finite() && dy5.is_finite());
+
+        // Span 4's delta must differ from span 5's -- they resolve against
+        // different winning nodes (the group vs. span 5 itself), so a bug
+        // that always cascaded to the outermost ancestor (ignoring a closer
+        // override) would make these equal.
+        assert!((dx4, dy4) != (dx5, dy5));
     }
 }

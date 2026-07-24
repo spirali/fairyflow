@@ -128,6 +128,14 @@ pub struct TextSpan {
     pub text: Arc<String>,
     #[serde(flatten)]
     pub text_style: TextStyle,
+    /// Placeable-run override delta `(dx, dy)`, already resolved against the
+    /// nearest self-or-ancestor `TextGroup`/`TextSpan` with an explicit
+    /// `x`/`y` — in the same final (fit-scaled) coordinate space `.at()`
+    /// queries use. `None` for the overwhelming common case (no override
+    /// anywhere in this span's ancestor chain); renderers convert to raw
+    /// glyph-space via the block's own fit-scale before painting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_offset: Option<(f32, f32)>,
 }
 
 /// A node in the text tree — either a nested group or a leaf span.
@@ -235,15 +243,15 @@ pub enum NodeKind {
         crop_end: f64,
         children: Vec<PathCommand>,
     },
-    /// Python: Text(PositionMixin, SizeMixin) — positioned block of text lines.
-    /// Each element of `lines` is one line (rendered top-to-bottom). `size` is
-    /// the resolved box the laid-out lines are scaled to fit (equals the
-    /// natural measured extent when never explicitly set).
+    /// Python: Text(PositionMixin, SizeMixin, RotAndScaleMixin) — positioned,
+    /// rotatable/scalable block of text lines. Each element of `lines` is one
+    /// line (rendered top-to-bottom). `node_box.size` is the resolved box the
+    /// laid-out lines are scaled to fit (equals the natural measured extent
+    /// when never explicitly set); `node_box.rotation`/`scale_*`/`pivot_*`
+    /// rotate/scale/pivot the whole resolved box, same as `Rect`/`Image`.
     Text {
         #[serde(flatten)]
-        position: Position,
-        #[serde(flatten)]
-        size: Size,
+        node_box: NodeBox,
         keep_aspect: bool,
         /// Maximum line width, in unscaled layout units, before wrapping.
         /// `None` disables wrapping (a paragraph is exactly one visual row
@@ -261,8 +269,6 @@ pub enum NodeKind {
         sh_theme: Option<Arc<String>>,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
-        #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-        z_level: Inheritable<f64>,
     },
     /// An image node (SVG for now).
     Image {

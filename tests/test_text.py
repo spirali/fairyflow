@@ -1,11 +1,26 @@
+from pathlib import Path
+
 import pytest
-from fairyflow.nodes import Scene
-from fairyflow.text import stext, Text, TextSpan, TextGroup
+
+from fairyflow.nodes import Image, Scene
+from fairyflow.sentinels import DEFAULT, rel
+from fairyflow.serializer import create_export
+from fairyflow.text import Text, TextGroup, TextSpan, stext
+
+ASSETS = Path(__file__).parent / "assets"
 
 
 def _span_text(span):
     av = span._attrs["text"]
     return av.values[av.init_frame]
+
+
+def _nodes(scene):
+    return create_export(0, scene)["nodes"]
+
+
+def _node(scene):
+    return _nodes(scene)[0]
 
 
 @pytest.fixture
@@ -360,3 +375,208 @@ def test_text_ctor_multiline(test_scene):
     test_scene.pdf_tolerance = 40  # two lines of vector-drawn glyphs vs. raster AA
     with test_scene.size(200, 60):
         Text("line one\nline two").xy(4, 15).font(size=16)
+
+
+# ── Sizing: .size()/.expand()/.keep_aspect() ─────────────────────────────────
+# `Text` scales its laid-out block as a unit to fit an explicit box, exactly
+# like `Image` (proposal §4.10's sizing subsection).
+
+
+def test_size_absent_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text("hi")
+    node = _node(s)
+    assert "w" not in node
+    assert "h" not in node
+    # keep_aspect defaults `True` but, like `Image`, is seeded eagerly at
+    # construction (`_add_attr`) rather than lazily, so it's always present.
+    assert node["keep_aspect"] is True
+
+
+def test_size_both_axes_writes_w_and_h():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").size(80, 30)
+    node = _node(s)
+    assert node["w"] == 80
+    assert node["h"] == 30
+
+
+def test_size_single_axis_leaves_other_absent():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").size(w=80)
+    node = _node(s)
+    assert node["w"] == 80
+    assert "h" not in node
+
+
+def test_expand_is_rel_1_on_both_axes():
+    s = Scene(100, 100)
+    with s:
+        t1 = Text("hi").expand()
+    node = _node(s)
+    assert node["w"] == node["h"]  # both are `mul(parent.dim, 1)` expressions
+    assert t1._has_attr("width") and t1._has_attr("height")
+
+
+def test_keep_aspect_writes_explicit_value():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").size(80, 30).keep_aspect(False)
+    node = _node(s)
+    assert node["keep_aspect"] is False
+
+
+def test_keep_aspect_defaults_true_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").size(80, 30)
+    node = _node(s)
+    assert node["keep_aspect"] is True
+
+
+def test_image_keep_aspect_setter_matches_ctor_kwarg():
+    # Image's `keep_aspect` was constructor-only before this slice; confirm
+    # the new shared setter can override it at runtime too.
+    s = Scene(100, 100)
+    with s:
+        Image(ASSETS / "test.svg", keep_aspect=True).size(50, 40).keep_aspect(False)
+    node = _node(s)
+    assert node["keep_aspect"] is False
+
+
+def test_text_size_width_only(test_scene):
+    with test_scene:
+        Text("Hi").font(size=16).size(w=50)
+
+
+def test_text_size_height_only(test_scene):
+    with test_scene:
+        Text("Hi").font(size=16).size(h=30)
+
+
+def test_text_size_both_keep_aspect_letterboxed(test_scene):
+    test_scene.pdf_tolerance = 40
+    with test_scene:
+        Text("Hi").font(size=16).size(50, 30)
+
+
+def test_text_size_both_keep_aspect_false_stretched(test_scene):
+    test_scene.pdf_tolerance = 40
+    with test_scene:
+        Text("Hi").font(size=16).size(50, 30).keep_aspect(False)
+
+
+def test_text_expand_poster_text(test_scene):
+    test_scene.pdf_tolerance = 40
+    with test_scene:
+        Text("Hi").font(size=16).expand()
+
+
+# ── Wrapping and alignment: .wrap()/.text_align() ────────────────────────────
+# Automatic line wrapping and paragraph alignment (proposal §4.10/§9.5).
+
+
+def test_wrap_default_removes_the_attribute():
+    s = Scene(100, 100)
+    with s:
+        t = Text("hi").wrap(200)
+        t.wrap(DEFAULT)
+    node = _node(s)
+    assert "wrap" not in node
+
+
+def test_wrap_accepts_rel():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").wrap(rel(0.5))
+    node = _node(s)
+    # `rel(0.5)` resolves against the parent Scene's width (100) at
+    # serialization time via `resolve_rel`, same as `width()`/`x()`.
+    assert node["wrap"] == 50.0
+
+
+def test_text_align_absent_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text("hi")
+    node = _node(s)
+    assert "text_align" not in node
+
+
+def test_text_align_writes_explicit_mode():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").text_align("center")
+    node = _node(s)
+    assert node["text_align"] == "center"
+
+
+def test_tgroup_text_align_absent_by_default():
+    s = Scene(100, 100)
+    with s:
+        t = Text()
+        line = t.line()
+        line.span("hi")
+    nodes = _nodes(s)
+    node = _node(s)
+    line_node = nodes[node["children"][0]]
+    assert "text_align" not in line_node
+
+
+def test_tgroup_text_align_overrides_block_default():
+    s = Scene(100, 100)
+    with s:
+        t = Text().text_align("left")
+        line = t.line()
+        line.span("hi")
+        line.text_align("right")
+    nodes = _nodes(s)
+    node = _node(s)
+    assert node["text_align"] == "left"
+    line_node = nodes[node["children"][0]]
+    assert line_node["text_align"] == "right"
+
+
+def test_text_wrap_breaks_multi_word_line(test_scene):
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(120, 100):
+        Text("the quick brown fox jumps").font(size=16).wrap(100).xy(4, 4)
+
+
+def test_text_align_center(test_scene):
+    test_scene.pdf_tolerance = 40
+    with test_scene.size(160, 100):
+        Text("hi\nlong line here").font(size=16).wrap(140).text_align("center").xy(4, 4)
+
+
+def test_text_align_right(test_scene):
+    test_scene.pdf_tolerance = 40
+    with test_scene.size(160, 100):
+        Text("hi\nlong line here").font(size=16).wrap(140).text_align("right").xy(4, 4)
+
+
+def test_text_align_justify(test_scene):
+    test_scene.pdf_tolerance = 90
+    with test_scene.size(160, 100):
+        Text("the quick brown fox jumps over the lazy dog").font(size=16).wrap(
+            140
+        ).text_align("justify")
+
+
+def test_tgroup_text_align_overrides_block_default_visually(test_scene):
+    test_scene.pdf_tolerance = 70
+    with test_scene.size(160, 100):
+        t = Text().font(size=16).wrap(140).text_align("left").xy(4, 4)
+        t.line("left aligned")
+        right_line = t.line()
+        right_line.span("right aligned")
+        right_line.text_align("right")
+
+
+def test_wrap_and_size_fit_the_wrapped_extent_not_the_wrap_width(test_scene):
+    test_scene.pdf_tolerance = 150
+    with test_scene.size(200, 100):
+        Text("the quick brown fox").font(size=16).wrap(90).size(w=180).xy(4, 4)

@@ -2,7 +2,7 @@ use renderer_core::glyph_cache::{PathVerb, VectorPath};
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
 use renderer_core::resources::Resources;
-use renderer_core::text_layout::{build_span_text, collect_spans, get_or_build_line};
+use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
     AffineTransform, node_z_level, positional_transform as core_positional_transform,
 };
@@ -199,17 +199,20 @@ impl RasterRenderer {
                 position,
                 size,
                 keep_aspect,
+                wrap,
+                text_align,
                 lines,
                 sh_language,
                 sh_theme,
                 ..
             } => {
-                let (nat_w, nat_h) = renderer_core::measure_text(lines);
+                let laid_out =
+                    renderer_core::layout_text(lines, wrap.map(|w| w as f32), *text_align);
                 let (sx, sy, off_x, off_y) = text_fit_scale(
                     size.width as f32,
                     size.height as f32,
-                    nat_w,
-                    nat_h,
+                    laid_out.width,
+                    laid_out.height,
                     *keep_aspect,
                 );
                 let transform = positional_transform(
@@ -226,7 +229,6 @@ impl RasterRenderer {
                     0.0,
                     parent_transform,
                 );
-                let lines = lines.clone();
                 let sh = sh_language.as_ref().map(|lang| {
                     let theme = sh_theme
                         .as_ref()
@@ -234,7 +236,7 @@ impl RasterRenderer {
                         .unwrap_or("InspiredGitHub");
                     (lang.as_str(), theme)
                 });
-                self.render_text_lines(&lines, pixmap, transform, parent_alpha, sh);
+                self.render_text_lines(lines, &laid_out.lines, pixmap, transform, parent_alpha, sh);
             }
             NodeKind::Image {
                 node_box,
@@ -268,6 +270,7 @@ impl RasterRenderer {
     fn render_text_lines(
         &self,
         lines: &[TextChild],
+        cached_lines: &[Arc<renderer_core::glyph_cache::CachedLine>],
         pixmap: &mut Pixmap,
         parent_transform: Transform,
         parent_alpha: f32,
@@ -307,14 +310,12 @@ impl RasterRenderer {
         });
 
         let mut y_cursor = 0.0f32;
-        for (line_idx, line) in lines.iter().enumerate() {
+        for (line_idx, (line, cached)) in lines.iter().zip(cached_lines.iter()).enumerate() {
             let mut spans: Vec<&TextSpan> = Vec::new();
             collect_spans(line, &mut spans);
             if spans.is_empty() {
                 continue;
             }
-
-            let cached = get_or_build_line(&spans);
 
             let zwnj_ranges: Vec<(std::ops::Range<usize>, usize)> = if sh_ctx.is_some() {
                 let (_, r) = build_span_text(&spans);

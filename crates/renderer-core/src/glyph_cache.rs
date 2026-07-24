@@ -1,3 +1,4 @@
+use crate::TextAlign;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, trace};
@@ -27,6 +28,11 @@ pub struct CachedGlyph {
     pub span_idx: usize,
     /// Left edge of this glyph within the line (for position queries).
     pub x: f32,
+    /// Top of this glyph's visual row within the (possibly multi-row, once
+    /// wrapped) line — 0 for the first row. For position queries only; NOT
+    /// used for painting (the glyph's `path` already has its own baseline
+    /// position baked in).
+    pub y: f32,
     /// Outline at y_cursor = 0 with (run_x + glyph.x, baseline - glyph.y) applied.
     pub path: VectorPath,
     /// Byte offset of this glyph's cluster in the concatenated span text string
@@ -55,8 +61,20 @@ pub struct SpanKey {
     pub italic: bool,
 }
 
-/// Ordered slice of span keys describing a complete line.
-pub type LineKey = Box<[SpanKey]>;
+/// Normalized cache key for a complete built line: the spans plus the
+/// wrap/alignment parameters used to lay them out (`api-v2-impl.md` §7 item
+/// 9's deferred note: "into the CachedLine cache key") — two lines with
+/// identical spans but a different wrap width or alignment reference are
+/// different renders and must not collide in the cache.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LineKey {
+    pub spans: Box<[SpanKey]>,
+    /// `f32::to_bits()` of the wrap width, if any.
+    pub wrap_bits: Option<u32>,
+    pub align: TextAlign,
+    /// `f32::to_bits()` of the cross-line alignment reference width.
+    pub alignment_width_bits: u32,
+}
 
 struct CacheEntry {
     last_used: u64,
@@ -80,7 +98,7 @@ fn cache() -> &'static Mutex<GlyphCache> {
 }
 
 /// Look up a cached line.  Bumps `last_used` on hit.
-pub fn cache_get(key: &[SpanKey]) -> Option<Arc<CachedLine>> {
+pub fn cache_get(key: &LineKey) -> Option<Arc<CachedLine>> {
     let mut guard = cache().lock().unwrap();
     guard.clock += 1;
     let clock = guard.clock;

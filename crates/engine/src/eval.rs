@@ -679,6 +679,8 @@ impl Node {
                 position,
                 size,
                 keep_aspect,
+                wrap,
+                text_align,
                 text_style,
                 sh_language,
                 sh_theme,
@@ -691,6 +693,8 @@ impl Node {
                     height: size.height.eval_or_else(ctx, |ctx| self.auto_height(ctx))?,
                 },
                 keep_aspect: keep_aspect.eval_or(ctx, true)?,
+                wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
+                text_align: text_align.unwrap_or_default(),
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),
@@ -795,10 +799,12 @@ impl Node {
         match &self.kind {
             NodeKind::TextGroup {
                 text_style,
+                text_align,
                 children,
             } => Ok(renderer_core::TextGroup {
                 id: self.id.as_u64(),
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
+                text_align: *text_align,
                 children: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))

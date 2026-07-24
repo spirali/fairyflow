@@ -162,12 +162,13 @@ pub enum NodeKind {
         children: Vec<NodeId>,
     },
 
-    /// Python: `Text(PositionMixin, SizeMixin)` — block of styled text with Line
-    /// children. `size` is the explicit/auto-derived box the laid-out text is
-    /// scaled to fit (never re-lays-out text; that's `font(size=)`'s job).
+    /// Python: `Text(PositionMixin, SizeMixin, RotAndScaleMixin)` — block of styled
+    /// text with Line children. `node_box.size` is the explicit/auto-derived box the
+    /// laid-out text is scaled to fit (never re-lays-out text; that's `font(size=)`'s
+    /// job); `node_box.rotation`/`scale_*`/`pivot_*` rotate/scale/pivot the whole
+    /// resolved box, same as `Rect`/`Image`.
     Text {
-        position: Position,
-        size: Size,
+        node_box: NodeBox,
         keep_aspect: AttrExpr<bool>,
         /// Maximum line width, in unscaled layout units, before wrapping.
         /// Absent (not `AttrExpr`-wrapped default handling) means wrapping is
@@ -177,13 +178,17 @@ pub enum NodeKind {
         /// Block-default alignment; `None` resolves to `Left` at eval time.
         text_align: Option<renderer_core::TextAlign>,
         text_style: TextStyle,
-        z_level: AttrExpr<f64>,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
         children: Vec<NodeId>,
     },
     /// Group containing instance of other TextGroups or TextSpans.
     TextGroup {
+        /// Placeable override — absent means the paragraph-layout position
+        /// (no reflow of siblings either way). Position only: no size (a run's
+        /// extent is always its measured glyphs) and no z (paragraph order is
+        /// draw order).
+        position: Position,
         text_style: TextStyle,
         /// Per-line alignment override; `None` inherits the owning `Text`
         /// block's own `text_align`.
@@ -192,6 +197,8 @@ pub enum NodeKind {
     },
     /// A text run with a concrete string value
     TextSpan {
+        /// Placeable override — see `TextGroup::position`.
+        position: Position,
         text_style: TextStyle,
         text: AttrExpr<Arc<String>>,
     },
@@ -254,7 +261,8 @@ impl NodeKind {
             | NodeKind::Rect { node_box, .. }
             | NodeKind::Ellipse { node_box, .. }
             | NodeKind::Image { node_box, .. }
-            | NodeKind::Layer { node_box, .. } => Some(node_box),
+            | NodeKind::Layer { node_box, .. }
+            | NodeKind::Text { node_box, .. } => Some(node_box),
             _ => None,
         }
     }
@@ -528,29 +536,24 @@ impl Node {
                     children,
                 }
             }
-            Kind::Text => {
-                let position = def.position();
-                let size = def.size();
-                let z_level = def.z_level();
-                NodeKind::Text {
-                    position,
-                    size,
-                    keep_aspect: AttrExpr(def.keep_aspect.take()),
-                    wrap: AttrExpr(def.wrap.take()),
-                    text_align: def.text_align.take(),
-                    text_style: def.text_style(),
-                    z_level,
-                    sh_language: def.sh_language.take(),
-                    sh_theme: def.sh_theme.take(),
-                    children,
-                }
-            }
+            Kind::Text => NodeKind::Text {
+                node_box: def.node_box(),
+                keep_aspect: AttrExpr(def.keep_aspect.take()),
+                wrap: AttrExpr(def.wrap.take()),
+                text_align: def.text_align.take(),
+                text_style: def.text_style(),
+                sh_language: def.sh_language.take(),
+                sh_theme: def.sh_theme.take(),
+                children,
+            },
             Kind::TextGroup => NodeKind::TextGroup {
+                position: def.position(),
                 text_style: def.text_style(),
                 text_align: def.text_align.take(),
                 children,
             },
             Kind::TextSpan => NodeKind::TextSpan {
+                position: def.position(),
                 text_style: def.text_style(),
                 text: AttrExpr(def.text.take()),
             },

@@ -13,12 +13,12 @@ from .nodes import (
     Node,
     NodeWithChildren,
     PositionMixin,
-    PositionQueryMixin,
     SizeMixin,
     KeepAspectMixin,
     StyleMixin,
     InheritedStyleMixin,
     ZLevelMixin,
+    RotAndScaleMixin,
 )
 
 
@@ -95,7 +95,7 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
 
 
 @beartype
-class TextSpan(Node, InheritedTextStyleMixin, PositionQueryMixin):
+class TextSpan(Node, InheritedTextStyleMixin, PositionMixin):
     kind = "tspan"
 
     def __init__(self, parent, text: StringLike):
@@ -107,7 +107,7 @@ class TextSpan(Node, InheritedTextStyleMixin, PositionQueryMixin):
 
 
 @beartype
-class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionQueryMixin):
+class TextGroup(NodeWithChildren, InheritedTextStyleMixin, PositionMixin):
     kind = "tline"
 
     def __init__(self, parent):
@@ -150,6 +150,7 @@ class Text(
     KeepAspectMixin,
     TextStyleMixin,
     ZLevelMixin,
+    RotAndScaleMixin,
 ):
     kind = "text"
 

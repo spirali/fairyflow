@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from fairyflow.nodes import Image, Scene
+from fairyflow.nodes import Image, Rect, Scene
 from fairyflow.sentinels import DEFAULT, rel
 from fairyflow.serializer import create_export
 from fairyflow.text import Text, TextGroup, TextSpan, stext
@@ -580,3 +580,150 @@ def test_wrap_and_size_fit_the_wrapped_extent_not_the_wrap_width(test_scene):
     test_scene.pdf_tolerance = 150
     with test_scene.size(200, 100):
         Text("the quick brown fox").font(size=16).wrap(90).size(w=180).xy(4, 4)
+
+
+# ── Transforms: Text.rotate()/.scale()/.pivot() ──────────────────────────────
+# Text-block rotate/scale/pivot (proposal §4.1/§4.10) — mirrors
+# test_transform.py's Rect/Ellipse/Image coverage, but for Text specifically.
+# Per-run (TextGroup/TextSpan) rotate/scale/pivot is a separate, deferred
+# slice — test_transform.py's `test_text_span_has_no_rotate` already locks in
+# that TextSpan still has no `rotate` attribute.
+
+
+def test_text_rotate_scale_pivot_serializes():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").rotate(45).scale(2).pivot(x=0, y=0)
+    node = _node(s)
+    assert node["rotation"] == 45
+    assert node["scale_x"] == 2
+    assert node["scale_y"] == 2
+    assert node["pivot_x"] == 0
+    assert node["pivot_y"] == 0
+
+
+def test_text_rotate(test_scene):
+    with test_scene.size(150, 150):
+        Text("Rotated").font(size=20).xy(20, 60).fill("darkred").rotate(20)
+
+
+def test_text_scale_and_pivot(test_scene):
+    with test_scene.size(150, 150):
+        t = Text("Grow").font(size=16).xy(20, 60).fill("darkslateblue")
+        t.pivot("top_left")
+        t.scale(1.8)
+
+
+# ── Placeable runs: TextGroup/TextSpan .xy()/.move()/.next_to() ─────────────
+# proposal §4.1/§4.10: a line/run's `xy()`/`pos()`/`move()`/`next_to()`
+# overrides the paragraph-layout position without reflowing siblings.
+
+
+def test_span_xy_absent_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text().span("hi")
+    # A bare `.span()` with no prior line is Text's direct child (no `tline`
+    # wrapper), so `children[0]` is the span itself.
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert "x" not in node
+    assert "y" not in node
+
+
+def test_span_xy_writes_x_y():
+    s = Scene(100, 100)
+    with s:
+        span = Text().span("hi")
+        span.xy(120, 45)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert node["x"] == 120
+    assert node["y"] == 45
+
+
+def test_span_xy_default_resets():
+    # Unlike `wrap(DEFAULT)` (true absence, no auto-op to fall back to),
+    # `xy(DEFAULT)` follows the standard `PositionMixin` reset: it writes an
+    # explicit `auto_x`/`auto_y`-referencing expression rather than removing
+    # the attribute, matching `x(DEFAULT)` on every other placeable node.
+    s = Scene(100, 100)
+    with s:
+        span = Text().span("hi")
+        span.xy(120, 45)
+        span.xy(DEFAULT, DEFAULT)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert node["x"][0] == "auto_x"
+    assert node["y"][0] == "auto_y"
+
+
+def test_tgroup_xy_writes_x_y():
+    s = Scene(100, 100)
+    with s:
+        t = Text()
+        line = t.line()
+        line.span("hi")
+        line.xy(80, 30)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert node["x"] == 80
+    assert node["y"] == 30
+
+
+def test_span_move_writes_relative_x_y():
+    s = Scene(100, 100)
+    with s:
+        span = Text().span("hi")
+        span.move(5, -3)
+    node = _nodes(s)[_node(s)["children"][0]]
+    assert "x" in node and "y" in node
+
+
+def test_word_flies_out_of_sentence(test_scene):
+    """A single overridden span draws at its explicit position while its
+    siblings keep their natural flowed positions (no reflow) — the gap where
+    the overridden word used to be stays empty."""
+    # Matches item 15/item 14's precedent: PDF (vector) vs PNG (raster) text
+    # AA differs slightly more than the default tolerance allows once
+    # multiple runs at different positions are involved.
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(200, 100):
+        t = Text().font(size=16).xy(4, 20).fill("black")
+        t.span("The quick brown ")
+        fox = t.span("fox")
+        fox.fill("darkred")
+        fox.xy(120, 60)
+        t.span(" jumps")
+
+
+def test_tgroup_move_displaces_whole_line(test_scene):
+    """A `.move()`'d TextGroup line displaces every descendant span that
+    doesn't have its own closer override, as a rigid unit."""
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(200, 150):
+        t = Text().font(size=16).xy(4, 20).fill("black")
+        t.line("Untouched line")
+        line2 = t.line()
+        line2.span("Moved ").fill("darkblue")
+        line2.span("line")
+        line2.xy(60, 100)
+
+
+def test_span_own_override_wins_over_ancestor_group(test_scene):
+    """A span's own override takes precedence over its parent group's,
+    matching the "nearest self-or-ancestor wins" cascade rule."""
+    with test_scene.size(200, 150):
+        t = Text().font(size=16).xy(4, 20).fill("black")
+        line = t.line()
+        line.span("Second ").fill("darkblue")
+        special = line.span("line")
+        special.fill("darkred")
+        line.xy(100, 100)
+        special.xy(10, 60)
+
+
+def test_next_to_targeting_a_placeable_span(test_scene):
+    """`next_to()` still works when its target is a genuinely movable
+    (PositionMixin, not just query-only) TextSpan."""
+    with test_scene.size(150, 80):
+        t = Text().font(size=14).xy(4, 15).fill("black")
+        span = t.span("target")
+        r = Rect().size(8, 8).fill("tomato")
+        r.next_to(span, "right", gap=3)

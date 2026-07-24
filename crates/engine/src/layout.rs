@@ -11,15 +11,14 @@ impl Node {
             | NodeKind::Rect { node_box, .. }
             | NodeKind::Ellipse { node_box, .. }
             | NodeKind::Image { node_box, .. }
-            | NodeKind::Layer { node_box, .. } => Some(&node_box.position),
+            | NodeKind::Layer { node_box, .. }
+            | NodeKind::Text { node_box, .. } => Some(&node_box.position),
             NodeKind::Move { position, .. }
             | NodeKind::Line { position, .. }
-            | NodeKind::Text { position, .. }
-            | NodeKind::Cubic { position, .. } => Some(position),
-            NodeKind::TextGroup { .. }
-            | NodeKind::TextSpan { .. }
-            | NodeKind::Path { .. }
-            | NodeKind::Close => None,
+            | NodeKind::Cubic { position, .. }
+            | NodeKind::TextGroup { position, .. }
+            | NodeKind::TextSpan { position, .. } => Some(position),
+            NodeKind::Path { .. } | NodeKind::Close => None,
         }
     }
 
@@ -29,8 +28,8 @@ impl Node {
             | NodeKind::Rect { node_box, .. }
             | NodeKind::Ellipse { node_box, .. }
             | NodeKind::Image { node_box, .. }
-            | NodeKind::Layer { node_box, .. } => Some(&node_box.size),
-            NodeKind::Text { size, .. } => Some(size),
+            | NodeKind::Layer { node_box, .. }
+            | NodeKind::Text { node_box, .. } => Some(&node_box.size),
             NodeKind::Move { .. }
             | NodeKind::Line { .. }
             | NodeKind::Cubic { .. }
@@ -408,14 +407,15 @@ impl Node {
             }
             NodeKind::Text {
                 children,
-                size,
+                node_box,
                 wrap,
                 text_align,
                 ..
             } => {
+                let size = &node_box.size;
                 let lines = children
                     .iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                    .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
                 let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
                 let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
@@ -437,7 +437,7 @@ impl Node {
                 }
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
-                let child = self.eval_as_text_child(ctx)?;
+                let child = self.eval_as_text_child_for_layout(ctx)?;
                 renderer_core::measure_text(&[child], None, renderer_core::TextAlign::Left).0 as f64
             }
             NodeKind::Image { path, node_box, .. } => {
@@ -535,14 +535,15 @@ impl Node {
             }
             NodeKind::Text {
                 children,
-                size,
+                node_box,
                 wrap,
                 text_align,
                 ..
             } => {
+                let size = &node_box.size;
                 let lines = children
                     .iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                    .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
                     .collect::<anyhow::Result<Vec<_>>>()?;
                 let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
                 let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
@@ -564,7 +565,7 @@ impl Node {
                 }
             }
             NodeKind::TextGroup { .. } | NodeKind::TextSpan { .. } => {
-                let child = self.eval_as_text_child(ctx)?;
+                let child = self.eval_as_text_child_for_layout(ctx)?;
                 renderer_core::measure_text(&[child], None, renderer_core::TextAlign::Left).1 as f64
             }
             NodeKind::Image { path, node_box, .. } => {
@@ -614,7 +615,7 @@ fn text_content_fit(text_node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f64, f64
     };
     let lines = children
         .iter()
-        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+        .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
     let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
     let (iw, ih) = renderer_core::measure_text(&lines, wrap_px, align);
@@ -649,7 +650,7 @@ fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     };
     let lines = children
         .iter()
-        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+        .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
         .collect::<anyhow::Result<Vec<_>>>()?;
     let (wrap_px, align) = resolve_text_wrap_align(wrap, *text_align, ctx)?;
     let (lx, ly) = renderer_core::measure_text_node_pos(&lines, node.id.as_u64(), wrap_px, align)
@@ -659,6 +660,53 @@ fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
         (lx as f64 * sx + off_x) as f32,
         (ly as f64 * sy + off_y) as f32,
     ))
+}
+
+/// Which axis `nearest_position_override_delta` should resolve.
+#[derive(Clone, Copy)]
+pub(crate) enum PosAxis {
+    X,
+    Y,
+}
+
+/// Walk from `leaf` (a `TextGroup`/`TextSpan`) up through its `TextGroup` ancestors,
+/// stopping at (not including) the owning `Text` block, to find the nearest
+/// self-or-ancestor with an explicit override on `axis`. Returns the delta to add to
+/// `leaf`'s own natural (paragraph-layout) position on that axis —
+/// `override_value - that_node's_own_natural_position` — so the whole subtree under
+/// the winning node moves as a rigid unit (proposal §4.1: "siblings keep their
+/// places... the overridden run just draws elsewhere"). `None` if no ancestor-or-self
+/// has that axis set — the common case, and cheap: no `text_default_pos` re-layout
+/// call happens unless a winner is actually found.
+pub(crate) fn nearest_position_override_delta(
+    ctx: &EvalCtx,
+    leaf: &Node,
+    axis: PosAxis,
+) -> anyhow::Result<Option<f64>> {
+    let mut current = leaf;
+    loop {
+        let position = match &current.kind {
+            NodeKind::TextGroup { position, .. } | NodeKind::TextSpan { position, .. } => position,
+            _ => return Ok(None),
+        };
+        let expr = match axis {
+            PosAxis::X => position.x.get_expr(),
+            PosAxis::Y => position.y.get_expr(),
+        };
+        if let Some(expr) = expr {
+            let explicit = expr.eval(ctx)?;
+            let (nx, ny) = text_default_pos(current, ctx)?;
+            let natural = match axis {
+                PosAxis::X => nx as f64,
+                PosAxis::Y => ny as f64,
+            };
+            return Ok(Some(explicit - natural));
+        }
+        match current.parent {
+            Some(parent_id) => current = ctx.node(parent_id)?,
+            None => return Ok(None),
+        }
+    }
 }
 
 /// Resolve a `Text` node's own `wrap`/`text_align` to the concrete values

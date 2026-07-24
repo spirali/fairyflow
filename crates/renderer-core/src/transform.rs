@@ -137,7 +137,8 @@ pub fn node_z_level(node: &Node) -> f64 {
         NodeKind::Group { node_box, .. }
         | NodeKind::Rect { node_box, .. }
         | NodeKind::Ellipse { node_box, .. }
-        | NodeKind::Image { node_box, .. } => *node_box.z_level.value(),
-        NodeKind::Path { z_level, .. } | NodeKind::Text { z_level, .. } => *z_level.value(),
+        | NodeKind::Image { node_box, .. }
+        | NodeKind::Text { node_box, .. } => *node_box.z_level.value(),
+        NodeKind::Path { z_level, .. } => *z_level.value(),
     }
 }

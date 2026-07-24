@@ -218,9 +218,64 @@ t.wrap(DEFAULT)  # turns wrapping back off
 
 ---
 
+## Transforms
+
+`Text` supports `.rotate()`, `.scale()`/`.scale_x()`/`.scale_y()`, and `.pivot()`,
+same as `Rect`/`Ellipse`/`Image` — the whole resolved box (after any `.size()` fit)
+rotates/scales around its pivot, default the box center:
+
+```ffpy frame="0"
+with Scene():
+    Text("Rotated").font(size=20).xy(20, 60).fill("darkred").rotate(20)
+```
+
+```ffpy frame="0"
+with Scene():
+    t = Text("Grow").font(size=16).xy(20, 60).fill("darkslateblue")
+    t.pivot("top_left")
+    t.scale(1.8)
+```
+
+---
+
 ## Positioning
 
 `Text` supports `.xy()`, `.align()`, and `.move()` for placement — see [Positioning](positioning.md) for details.
+
+### Placing individual lines and runs
+
+A `TextGroup` line (from `.line()`) or a `TextSpan` run (from `.span()`) is placeable
+too: `.xy()`/`.pos()`/`.move()`/`.next_to()` override where that one run draws,
+*without* reflowing its siblings — the rest of the paragraph keeps its normal layout,
+leaving a gap where the overridden run used to sit. `DEFAULT` restores the paragraph
+position. This is the "word flies out of the sentence" primitive:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=16).xy(4, 20).fill("black")
+    t.span("The quick brown ")
+    fox = t.span("fox")
+    fox.fill("darkred")
+    fox.move(15, 60)
+    t.span(" jumps")
+```
+
+Overriding a `TextGroup` line moves every descendant span that doesn't have its own
+override, as a rigid unit — a nested span's own override always wins over its parent
+line's (nearest self-or-ancestor, independently per axis):
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=16).xy(4, 20).fill("black")
+    t.line("Untouched line")
+    line2 = t.line()
+    line2.span("Moved ").fill("darkblue")
+    line2.span("line")
+    line2.xy(60, 100)
+```
+
+Per-run `.rotate()`/`.scale()`/`.pivot()` (spinning or growing one word in place) is
+not yet supported — only the block-level transforms above.
 
 ## stext
 

@@ -250,6 +250,10 @@ pub enum PathCommand {
     },
 }
 
+fn is_fully_revealed(reveal: &f64) -> bool {
+    *reveal >= 1.0
+}
+
 /// Kind-specific data for a scene node.
 /// Each variant carries exactly the mixins its Python counterpart inherits.
 #[derive(Debug, Clone, Serialize)]
@@ -328,6 +332,13 @@ pub enum NodeKind {
         sh_language: Option<Arc<String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         sh_theme: Option<Arc<String>>,
+        /// Typewriter-reveal fraction (proposal §9.6): `1.0` shows every
+        /// glyph; renderers apply a per-glyph cutoff based on this value.
+        /// Sparse like `wrap`/`sh_language` above — omitted at the default so
+        /// existing golden-image snapshots of the `/tree/{frame}` debug JSON
+        /// (predating this field) still match byte-for-byte.
+        #[serde(skip_serializing_if = "is_fully_revealed")]
+        reveal: f64,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
     },

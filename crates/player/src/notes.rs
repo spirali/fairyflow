@@ -91,6 +91,7 @@ pub fn build_notes_scene(paragraphs: &[&str], width: u32, height: u32) -> Scene 
             text_style: notes_text_style(),
             sh_language: None,
             sh_theme: None,
+            reveal: 1.0,
             lines,
         },
     };

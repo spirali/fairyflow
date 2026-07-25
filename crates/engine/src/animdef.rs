@@ -1229,6 +1229,44 @@ mod tests {
         }
     }
 
+    fn text_reveal(scene: &renderer_core::Scene, id: u64) -> f64 {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Text { reveal, .. } => *reveal,
+            other => panic!("expected a text node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_reveal_defaults_to_fully_revealed_when_absent() {
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(TEXT_SIZE_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        assert_eq!(text_reveal(&scene, 0), 1.0);
+    }
+
+    #[test]
+    fn text_reveal_wire_round_trip() {
+        renderer_core::Resources::init();
+        let json = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "Test", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "text", "x": 0, "y": 0, "reveal": 0.5}
+     ]}
+  ]
+}"#;
+        let anim = AnimationDef::from_json(json).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        assert_eq!(text_reveal(&scene, 0), 0.5);
+    }
+
     #[test]
     fn text_explicit_w_h_keep_aspect_round_trip() {
         // `measure_text`'s thread-local layout engine touches

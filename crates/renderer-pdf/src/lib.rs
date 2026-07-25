@@ -276,6 +276,7 @@ impl PdfRenderer {
                 text_style: _,
                 sh_language,
                 sh_theme,
+                reveal,
                 lines,
             } => {
                 let laid_out =
@@ -311,6 +312,7 @@ impl PdfRenderer {
                     sh_language.as_ref().map(|s| s.as_str()),
                     sh_theme.as_ref().map(|s| s.as_str()),
                     (sx, sy),
+                    *reveal as f32,
                 );
                 surface.pop();
             }
@@ -641,7 +643,14 @@ fn render_text_lines(
     sh_language: Option<&str>,
     sh_theme: Option<&str>,
     fit_scale: (f32, f32),
+    reveal: f32,
 ) {
+    // Typewriter reveal (proposal §9.6) — see renderer-skia's `render_text_lines`
+    // for the full rationale. A hard per-glyph cutoff, no-op at `reveal >= 1.0`.
+    let total_glyphs: usize = cached_lines.iter().map(|l| l.glyphs.len()).sum();
+    let reveal_count = (reveal as f64 * total_glyphs as f64).floor() as usize;
+    let mut glyph_index = 0usize;
+
     // See renderer-skia's `render_text_lines` for the derivation: a placeable
     // run's `override_offset` is a final-space delta; dividing by the
     // block's uniform fit-scale converts it to the raw glyph-space this
@@ -726,6 +735,12 @@ fn render_text_lines(
         };
 
         for glyph in &cached.glyphs {
+            let should_draw = glyph_index < reveal_count;
+            glyph_index += 1;
+            if !should_draw {
+                continue;
+            }
+
             let span = spans[glyph.span_idx];
             let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
 
@@ -1036,7 +1051,89 @@ fn unpremultiply(data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use renderer_core::{Camera, Inheritable, NodeBox};
+    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextStyle};
+
+    fn text_style_for_test() -> TextStyle {
+        TextStyle {
+            fill_color: Inheritable::Own(RcPaint::Solid(Color::from_rgba8(0, 0, 0, 255))),
+            stroke_color: Inheritable::Own(Color::from_rgba8(0, 0, 0, 0)),
+            stroke_width: Inheritable::Own(0.0),
+            alpha: Inheritable::Own(1.0),
+            font_family: Inheritable::Own(Arc::new("sans-serif".to_string())),
+            font_size: Inheritable::Own(24.0),
+            font_weight: Inheritable::Own(400.0),
+            italic: Inheritable::Own(false),
+        }
+    }
+
+    fn text_scene(reveal: f64) -> Scene {
+        let node_box = NodeBox {
+            position: Position { x: 0.0, y: 0.0 },
+            size: Size {
+                width: 200.0,
+                height: 40.0,
+            },
+            z_level: Inheritable::Own(0.0),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            pivot_x: 0.0,
+            pivot_y: 0.0,
+        };
+        Scene {
+            width: 200.0,
+            height: 40.0,
+            fill_color: Color::from_rgba8(255, 255, 255, 255),
+            camera: Camera {
+                camera_zoom: 1.0,
+                camera_x: 100.0,
+                camera_y: 20.0,
+            },
+            children: vec![Node {
+                id: 0,
+                kind: NodeKind::Text {
+                    node_box,
+                    keep_aspect: false,
+                    wrap: None,
+                    text_align: TextAlign::Left,
+                    text_style: text_style_for_test(),
+                    sh_language: None,
+                    sh_theme: None,
+                    reveal,
+                    lines: vec![TextChild::Span(TextSpan {
+                        id: 1,
+                        text: Arc::new("Hello fairyflow".to_string()),
+                        text_style: text_style_for_test(),
+                        override_offset: None,
+                        override_transform: None,
+                    })],
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn type_on_reveal_produces_progressively_larger_pdf_output() {
+        // No PDF rasterizer is available as a dev-dependency (see the
+        // gradient shading test above for the same constraint) — glyphs are
+        // drawn as vector paths (`docs`/CLAUDE.md: "no font embedding"), so
+        // more revealed glyphs means strictly more path data in the content
+        // stream, and thus a strictly larger PDF. A coarse but reliable
+        // proxy for "fewer glyphs were actually drawn," confirmed empirically
+        // monotonic (reveal=0.0/0.5/1.0 produced 1499/2753/4974 bytes).
+        renderer_core::Resources::init();
+        let empty = render_to_pdf(&[&text_scene(0.0)]).unwrap().len();
+        let half = render_to_pdf(&[&text_scene(0.5)]).unwrap().len();
+        let full = render_to_pdf(&[&text_scene(1.0)]).unwrap().len();
+        assert!(
+            empty < half,
+            "expected reveal=0.0 ({empty} bytes) < reveal=0.5 ({half} bytes)"
+        );
+        assert!(
+            half < full,
+            "expected reveal=0.5 ({half} bytes) < reveal=1.0 ({full} bytes)"
+        );
+    }
 
     #[test]
     fn gradient_fill_emits_a_pdf_shading_not_a_flat_color() {

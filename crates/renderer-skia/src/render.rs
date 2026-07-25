@@ -205,6 +205,7 @@ impl RasterRenderer {
                 lines,
                 sh_language,
                 sh_theme,
+                reveal,
                 ..
             } => {
                 let laid_out =
@@ -246,6 +247,7 @@ impl RasterRenderer {
                     parent_alpha,
                     sh,
                     (sx, sy),
+                    *reveal as f32,
                 );
             }
             NodeKind::Image {
@@ -287,7 +289,17 @@ impl RasterRenderer {
         parent_alpha: f32,
         sh: Option<(&str, &str)>,
         fit_scale: (f32, f32),
+        reveal: f32,
     ) {
+        // Typewriter reveal (proposal §9.6): a hard per-glyph cutoff over the
+        // already-laid-out glyphs, in reading order across all lines — never
+        // a reflow. At `reveal >= 1.0` every glyph's index is below the
+        // cutoff, so this is a no-op for the common (never called `type_on`)
+        // case.
+        let total_glyphs: usize = cached_lines.iter().map(|l| l.glyphs.len()).sum();
+        let reveal_count = (reveal as f64 * total_glyphs as f64).floor() as usize;
+        let mut glyph_index = 0usize;
+
         // A placeable run's `override_offset` is a delta in the block's final
         // (fit-scaled) coordinate space — the same space `.at()` queries use —
         // but glyph paths are built in raw, pre-fit-scale space, with the
@@ -375,6 +387,12 @@ impl RasterRenderer {
             };
 
             for glyph in &cached.glyphs {
+                let should_draw = glyph_index < reveal_count;
+                glyph_index += 1;
+                if !should_draw {
+                    continue;
+                }
+
                 let span = spans[glyph.span_idx];
                 let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
 
@@ -993,7 +1011,100 @@ fn render_image(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use renderer_core::{Camera, Inheritable, NodeBox};
+    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextStyle};
+
+    fn count_non_background_pixels(pixmap: &Pixmap) -> usize {
+        pixmap
+            .pixels()
+            .iter()
+            .filter(|p| !(p.red() == 255 && p.green() == 255 && p.blue() == 255))
+            .count()
+    }
+
+    fn text_style_for_test() -> TextStyle {
+        TextStyle {
+            fill_color: Inheritable::Own(RcPaint::Solid(Color::from_rgba8(0, 0, 0, 255))),
+            stroke_color: Inheritable::Own(Color::from_rgba8(0, 0, 0, 0)),
+            stroke_width: Inheritable::Own(0.0),
+            alpha: Inheritable::Own(1.0),
+            font_family: Inheritable::Own(Arc::new("sans-serif".to_string())),
+            font_size: Inheritable::Own(24.0),
+            font_weight: Inheritable::Own(400.0),
+            italic: Inheritable::Own(false),
+        }
+    }
+
+    fn text_scene(reveal: f64) -> Scene {
+        let node_box = NodeBox {
+            position: Position { x: 0.0, y: 0.0 },
+            size: Size {
+                width: 200.0,
+                height: 40.0,
+            },
+            z_level: Inheritable::Own(0.0),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            pivot_x: 0.0,
+            pivot_y: 0.0,
+        };
+        Scene {
+            width: 200.0,
+            height: 40.0,
+            fill_color: Color::from_rgba8(255, 255, 255, 255),
+            camera: Camera {
+                camera_zoom: 1.0,
+                camera_x: 100.0,
+                camera_y: 20.0,
+            },
+            children: vec![Node {
+                id: 0,
+                kind: NodeKind::Text {
+                    node_box,
+                    keep_aspect: false,
+                    wrap: None,
+                    text_align: TextAlign::Left,
+                    text_style: text_style_for_test(),
+                    sh_language: None,
+                    sh_theme: None,
+                    reveal,
+                    lines: vec![TextChild::Span(TextSpan {
+                        id: 1,
+                        text: Arc::new("Hello fairyflow".to_string()),
+                        text_style: text_style_for_test(),
+                        override_offset: None,
+                        override_transform: None,
+                    })],
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn type_on_reveal_zero_draws_nothing() {
+        Resources::init();
+        let pixmap = render_scene(&text_scene(0.0), 1.0);
+        assert_eq!(count_non_background_pixels(&pixmap), 0);
+    }
+
+    #[test]
+    fn type_on_reveal_one_draws_the_full_text() {
+        Resources::init();
+        let pixmap = render_scene(&text_scene(1.0), 1.0);
+        assert!(count_non_background_pixels(&pixmap) > 0);
+    }
+
+    #[test]
+    fn type_on_partial_reveal_draws_strictly_fewer_pixels_than_full() {
+        Resources::init();
+        let half = count_non_background_pixels(&render_scene(&text_scene(0.5), 1.0));
+        let full = count_non_background_pixels(&render_scene(&text_scene(1.0), 1.0));
+        assert!(half > 0, "expected some glyphs visible at reveal=0.5");
+        assert!(
+            half < full,
+            "expected reveal=0.5 ({half} px) to draw fewer pixels than reveal=1.0 ({full} px)"
+        );
+    }
 
     #[test]
     fn gradient_fill_produces_different_colors_across_the_axis() {

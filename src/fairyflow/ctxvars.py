@@ -6,6 +6,7 @@ from .animtime import Duration, Easing, duration_to_frames
 ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
 COMPOSER = contextvars.ContextVar("composer", default=None)
+PENDING_CUE_ADVANCE = contextvars.ContextVar("pending_cue_advance", default=False)
 
 
 @beartype
@@ -14,19 +15,31 @@ def wait(dur: Duration) -> int:
     Advance the current time by the given duration in seconds.
     """
     frames = duration_to_frames(dur)
-    return COMPOSER.get().move_frame(frames)
+    return move_frame(frames)
 
 
 def next_frame() -> int:
-    return COMPOSER.get().move_frame(1)
+    return move_frame(1)
 
 
 def cue():
     """
     Mark the current frame as a cue point; the player pauses here and waits for user input.
+
+    Also arms a pending one-frame advance: the next instant attribute set, node
+    creation, `remove()`, or transition start happens one frame later instead of
+    on the cue frame itself. Explicit clock movement (`wait()`, `next_frame()`)
+    disarms the pending advance instead of stacking with it.
     """
     node = CURRENT_NODE.get()
     node.get_scene().cues.add(get_frame())
+    PENDING_CUE_ADVANCE.set(True)
+
+
+def _flush_pending_cue_advance():
+    if PENDING_CUE_ADVANCE.get():
+        PENDING_CUE_ADVANCE.set(False)
+        COMPOSER.get().move_frame(1)
 
 
 def get_frame() -> int:
@@ -48,14 +61,17 @@ def reset_ctx():
     ROOT_OBJECTS.set([])
     CURRENT_NODE.set(None)
     COMPOSER.set(Seq())
+    PENDING_CUE_ADVANCE.set(False)
 
 
 def reset_scene():
     CURRENT_NODE.set(None)
     COMPOSER.set(Seq())
+    PENDING_CUE_ADVANCE.set(False)
 
 
 def move_frame(frames: int):
+    PENDING_CUE_ADVANCE.set(False)
     return COMPOSER.get().move_frame(frames)
 
 

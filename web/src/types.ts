@@ -123,6 +123,7 @@ export interface SceneInfo {
   name: string;
   key_frames: number[];
   cue_frames: number[];
+  flow: boolean;
   frame_count: number;
   info: InfoEntry[];
 }
@@ -148,6 +149,7 @@ export interface SequenceSceneResult {
   path: string;
   frameCount: number;
   cueFrames: number[];
+  flow: boolean; // if true, the player does not pause at the end of this scene
   frames: string[]; // blob URLs, index = local frame number within this scene
   width: number;
   height: number;
@@ -158,5 +160,6 @@ export interface SequenceSceneResult {
 export interface SequenceRenderResult {
   scenes: SequenceSceneResult[];
   totalFrames: number;
-  globalCueFrames: number[]; // in global frame coordinates; always includes 0 and last frame
+  globalCueFrames: number[]; // in global frame coordinates; always includes last frame
+  globalPauseFrames: number[]; // cues + non-flow scene ends; drives autoplay stopping
 }

@@ -140,7 +140,7 @@ export default function SequencePlayer({
     }
     setIsPlaying(true);
     let f = frame >= maxFrame ? 0 : frame;
-    const capturedCueFrames = cueFrames;
+    const capturedPauseFrames = result?.globalPauseFrames ?? [];
     const stop = (at: number) => {
       clearInterval(playIntervalRef.current!);
       playIntervalRef.current = null;
@@ -150,7 +150,7 @@ export default function SequencePlayer({
     playIntervalRef.current = setInterval(
       () => {
         f++;
-        if (capturedCueFrames.includes(f)) {
+        if (capturedPauseFrames.includes(f)) {
           stop(f);
         } else if (f > maxFrame) {
           stop(maxFrame);

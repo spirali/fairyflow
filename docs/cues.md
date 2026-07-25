@@ -10,7 +10,12 @@ A **cue** is a marker on the timeline where the player pauses and waits for user
 (e.g. a click or key press) before continuing. Cues let you build presentations where each
 slide or step is a separate "chapter" in one continuous animation.
 
-Call `cue()` at any point in your scene to mark the current frame as a cue point:
+Call `cue()` at any point in your scene to mark the current frame as a cue point.
+`cue()` also arms a lazy one-frame advance: the very next change — an instant attribute
+set, a new node, `remove()`, or a transition — happens one frame later automatically, so
+the cue point and the first frame of the following change are never the same frame. An
+explicit `wait()` or `next_frame()` right after `cue()` disarms the lazy advance instead
+of stacking with it, and calling `cue()` more than once on the same frame is harmless.
 
 ```python
 with Scene():
@@ -34,14 +39,15 @@ with Scene():
 
 ---
 
-## cue_at_start
+## Scene(flow=True)
 
-By default every scene adds a cue at frame 0 (`cue_at_start=True`). This means the player
-waits for input before the animation begins. Pass `cue_at_start=False` to start playing
-immediately:
+By default the player pauses at the end of every scene, the same way it pauses at an
+explicit cue — this keeps multi-scene decks from running past a scene boundary
+unattended. Pass `flow=True` to opt a scene out, so playback runs straight into the next
+scene instead of stopping:
 
 ```python
-with Scene(cue_at_start=False):
+with Scene(flow=True):
     r = Rect().size(80, 80).fill("tomato").align(0.5, 0.5)
     r.fade_in(dur=1)
 ```
@@ -51,11 +57,11 @@ with Scene(cue_at_start=False):
 ## Player behavior
 
 In the interactive editor (opened with `fairyflow open`) the canvas auto-plays between cue
-points.
+points and pauses at the end of every scene, unless that scene uses `flow=True`.
 
 When you export to a **stand-alone player** (see [Exports](exports.md)), the same behavior is
-preserved — the exported bundle plays and pauses at every cue point, making it suitable for
-use as a self-contained presentation.
+preserved — the exported bundle plays and pauses at every cue point (and at every
+non-`flow` scene boundary), making it suitable for use as a self-contained presentation.
 
 ---
 

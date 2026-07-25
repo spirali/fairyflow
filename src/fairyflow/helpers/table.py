@@ -14,14 +14,6 @@ _HEADER_FILL = "#e0e0e0"
 
 @beartype
 class _TableCell(Group):
-    """A `Table` cell: a `Group` (background `Rect` + content) whose
-    `fill()` forwards to its own background `Rect` - the proposal's own
-    example calls `.fill()` directly on `cell()`'s return value
-    (`t.cell(2, 1).fill("gold", dur=0.3)`), and a bare `Group` has no
-    `fill()` (only shapes/text do, via `StyleMixin`). Per-cell `stroke()`
-    is a deliberate non-goal ("per-cell border control", proposal §4.12),
-    so only `fill()` is forwarded."""
-
     def __init__(self):
         super().__init__()
         self._bg: Rect | None = None

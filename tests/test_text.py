@@ -378,8 +378,6 @@ def test_text_ctor_multiline(test_scene):
 
 
 # ── Sizing: .size()/.expand()/.keep_aspect() ─────────────────────────────────
-# `Text` scales its laid-out block as a unit to fit an explicit box, exactly
-# like `Image` (proposal §4.10's sizing subsection).
 
 
 def test_size_absent_when_never_called():
@@ -476,7 +474,6 @@ def test_text_expand_poster_text(test_scene):
 
 
 # ── Wrapping and alignment: .wrap()/.text_align() ────────────────────────────
-# Automatic line wrapping and paragraph alignment (proposal §4.10/§9.5).
 
 
 def test_wrap_default_removes_the_attribute():
@@ -583,11 +580,6 @@ def test_wrap_and_size_fit_the_wrapped_extent_not_the_wrap_width(test_scene):
 
 
 # ── Transforms: Text.rotate()/.scale()/.pivot() ──────────────────────────────
-# Text-block rotate/scale/pivot (proposal §4.1/§4.10) — mirrors
-# test_transform.py's Rect/Ellipse/Image coverage, but for Text specifically.
-# Per-run (TextGroup/TextSpan) rotate/scale/pivot is a separate, deferred
-# slice — test_transform.py's `test_text_span_has_no_rotate` already locks in
-# that TextSpan still has no `rotate` attribute.
 
 
 def test_text_rotate_scale_pivot_serializes():
@@ -615,8 +607,6 @@ def test_text_scale_and_pivot(test_scene):
 
 
 # ── Placeable runs: TextGroup/TextSpan .xy()/.move()/.next_to() ─────────────
-# proposal §4.1/§4.10: a line/run's `xy()`/`pos()`/`move()`/`next_to()`
-# overrides the paragraph-layout position without reflowing siblings.
 
 
 def test_span_xy_absent_when_never_called():
@@ -730,9 +720,6 @@ def test_next_to_targeting_a_placeable_span(test_scene):
 
 
 # ── Per-run transforms: TextGroup/TextSpan .rotate()/.scale()/.pivot() ──────
-# proposal §4.1/§4.10: "text lines and spans... gain rotate()/scale() about
-# their own measured box — spin or grow a word in place." Composes with
-# item 16's placeable position (.xy()/.move()) via two independent cascades.
 
 
 def test_span_rotate_scale_pivot_serializes():

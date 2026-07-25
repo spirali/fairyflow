@@ -4,17 +4,19 @@ use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_ver
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
-    AffineTransform, node_z_level, positional_transform as core_positional_transform,
+    AffineTransform, gradient_line_endpoints, node_z_level,
+    positional_transform as core_positional_transform,
 };
 use renderer_core::{
-    Color, ImageLayer, Node, NodeKind, PathCommand, Position, Scene, Size, Style, TextChild,
-    TextSpan,
+    Color, ImageLayer, Node, NodeKind, Paint as RcPaint, PathCommand, Position, Scene, Size, Style,
+    TextChild, TextSpan,
 };
 use renderer_core::{NodeBox, highlight};
 use resvg::usvg;
 use std::sync::Arc;
 use tiny_skia::{
-    FillRule, FilterQuality, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Stroke, Transform,
+    FillRule, FilterQuality, GradientStop, LinearGradient, Mask, Paint, PathBuilder, Pixmap,
+    PixmapPaint, Point, Rect, Shader, SpreadMode, Stroke, Transform,
 };
 
 // ── Color conversion ──────────────────────────────────────────────────────────
@@ -391,7 +393,9 @@ impl RasterRenderer {
                             .unwrap_or(0);
                         let byte_in_full = span_start_in_full + offset_in_span;
 
-                        let fallback = span.text_style.fill_color.value();
+                        // Gradients aren't supported on text fill — degrade to the
+                        // first stop as a solid color (`Paint::solid_or_first_stop`).
+                        let fallback = span.text_style.fill_color.value().solid_or_first_stop();
                         sh_colors
                             .color_at(byte_in_full)
                             .map(|c| color_to_skia(&c))
@@ -403,7 +407,7 @@ impl RasterRenderer {
                                 }
                             })
                     } else {
-                        let c = span.text_style.fill_color.value();
+                        let c = span.text_style.fill_color.value().solid_or_first_stop();
                         if !c.is_transparent() {
                             Some(color_to_skia(c))
                         } else {
@@ -411,7 +415,7 @@ impl RasterRenderer {
                         }
                     }
                 } else {
-                    let c = span.text_style.fill_color.value();
+                    let c = span.text_style.fill_color.value().solid_or_first_stop();
                     if !c.is_transparent() {
                         Some(color_to_skia(c))
                     } else {
@@ -613,11 +617,38 @@ fn fill_and_stroke(
     if !style.fill_color.is_transparent() {
         let b = path.bounds();
         if b.width() > (1.0 / 4096.0) && b.height() > (1.0 / 4096.0) {
-            let mut color = color_to_skia(&style.fill_color);
-            color.set_alpha(color.alpha() * alpha);
-            let mut paint = Paint::default();
-            paint.set_color(color);
-            paint.anti_alias = true;
+            let shader = match &style.fill_color {
+                RcPaint::Solid(c) => {
+                    let mut color = color_to_skia(c);
+                    color.set_alpha(color.alpha() * alpha);
+                    Shader::SolidColor(color)
+                }
+                RcPaint::LinearGradient { stops, angle } => {
+                    let bounds = (b.x(), b.y(), b.width(), b.height());
+                    let (start, end) = gradient_line_endpoints(*angle, bounds);
+                    let grad_stops: Vec<GradientStop> = stops
+                        .iter()
+                        .map(|(offset, c)| {
+                            let mut sc = color_to_skia(c);
+                            sc.set_alpha(sc.alpha() * alpha);
+                            GradientStop::new(*offset as f32, sc)
+                        })
+                        .collect();
+                    LinearGradient::new(
+                        Point::from_xy(start.0, start.1),
+                        Point::from_xy(end.0, end.1),
+                        grad_stops,
+                        SpreadMode::Pad,
+                        Transform::identity(),
+                    )
+                    .unwrap_or(Shader::SolidColor(tiny_skia::Color::TRANSPARENT))
+                }
+            };
+            let paint = Paint {
+                shader,
+                anti_alias: true,
+                ..Default::default()
+            };
             pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
         }
     }
@@ -956,5 +987,68 @@ fn render_image(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use renderer_core::{Camera, Inheritable, NodeBox};
+
+    #[test]
+    fn gradient_fill_produces_different_colors_across_the_axis() {
+        let node_box = NodeBox {
+            position: Position { x: 0.0, y: 0.0 },
+            size: Size {
+                width: 100.0,
+                height: 40.0,
+            },
+            z_level: Inheritable::Own(0.0),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            pivot_x: 0.0,
+            pivot_y: 0.0,
+        };
+        let style = Style {
+            fill_color: RcPaint::LinearGradient {
+                stops: vec![
+                    (0.0, renderer_core::Color::from_rgba8(255, 0, 0, 255)),
+                    (1.0, renderer_core::Color::from_rgba8(0, 0, 255, 255)),
+                ],
+                angle: 90.0, // left-to-right, per gradient_line_endpoints' convention
+            },
+            stroke_color: renderer_core::Color::from_rgba8(0, 0, 0, 0),
+            stroke_width: 0.0,
+            alpha: 1.0,
+            dash: None,
+            dash_offset: 0.0,
+        };
+        let scene = Scene {
+            width: 100.0,
+            height: 40.0,
+            fill_color: renderer_core::Color::from_rgba8(255, 255, 255, 255),
+            camera: Camera {
+                camera_zoom: 1.0,
+                camera_x: 50.0,
+                camera_y: 20.0,
+            },
+            children: vec![Node {
+                id: 0,
+                kind: NodeKind::Rect {
+                    node_box,
+                    style,
+                    radius: 0.0,
+                },
+            }],
+        };
+        let pixmap = render_scene(&scene, 1.0);
+        let left = pixmap.pixel(2, 20).unwrap();
+        let right = pixmap.pixel(97, 20).unwrap();
+        assert!(
+            left.red() > right.red() && right.blue() > left.blue(),
+            "expected left (red stop) to right (blue stop) to actually vary: \
+             left={left:?} right={right:?}"
+        );
     }
 }

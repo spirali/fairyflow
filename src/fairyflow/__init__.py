@@ -3,7 +3,7 @@ from .ctxvars import wait, next_frame, cue, note, Par, Seq, anim, get_frame
 from .animtime import time_to_frames, Frames, frames_to_time
 from .sentinels import DEFAULT, rel
 
-from .color import Color
+from .color import Color, Gradient, gradient
 from .text import stext, Text
 from .shapes import Line, Arrow, Polygon, RegularPolygon, Star
 from .helpers import Table
@@ -17,6 +17,8 @@ __all__ = [
     "Ellipse",
     "Scene",
     "Color",
+    "Gradient",
+    "gradient",
     "Image",
     "Text",
     "stext",

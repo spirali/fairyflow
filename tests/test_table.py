@@ -1,6 +1,3 @@
-"""Tests for the `Table` helper (proposal §4.12), built on `Group.grid()`/
-`Group.padding()`."""
-
 import pytest
 from fairyflow import Image, Scene, Table
 

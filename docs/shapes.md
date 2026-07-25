@@ -35,6 +35,31 @@ with Scene():
     r.stroke(None)  # outline removed, fill unaffected
 ```
 
+### Gradients
+
+`.fill()` also accepts `gradient(*stops, angle=0)` for a linear gradient — stops are
+either plain colors (evenly spaced) or explicit `(offset, color)` pairs. `angle` follows
+the CSS `linear-gradient()` convention: `0` points from bottom to top, increasing
+clockwise, so `angle=90` goes left to right.
+
+```ffpy frame="0"
+with Scene(width=200, height=100):
+    Rect().xy(20, 20).size(160, 60).fill(gradient("tomato", "gold", angle=90))
+```
+
+Explicit offsets let you control where each color sits along the gradient, including
+sharp transitions (two stops at the same offset):
+
+```ffpy frame="0"
+with Scene(width=200, height=100):
+    Rect().xy(20, 20).size(160, 60).fill(
+        gradient((0.0, "black"), (0.3, "black"), (1.0, "white"))
+    )
+```
+
+Gradients are only supported for `.fill()` — `.stroke()` and `Scene().background()`
+raise a `TypeError` if given one. Note: `Text().fill(gradient(...))` is not implemented in this version.
+
 ### Rounded corners
 
 `.radius(r)` rounds a rect's corners. It's clamped to `min(width, height) / 2` at

@@ -141,6 +141,28 @@ pub fn camera_transform(camera: &Camera, box_center: Position) -> AffineTransfor
     ))
 }
 
+/// Resolve a linear gradient's `angle` (degrees; `0` = bottom-to-top,
+/// increasing clockwise — matches CSS `linear-gradient()`) plus a shape's
+/// local-space bounding box `(x, y, width, height)` into concrete `(start,
+/// end)` line endpoints, sized so the 0%/100% stops land exactly at the
+/// box's corners projected onto the gradient axis (the standard CSS
+/// gradient-line-length construction). Shared by both renderer backends so
+/// raster and PDF output agree pixel-for-pixel on gradient placement.
+pub fn gradient_line_endpoints(
+    angle_deg: f64,
+    bounds: (f32, f32, f32, f32),
+) -> ((f32, f32), (f32, f32)) {
+    let (x, y, w, h) = bounds;
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    let theta = (angle_deg as f32).to_radians();
+    let (dx, dy) = (theta.sin(), -theta.cos());
+    let half_len = 0.5 * (w * dx.abs() + h * dy.abs());
+    (
+        (cx - half_len * dx, cy - half_len * dy),
+        (cx + half_len * dx, cy + half_len * dy),
+    )
+}
+
 /// Extract the z-level value from any node kind.
 pub fn node_z_level(node: &Node) -> f64 {
     match &node.kind {

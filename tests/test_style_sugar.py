@@ -1,8 +1,6 @@
-"""Tests for `Rect.radius()`, the unified `stroke()` setter (incl. dashed
-strokes), and `Path.draw()` — proposal §9.2/§9.3/§9.8."""
-
 import pytest
-from fairyflow import Ellipse, Path, Rect, Scene
+
+from fairyflow import Ellipse, Path, Rect, Scene, gradient
 from fairyflow.serializer import create_export
 from fairyflow.text import Text
 
@@ -206,7 +204,7 @@ def test_path_draw_animation(test_scene):
         p.draw(dur=1)
 
 
-# ── fill() — replaces color() (api-v2-impl.md item 11) ──────────────────────
+# ── fill() — replaces color() ──────────────────────
 
 
 def test_fill_writes_fill_color():
@@ -226,3 +224,76 @@ def test_shapes_and_text_have_no_color_method():
         t = Text("hi")
     assert not hasattr(r, "color")
     assert not hasattr(t, "color")
+
+
+# ── gradient() — linear gradients ─────────────────
+
+
+def test_gradient_bare_colors_evenly_spaced():
+    s = Scene(100, 100)
+    with s:
+        Rect().fill(gradient("tomato", "gold", angle=90))
+    node = create_export(0, s)["nodes"][0]
+    assert node["fill"] == ["gradient", [[0.0, "tomato"], [1.0, "gold"]], 90]
+
+
+def test_gradient_three_bare_colors_evenly_spaced():
+    s = Scene(100, 100)
+    with s:
+        Rect().fill(gradient("red", "green", "blue"))
+    node = create_export(0, s)["nodes"][0]
+    assert node["fill"] == [
+        "gradient",
+        [[0.0, "red"], [0.5, "green"], [1.0, "blue"]],
+        0,
+    ]
+
+
+def test_gradient_explicit_offset_tuples_preserved():
+    s = Scene(100, 100)
+    with s:
+        Rect().fill(gradient((0.0, "black"), (0.3, "black"), (1.0, "white")))
+    node = create_export(0, s)["nodes"][0]
+    assert node["fill"] == [
+        "gradient",
+        [[0.0, "black"], [0.3, "black"], [1.0, "white"]],
+        0,
+    ]
+
+
+def test_gradient_default_angle_is_zero():
+    s = Scene(100, 100)
+    with s:
+        Rect().fill(gradient("red", "blue"))
+    node = create_export(0, s)["nodes"][0]
+    assert node["fill"][2] == 0
+
+
+def test_gradient_needs_at_least_one_stop():
+    with pytest.raises(ValueError):
+        gradient()
+
+
+def test_stroke_rejects_gradient():
+    s = Scene(100, 100)
+    with s:
+        r = Rect()
+        with pytest.raises(TypeError):
+            r.stroke(gradient("tomato", "gold"))
+
+
+def test_background_rejects_gradient():
+    s = Scene(100, 100)
+    with s, pytest.raises(TypeError):
+        s.background(gradient("tomato", "gold"))
+
+
+def test_text_fill_accepts_gradient_wire_presence():
+    # Uniform `.fill()` API — Text can be given a gradient at the Python/wire
+    # level (StyleMethods is shared with shapes); actual gradient rendering
+    # on text glyphs isn't implemented, it degrades to the first stop.
+    s = Scene(100, 100)
+    with s:
+        Text("hi").fill(gradient("red", "blue"))
+    node = create_export(0, s)["nodes"][0]
+    assert node["fill"] == ["gradient", [[0.0, "red"], [1.0, "blue"]], 0]

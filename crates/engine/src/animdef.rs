@@ -612,6 +612,67 @@ mod tests {
         }
     }
 
+    fn rect_fill(scene: &renderer_core::Scene, id: u64) -> &renderer_core::Paint {
+        let node = find_node(&scene.children, id).unwrap();
+        match &node.kind {
+            renderer_core::NodeKind::Rect { style, .. } => &style.fill_color,
+            other => panic!("expected a rect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn gradient_fill_wire_round_trip() {
+        let json = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "Test", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "rect", "x": 5, "y": 5, "w": 10, "h": 10,
+        "fill": ["gradient", [[0.0, "tomato"], [1.0, "gold"]], 90]}
+     ]}
+  ]
+}"#;
+        let anim = AnimationDef::from_json(json).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        match rect_fill(&scene, 0) {
+            renderer_core::Paint::LinearGradient { stops, angle } => {
+                assert_eq!(stops.len(), 2);
+                assert_eq!(*angle, 90.0);
+            }
+            other => panic!("expected a gradient, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn solid_fill_stays_solid_paint() {
+        let anim = AnimationDef::from_json(SCENE_SENTINEL_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        assert!(matches!(
+            rect_fill(&scene, 1),
+            renderer_core::Paint::Solid(_)
+        ));
+    }
+
+    #[test]
+    fn gradient_needs_at_least_one_stop() {
+        let json = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "Test", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "rect", "x": 5, "y": 5, "w": 10, "h": 10, "fill": ["gradient", [], 0]}
+     ]}
+  ]
+}"#;
+        assert!(AnimationDef::from_json(json).is_err());
+    }
+
     fn group_wh(scene: &renderer_core::Scene, id: u64) -> (f64, f64) {
         let node = find_node(&scene.children, id).unwrap();
         match &node.kind {

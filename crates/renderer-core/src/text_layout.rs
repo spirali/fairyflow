@@ -501,11 +501,11 @@ impl OutlinePen for GlyphPen {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Color, Inheritable, TextStyle};
+    use crate::{Color, Inheritable, Paint, TextStyle};
 
     fn test_style() -> TextStyle {
         TextStyle {
-            fill_color: Inheritable::Own(Color::from_rgba8(0, 0, 0, 255)),
+            fill_color: Inheritable::Own(Paint::Solid(Color::from_rgba8(0, 0, 0, 255))),
             stroke_color: Inheritable::Own(Color::from_rgba8(0, 0, 0, 0)),
             stroke_width: Inheritable::Own(0.0),
             alpha: Inheritable::Own(1.0),

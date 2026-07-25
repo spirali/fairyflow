@@ -2,6 +2,7 @@ use crate::avalue::{AnimatedValue, KeyframeTuple};
 use crate::basictypes::NodeId;
 use crate::eval::EvalCtx;
 use renderer_core::Color as RendererColor;
+use renderer_core::Paint as RendererPaint;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, de};
 use std::collections::{BTreeMap, HashSet};
@@ -31,6 +32,44 @@ impl Color {
 
     pub fn interpolate(a: &Color, b: &Color, t: f64) -> Color {
         Color(a.0.interpolate(&b.0, t))
+    }
+}
+
+/// A fill: either a solid color or a linear gradient (proposal §9.11). Only
+/// `Style.fill_color`/`TextStyle.fill_color` use this — `stroke_color` and
+/// `Scene.fill_color` (background) stay plain `Color`, rejected at the
+/// Python layer (`.stroke()`/`.background()`) before a `Paint` ever reaches
+/// the wire.
+#[derive(Debug, Clone)]
+pub enum Paint {
+    Solid(Color),
+    LinearGradient {
+        stops: Vec<(f64, Color)>,
+        angle: f64,
+    },
+}
+
+/// Scalar wire values (a bare color string) are always solid — mirrors
+/// `Color`'s own `Deserialize` exactly, since a gradient can only arrive via
+/// the `["gradient", ...]` `Call` shape (`PaintCall`), never a JSON scalar.
+impl<'de> Deserialize<'de> for Paint {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Color::deserialize(d).map(Paint::Solid)
+    }
+}
+
+impl Paint {
+    pub fn into_inner(self) -> RendererPaint {
+        match self {
+            Paint::Solid(c) => RendererPaint::Solid(c.into_inner()),
+            Paint::LinearGradient { stops, angle } => RendererPaint::LinearGradient {
+                stops: stops
+                    .into_iter()
+                    .map(|(o, c)| (o, c.into_inner()))
+                    .collect(),
+                angle,
+            },
+        }
     }
 }
 
@@ -326,6 +365,91 @@ impl Value for Color {
     }
 }
 
+/// `["gradient", [[offset, "color"], ...], angle]` — the only op `Paint` supports.
+#[derive(Debug)]
+pub enum PaintCall {
+    Gradient(Box<(Vec<(f64, Color)>, f64)>),
+}
+
+impl CallParse for PaintCall {
+    fn parse_seq<'de, A: de::SeqAccess<'de>>(op: &str, mut seq: A) -> Result<Self, A::Error> {
+        macro_rules! next {
+            () => {
+                seq.next_element()?.ok_or_else(|| {
+                    de::Error::custom(format!("not enough arguments for op `{}`", op))
+                })?
+            };
+        }
+        let result = match op {
+            "gradient" => {
+                let stops: Vec<(f64, Color)> = next!();
+                let angle: f64 = next!();
+                if stops.is_empty() {
+                    return Err(de::Error::custom("gradient needs at least one stop"));
+                }
+                PaintCall::Gradient(Box::new((stops, angle)))
+            }
+            other => return Err(de::Error::custom(format!("unknown op `{}`", other))),
+        };
+        if seq.next_element::<de::IgnoredAny>()?.is_some() {
+            return Err(de::Error::custom(format!(
+                "too many arguments for op `{}`",
+                op
+            )));
+        }
+        Ok(result)
+    }
+}
+
+impl Eval<Paint> for PaintCall {
+    fn eval(&self, _ctx: &EvalCtx) -> anyhow::Result<Paint> {
+        match self {
+            PaintCall::Gradient(params) => {
+                let (stops, angle) = params.as_ref();
+                Ok(Paint::LinearGradient {
+                    stops: stops.clone(),
+                    angle: *angle,
+                })
+            }
+        }
+    }
+}
+
+impl Value for Paint {
+    type Call = PaintCall;
+    fn recursive_value() -> Self {
+        Paint::Solid(Color::recursive_value())
+    }
+    fn interpolate(&self, other: &Self, t: f64) -> Self {
+        match (self, other) {
+            (Paint::Solid(a), Paint::Solid(b)) => Paint::Solid(Color::interpolate(a, b, t)),
+            (
+                Paint::LinearGradient {
+                    stops: sa,
+                    angle: aa,
+                },
+                Paint::LinearGradient { stops: sb, .. },
+            ) if sa.len() == sb.len() => Paint::LinearGradient {
+                stops: sa
+                    .iter()
+                    .zip(sb)
+                    .map(|((oa, ca), (_, cb))| (*oa, Color::interpolate(ca, cb, t)))
+                    .collect(),
+                angle: *aa,
+            },
+            // Mismatched shapes (solid<->gradient, or different stop counts)
+            // have no well-defined blend — step at the transition instead.
+            _ => {
+                if t < 1.0 {
+                    self.clone()
+                } else {
+                    other.clone()
+                }
+            }
+        }
+    }
+}
+
 impl Value for Arc<String> {
     type Call = NoCall;
     fn recursive_value() -> Self {
@@ -345,5 +469,74 @@ impl Value for bool {
 
     fn interpolate(&self, _other: &Self, _t: f64) -> Self {
         *self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn c(r: u8, g: u8, b: u8) -> Color {
+        Color(RendererColor::from_rgba8(r, g, b, 255))
+    }
+
+    fn rgb(c: &Color) -> (f32, f32, f32) {
+        let (r, g, b, _) = c.0.to_rgba_f32();
+        (r, g, b)
+    }
+
+    #[test]
+    fn paint_interpolate_solid_solid_lerps_the_color() {
+        let a = Paint::Solid(c(0, 0, 0));
+        let b = Paint::Solid(c(255, 255, 255));
+        let Paint::Solid(mid) = a.interpolate(&b, 0.5) else {
+            panic!("expected Solid");
+        };
+        let (r, g, bl) = rgb(&mid);
+        assert!((r - 0.5).abs() < 0.01 && (g - 0.5).abs() < 0.01 && (bl - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn paint_interpolate_matching_gradient_stops_lerps_each_stop_keeps_left_angle() {
+        let a = Paint::LinearGradient {
+            stops: vec![(0.0, c(0, 0, 0)), (1.0, c(0, 0, 0))],
+            angle: 45.0,
+        };
+        let b = Paint::LinearGradient {
+            stops: vec![(0.0, c(255, 255, 255)), (1.0, c(255, 255, 255))],
+            angle: 90.0,
+        };
+        let Paint::LinearGradient { stops, angle } = a.interpolate(&b, 0.5) else {
+            panic!("expected LinearGradient");
+        };
+        assert_eq!(angle, 45.0); // geometry is static — left keyframe wins
+        for (_, stop_color) in &stops {
+            let (r, g, bl) = rgb(stop_color);
+            assert!((r - 0.5).abs() < 0.01 && (g - 0.5).abs() < 0.01 && (bl - 0.5).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn paint_interpolate_mismatched_shapes_steps_at_the_transition() {
+        let solid = Paint::Solid(c(0, 0, 0));
+        let gradient = Paint::LinearGradient {
+            stops: vec![(0.0, c(255, 255, 255)), (1.0, c(255, 255, 255))],
+            angle: 0.0,
+        };
+        assert!(matches!(solid.interpolate(&gradient, 0.5), Paint::Solid(_)));
+        assert!(matches!(
+            solid.interpolate(&gradient, 1.0),
+            Paint::LinearGradient { .. }
+        ));
+
+        let g2 = Paint::LinearGradient {
+            stops: vec![(0.0, c(0, 0, 0)), (0.5, c(0, 0, 0)), (1.0, c(0, 0, 0))],
+            angle: 0.0,
+        };
+        // Different stop counts (2 vs 3) also step rather than blend.
+        assert!(matches!(
+            gradient.interpolate(&g2, 0.9),
+            Paint::LinearGradient { ref stops, .. } if stops.len() == 2
+        ));
     }
 }

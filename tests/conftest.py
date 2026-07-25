@@ -1,7 +1,9 @@
 import json
+import queue
 import shutil
 import socket
 import subprocess
+import threading
 import time
 import os
 import pymupdf
@@ -132,11 +134,33 @@ def _server(tmp_path_factory):
         text=True,
     )
 
+    # `proc.stdout.readline()` blocks indefinitely if the process hangs during
+    # startup without producing output or closing stdout — a plain deadline
+    # loop around it only re-checks *between* calls, so it wouldn't actually
+    # bound a stuck readline(). `select()` on the raw fd doesn't help either:
+    # `proc.stdout` is a buffered `TextIOWrapper`, and a single `readline()`
+    # can silently consume more bytes from the OS pipe than it returns,
+    # leaving `select()` blind to data already sitting in Python's buffer.
+    # Read lines on a background thread instead and enforce the deadline via
+    # `Queue.get(timeout=...)`, which has no such blind spot.
+    line_queue: queue.Queue[str | None] = queue.Queue()
+
+    def _pump_lines():
+        for line in proc.stdout:
+            line_queue.put(line)
+        line_queue.put(None)  # signals EOF
+
+    threading.Thread(target=_pump_lines, daemon=True).start()
+
     deadline = time.monotonic() + SERVER_STARTUP_TIMEOUT
     ready = False
     while time.monotonic() < deadline:
-        line = proc.stdout.readline()
-        if not line:
+        remaining = deadline - time.monotonic()
+        try:
+            line = line_queue.get(timeout=max(0, remaining))
+        except queue.Empty:
+            break
+        if line is None:
             break
         if "localhost" in line:
             ready = True
@@ -144,6 +168,10 @@ def _server(tmp_path_factory):
 
     if not ready:
         proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
         raise RuntimeError("Server did not become ready in time")
 
     yield port, token, proj

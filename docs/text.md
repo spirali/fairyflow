@@ -424,3 +424,20 @@ print(f"Hello {x}!")
 """
     ).sh("Python", theme="base16-ocean.dark").font("monospace")
 ```
+
+---
+
+## Typewriter reveal
+
+`.type_on(dur=)` animates glyphs appearing progressively, in reading order:
+
+```ffpy video="mp4"
+with Scene():
+    Text("fairyflow renders this\nletter by letter").type_on(dur=1.5)
+```
+
+Glyphs pop in at their already-laid-out final position — the text never reflows as
+more of it becomes visible, and `dur=`/`ease=` follow the usual conventions
+(`ease="linear"` by default). Revealing is a whole-glyph cutoff, not a character-exact
+or fractional-glyph reveal, so timing is a close visual approximation rather than
+precise per-character pacing.

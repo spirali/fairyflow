@@ -180,6 +180,9 @@ pub enum NodeKind {
         text_style: TextStyle,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
+        /// Typewriter-reveal fraction (proposal §9.6) — `1.0` (default) shows
+        /// every glyph; the renderer applies the per-glyph cutoff.
+        reveal: AttrExpr<f64>,
         children: Vec<NodeId>,
     },
     /// Group containing instance of other TextGroups or TextSpans.
@@ -416,6 +419,7 @@ pub(crate) struct NodeDef {
     pub sh_theme: Option<Arc<String>>,
     pub wrap: Option<Expr<f64>>,
     pub text_align: Option<renderer_core::TextAlign>,
+    pub reveal: Option<Expr<f64>>,
 
     pub file: Option<Expr<Arc<String>>>,
     pub keep_aspect: Option<Expr<bool>>,
@@ -551,6 +555,7 @@ impl Node {
                 text_style: def.text_style(),
                 sh_language: def.sh_language.take(),
                 sh_theme: def.sh_theme.take(),
+                reveal: AttrExpr(def.reveal.take()),
                 children,
             },
             Kind::TextGroup => NodeKind::TextGroup {

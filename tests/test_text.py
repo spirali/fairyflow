@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from fairyflow import next_frame
 from fairyflow.nodes import Image, Rect, Scene
 from fairyflow.sentinels import DEFAULT, rel
 from fairyflow.serializer import create_export
@@ -826,3 +827,41 @@ def test_span_own_transform_wins_over_ancestor_group(test_scene):
         special.fill("darkred")
         line.rotate(20)
         special.scale(1.8)
+
+
+# ── Typewriter reveal: type_on() (item 21, proposal §9.6) ───────────────────
+
+
+def test_reveal_absent_when_type_on_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text("hi")
+    node = _node(s)
+    assert "reveal" not in node
+
+
+def test_type_on_produces_snap_to_zero_then_animate_to_one():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").type_on(dur=1)
+    node = _node(s)
+    assert node["reveal"] == {"k": [[0, 0], [24, 1, "linear"]]}
+
+
+def test_type_on_respects_custom_ease():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").type_on(dur=1, ease="in_out")
+    node = _node(s)
+    assert node["reveal"]["k"][1] == [24, 1, "in_out"]
+
+
+def test_type_on_starts_from_the_current_frame():
+    s = Scene(100, 100)
+    with s:
+        next_frame()
+        next_frame()
+        Text("hi").type_on(dur=0.5)
+    node = _node(s)
+    assert node["reveal"]["k"][0] == [2, 0]
+    assert node["reveal"]["k"][1] == [14, 1, "linear"]

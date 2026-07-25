@@ -684,6 +684,7 @@ impl Node {
                 text_style,
                 sh_language,
                 sh_theme,
+                reveal,
                 children,
             } => renderer_core::NodeKind::Text {
                 node_box: self.eval_node_box(node_box, ctx)?,
@@ -693,6 +694,7 @@ impl Node {
                 text_style: text_style.eval_as_inheritable(ctx, self)?,
                 sh_language: sh_language.clone(),
                 sh_theme: sh_theme.clone(),
+                reveal: reveal.eval_or(ctx, 1.0)?,
                 lines: children
                     .iter()
                     .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))

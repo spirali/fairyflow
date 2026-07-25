@@ -7,7 +7,7 @@ from .types import StringLike, BoolLike, FloatLike
 from .animtime import Duration, Easing
 from .avalue import AnimatedValue
 from .sentinels import INHERITED_VALUE, DEFAULT, DefaultMarker, RelValue, resolve_rel
-from .ctxvars import Par
+from .ctxvars import Par, Seq
 
 from .nodes import (
     Node,
@@ -156,6 +156,8 @@ class Text(
 ):
     kind = "text"
 
+    _ATTR_DEFAULTS = {"reveal": 1}
+
     def __init__(self, text: StringLike | None = None):
         super().__init__()
         self.fill("black")
@@ -174,6 +176,26 @@ class Text(
         """
         self.sh_language = language
         self.sh_theme = theme
+        return self
+
+    def type_on(self, *, dur: Duration = None, ease: Easing = None) -> Self:
+        """Animate a typewriter reveal, showing glyphs progressively in order.
+
+        Glyphs pop in at their already-laid-out final position — the text
+        never reflows as more of it becomes visible.
+
+        Args:
+            dur: Duration of the animation in seconds. If unset, uses the
+                enclosing `anim()` block's default, or is instant if there
+                is none.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        with Seq():
+            self._set_attr("reveal", 0, dur=0)
+            self._set_attr("reveal", 1, dur=dur, ease=ease)
         return self
 
     def wrap(self, width: FloatLike | RelValue | DefaultMarker) -> Self:

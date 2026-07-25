@@ -37,6 +37,7 @@ pub struct SceneInfoMsg {
     pub name: String,
     pub key_frames: Vec<u32>,
     pub cue_frames: Vec<u32>,
+    pub flow: bool,
     pub frame_count: u32,
     pub info: Vec<serde_json::Value>,
 }
@@ -186,6 +187,7 @@ pub async fn run_python(
                             name: si.name,
                             key_frames: si.key_frames,
                             cue_frames: si.cue_frames,
+                            flow: si.flow,
                             frame_count: si.frame_count,
                             info: si.info,
                         })

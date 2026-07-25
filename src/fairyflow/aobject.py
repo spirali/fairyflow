@@ -1,5 +1,5 @@
 from .avalue import AnimatedValue
-from .ctxvars import COMPOSER, get_frame
+from .ctxvars import COMPOSER, _flush_pending_cue_advance, get_frame
 from .sentinels import INHERITED_VALUE
 
 
@@ -23,6 +23,7 @@ class AnimatedObject:
     `_attrs`, which is naturally only the touched ones)."""
 
     def __init__(self):
+        _flush_pending_cue_advance()
         self._start = get_frame()
         self._end = None
         self._attrs = {}
@@ -58,6 +59,7 @@ class AnimatedObject:
         return self._attrs[name]
 
     def _set_attr(self, name, value, dur=None, ease=None):
+        _flush_pending_cue_advance()
         COMPOSER.get()._begin_unit()
         dur, ease = _resolve_dur_ease(dur, ease)
         self._ensure_attr(name).set(value, dur=dur, ease=ease)
@@ -69,9 +71,11 @@ class AnimatedObject:
         return name in self._attrs
 
     def remove(self):
+        _flush_pending_cue_advance()
         self._end = get_frame()
 
     def _move_attr(self, name, delta, dur=None, ease=None):
+        _flush_pending_cue_advance()
         COMPOSER.get()._begin_unit()
         dur, ease = _resolve_dur_ease(dur, ease)
         self._ensure_attr(name).move(delta, dur=dur, ease=ease)

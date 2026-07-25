@@ -1637,7 +1637,8 @@ class Scene(
         width: Canvas width in pixels.
         height: Canvas height in pixels.
         background: Background color (string or `Color` instance).
-        cue_at_start: If ``True``, frame 0 is automatically added as a cue point.
+        flow: If ``True``, the player does not pause at the end of this scene
+            and runs straight into the next one.
     """
 
     kind = "scene"
@@ -1652,7 +1653,7 @@ class Scene(
         width: SupportsFloat | None = None,
         height: SupportsFloat | None = None,
         background: str | Color | None = None,
-        cue_at_start: bool | None = None,
+        flow: bool | None = None,
     ):
         reset_scene()
         super().__init__(put_in_context=False)
@@ -1663,8 +1664,8 @@ class Scene(
             height = DEFAULT_SCENE_CONFIG["height"]
         if background is None:
             background = DEFAULT_SCENE_CONFIG["background"]
-        if cue_at_start is None:
-            cue_at_start = DEFAULT_SCENE_CONFIG["cue_at_start"]
+        if flow is None:
+            flow = DEFAULT_SCENE_CONFIG["flow"]
         self._add_attr("width", width)
         self._add_attr("height", height)
         self._add_attr("fill_color", background)
@@ -1672,7 +1673,7 @@ class Scene(
         self._id = 0
         self._layout = CENTERING_LAYOUT
         self.max_frame = 0
-        self.cue_at_start = cue_at_start
+        self.flow = flow
         self.cues = set()
         ROOT_OBJECTS.get().append(self)
 
@@ -1718,8 +1719,8 @@ class Scene(
             av = self._attrs.get(name)
             if av is not None and not av.is_default:
                 result[name] = serialize_expr(av)
-        if self.cue_at_start:
-            self.cues.add(0)
+        if self.flow:
+            result["flow"] = True
         if self.cues:
             result["cues"] = sorted(self.cues)
         if self._children:

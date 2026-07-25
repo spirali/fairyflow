@@ -211,6 +211,7 @@ export default function SequenceEditor({
     return new Promise((resolve, reject) => {
       let frameCount = 0;
       let cueFrames: number[] = [];
+      let flow = false;
       let treeDone = false;
 
       const handler = (msg: ServerMsg) => {
@@ -221,6 +222,7 @@ export default function SequenceEditor({
         } else if (msg.type === "tree") {
           frameCount = msg.frame_count;
           cueFrames = msg.cue_frames ?? [];
+          flow = msg.scenes.at(-1)?.flow ?? false;
           treeDone = true;
         } else if (msg.type === "done") {
           if (!treeDone) {
@@ -284,6 +286,7 @@ export default function SequenceEditor({
                     path: filePath,
                     frameCount,
                     cueFrames,
+                    flow,
                     frames,
                     width: scene.width,
                     height: scene.height,
@@ -332,22 +335,29 @@ export default function SequenceEditor({
       }
     }
 
-    // Build global cue frames — include 0 and last frame as cues
+    // Build global cue frames and pause frames (cues + non-flow scene ends).
     let offset = 0;
     const globalCues: number[] = [];
+    const globalPauses: number[] = [];
     for (const sr of sceneResults) {
-      for (const cf of sr.cueFrames) globalCues.push(offset + cf);
+      for (const cf of sr.cueFrames) {
+        globalCues.push(offset + cf);
+        globalPauses.push(offset + cf);
+      }
       offset += sr.frameCount;
+      if (!sr.flow && sr.frameCount > 0) globalPauses.push(offset - 1);
     }
     const totalFrames = offset;
-    if (!globalCues.includes(0)) globalCues.unshift(0);
     if (totalFrames > 0 && !globalCues.includes(totalFrames - 1)) globalCues.push(totalFrames - 1);
+    if (totalFrames > 0 && !globalPauses.includes(totalFrames - 1)) globalPauses.push(totalFrames - 1);
     globalCues.sort((a, b) => a - b);
+    globalPauses.sort((a, b) => a - b);
 
     onRenderResult({
       scenes: sceneResults,
       totalFrames,
       globalCueFrames: [...new Set(globalCues)],
+      globalPauseFrames: [...new Set(globalPauses)],
     });
 
     setLines((prev) => [

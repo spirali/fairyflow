@@ -27,6 +27,8 @@ pub struct SceneInfo {
     pub key_frames: Vec<u32>,
     /// Cue frames within this scene (local frame numbers, 0-based).
     pub cue_frames: Vec<u32>,
+    /// If `true`, the player does not pause at the end of this scene.
+    pub flow: bool,
     pub frame_count: u32,
     /// Opaque per-node debug info (`--debug`), each tagged with its node's
     /// wire id (array index); empty outside debug runs. The engine never
@@ -89,6 +91,8 @@ struct RawScene {
     #[serde(default)]
     cues: Vec<u32>,
     #[serde(default)]
+    flow: bool,
+    #[serde(default)]
     children: Vec<NodeId>,
     #[serde(default)]
     nodes: Vec<NodeDef>,
@@ -128,6 +132,7 @@ impl SingleScene {
             },
             frames: raw.frames,
             cues: raw.cues,
+            flow: raw.flow,
             children: raw.children,
         };
 
@@ -277,6 +282,7 @@ impl AnimationDef {
                     name: s.name.clone(),
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
                     cue_frames: s.scene.cues.clone(),
+                    flow: s.scene.flow,
                     frame_count: s.frame_count(),
                     info: s.info.clone(),
                 }
@@ -471,6 +477,22 @@ mod tests {
         let all_kf = anim.key_frames(SceneSelection::All);
         // Frame 1 = scene-1 frame-0 shifted by offset 1.
         assert!(all_kf.iter().any(|f| f.as_u32() == 1));
+    }
+
+    #[test]
+    fn scene_flow_defaults_false_when_absent() {
+        let anim = AnimationDef::from_json(SCENE_JSON).unwrap();
+        assert!(!anim.scene_infos()[0].flow);
+    }
+
+    #[test]
+    fn scene_flow_true_round_trips() {
+        let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
+        let mut scene = doc["scenes"][0].clone();
+        scene["flow"] = serde_json::json!(true);
+        let json = serde_json::json!({"version": 2, "scenes": [scene]}).to_string();
+        let anim = AnimationDef::from_json(&json).unwrap();
+        assert!(anim.scene_infos()[0].flow);
     }
 
     #[test]

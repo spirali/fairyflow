@@ -327,6 +327,7 @@ pub(crate) struct SceneDef {
     pub camera: Camera,
     pub frames: u32,
     pub cues: Vec<u32>,
+    pub flow: bool,
     pub children: Vec<NodeId>,
 }
 

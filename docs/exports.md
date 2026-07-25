@@ -36,4 +36,5 @@ fairyflow play <mypackage.ffpkg>
 | ++end++ | Jump to last frame |
 | ++f5++ | Toggle fullscreen |
 
-The player automatically pauses at every [cue](cues.md).
+The player automatically pauses at every [cue](cues.md), and at the end of every scene,
+unless the scene uses `flow=True`.

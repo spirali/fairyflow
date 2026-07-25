@@ -1,4 +1,6 @@
-from fairyflow import Rect, Group, Scene, next_frame, wait, Frames, Par
+import pytest
+
+from fairyflow import Rect, Group, Scene, cue, get_frame, next_frame, wait, Frames, Par
 from fairyflow.serializer import create_export
 
 
@@ -89,3 +91,96 @@ def test_scene_has_no_color_method():
     with s:
         pass
     assert not hasattr(s, "color")
+
+
+# ── Lazy cue() advance (item 18) ────────────────────────────────────────────
+
+
+def test_cue_advances_before_instant_attr_set():
+    s = Scene(60, 40)
+    with s:
+        r = Rect().size(10, 10)
+        cue()
+        assert get_frame() == 0
+        r.fill("red")
+        assert get_frame() == 1
+
+
+def test_cue_advances_before_node_creation():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        assert get_frame() == 0
+        Rect().size(10, 10)
+        assert get_frame() == 1
+
+
+def test_cue_advances_before_remove():
+    s = Scene(60, 40)
+    with s:
+        r = Rect().size(10, 10)
+        next_frame()
+        cue()
+        assert get_frame() == 1
+        r.remove()
+        assert get_frame() == 2
+
+
+def test_cue_disarmed_by_explicit_wait():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        wait(Frames(3))
+        assert get_frame() == 3
+        # wait() already disarmed the pending advance — no extra frame here
+        Rect().size(10, 10)
+        assert get_frame() == 3
+
+
+def test_cue_disarmed_by_next_frame():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        next_frame()
+        assert get_frame() == 1
+        Rect().size(10, 10)
+        assert get_frame() == 1
+
+
+def test_cue_idempotent():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        cue()
+        Rect().size(10, 10)
+        assert get_frame() == 1
+
+
+def test_trailing_cue_produces_no_extra_frame():
+    s = Scene(60, 40)
+    with s:
+        Rect().size(10, 10)
+        cue()
+    assert s.max_frame == 0
+
+
+# ── Scene.flow — replaces cue_at_start (item 18) ────────────────────────────
+
+
+def test_scene_flow_default_absent_from_wire():
+    s = Scene(100, 100)
+    with s:
+        pass
+    assert "flow" not in create_export(0, s)
+
+
+def test_scene_flow_true_serialized():
+    s = Scene(100, 100, flow=True)
+    with s:
+        pass
+    assert create_export(0, s)["flow"] is True
+
+
+def test_scene_cue_at_start_removed():
+    with pytest.raises(TypeError):
+        Scene(100, 100, cue_at_start=True)

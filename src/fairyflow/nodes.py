@@ -2,7 +2,7 @@ from typing import Union, Literal, Self, SupportsFloat
 from beartype import beartype
 import os
 
-from .types import ColorLike, FloatLike
+from .types import ColorLike, FillLike, FloatLike
 from .layout import CENTERING_LAYOUT, ColumnLayout, GridLayout, RowLayout
 from .position import Position
 from .info import get_info
@@ -19,7 +19,7 @@ from .sentinels import (
 )
 from .aobject import AnimatedObject, get_frame
 from .avalue import AnimatedValue
-from .color import Color
+from .color import Color, Gradient
 from .exprs import (
     Call,
     to_expr,
@@ -831,20 +831,22 @@ class StyleMethods:
     care which default strategy backs the attribute."""
 
     def fill(
-        self, value: ColorLike, *, dur: Duration = None, ease: Easing = None
+        self, value: FillLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
-        """Set the fill color of the node.
+        """Set the fill color (or gradient) of the node.
 
         Args:
             value: Any color value accepted by `Color.parse` (e.g. a hex
-                string, an RGB tuple, or a `Color` instance).
+                string, an RGB tuple, or a `Color` instance), or a
+                `gradient(...)`.
             dur: Optional duration for animation.
             ease: Optional easing curve (``"linear"`` default).
 
         Returns:
             self, for method chaining.
         """
-        self._set_attr("fill_color", Color.parse(value), dur, ease)
+        parsed = value if isinstance(value, Gradient) else Color.parse(value)
+        self._set_attr("fill_color", parsed, dur, ease)
         return self
 
     def stroke(
@@ -881,6 +883,8 @@ class StyleMethods:
             self, (Rect, Ellipse, Path)
         ):
             raise TypeError("dash/offset are only supported on Rect, Ellipse, and Path")
+        if isinstance(color, Gradient):
+            raise TypeError("stroke() does not support gradients, only fill() does")
         with Par():
             if color is not OMITTED:
                 self._set_attr("stroke_color", Color.parse(color), dur, ease)
@@ -1699,6 +1703,8 @@ class Scene(
         Returns:
             self, for method chaining.
         """
+        if isinstance(value, Gradient):
+            raise TypeError("background() does not support gradients")
         self._set_attr("fill_color", Color.parse(value), dur, ease)
         return self
 

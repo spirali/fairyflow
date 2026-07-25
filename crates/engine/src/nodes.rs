@@ -1,6 +1,6 @@
 use crate::basictypes::{FrameId, NodeId};
 use crate::eval::EvalCtx;
-use crate::values::{Color, Expr, Value};
+use crate::values::{Color, Expr, Paint, Value};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
@@ -64,7 +64,7 @@ pub struct Size {
 /// literal defaults — used by shape nodes (rect/ellipse/path).
 #[derive(Debug)]
 pub struct Style {
-    pub fill_color: AttrExpr<Color>,
+    pub fill_color: AttrExpr<Paint>,
     pub stroke_color: AttrExpr<Color>,
     pub stroke_width: AttrExpr<f64>,
     pub alpha: AttrExpr<f64>,
@@ -80,7 +80,7 @@ pub struct Style {
 /// inherited-from-ancestor when absent (see `eval.rs::eval_inherited`).
 #[derive(Debug)]
 pub struct TextStyle {
-    pub fill_color: AttrExpr<Color>,
+    pub fill_color: AttrExpr<Paint>,
     pub stroke_color: AttrExpr<Color>,
     pub stroke_width: AttrExpr<f64>,
     pub alpha: AttrExpr<f64>,
@@ -390,7 +390,7 @@ pub(crate) struct NodeDef {
     pub padding_bottom: Option<Expr<f64>>,
     pub padding_left: Option<Expr<f64>>,
 
-    pub fill: Option<Expr<Color>>,
+    pub fill: Option<Expr<Paint>>,
     pub stroke: Option<Expr<Color>>,
     pub stroke_width: Option<Expr<f64>>,
     pub dash_on: Option<Expr<f64>>,

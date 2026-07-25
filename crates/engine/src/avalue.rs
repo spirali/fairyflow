@@ -8,9 +8,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-/// Rename of v1's `"S"`/`"L"` — `Linear` plus the 4 CSS-equivalent cubic-bezier
-/// presets from api-v2-proposal.md §3.2 (sampled/custom easing is a later step,
-/// not part of this rewrite).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Transition {
     Step,

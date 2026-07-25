@@ -4,7 +4,7 @@ use crate::nodes::{
     AttrExpr, Camera, Node, NodeBox, NodeKind, Position, SceneDef, Style, TextStyle,
 };
 use crate::paths::{path_length, point_in_path};
-use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Value};
+use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Paint, Value};
 use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
 use serde::de::DeserializeOwned;
 use std::cell::RefCell;
@@ -498,7 +498,7 @@ impl Style {
         Ok(renderer_core::Style {
             fill_color: self
                 .fill_color
-                .eval_or(ctx, Color::recursive_value())?
+                .eval_or(ctx, Paint::recursive_value())?
                 .into_inner(),
             stroke_color: self
                 .stroke_color
@@ -525,7 +525,7 @@ impl TextStyle {
                 ctx,
                 owner,
                 |ts| &ts.fill_color,
-                Color::recursive_value(),
+                Paint::recursive_value(),
             )?
             .map(|v| v.clone().into_inner()),
             stroke_color: eval_text_inherited(

@@ -8,14 +8,16 @@ use krilla_svg::{SurfaceExt, SvgSettings};
 use renderer_core::glyph_cache::PathVerb;
 use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
-use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
+use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs, verbs_bounds};
 use renderer_core::resources::Resources;
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
-    AffineTransform, camera_transform, node_z_level, positional_transform, transform_node_box,
+    AffineTransform, camera_transform, gradient_line_endpoints, node_z_level, positional_transform,
+    transform_node_box,
 };
 use renderer_core::{
-    Color, ImageLayer, Node, NodeKind, Position, Scene, Size, Style, TextChild, TextSpan,
+    Color, ImageLayer, Node, NodeKind, Paint as RcPaint, Position, Scene, Size, Style, TextChild,
+    TextSpan,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -236,7 +238,7 @@ impl PdfRenderer {
                     })
                 };
                 if let Some(path) = path {
-                    fill_and_stroke(surface, &path, style, parent_alpha);
+                    fill_and_stroke(surface, &path, style, parent_alpha, (0.0, 0.0, w, h));
                 }
                 surface.pop();
             }
@@ -244,10 +246,9 @@ impl PdfRenderer {
             NodeKind::Ellipse { node_box, style } => {
                 let transform = transform_node_box(&node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
-                if let Some(path) =
-                    build_ellipse_path(node_box.size.width as f32, node_box.size.height as f32)
-                {
-                    fill_and_stroke(surface, &path, style, parent_alpha);
+                let (w, h) = (node_box.size.width as f32, node_box.size.height as f32);
+                if let Some(path) = build_ellipse_path(w, h) {
+                    fill_and_stroke(surface, &path, style, parent_alpha, (0.0, 0.0, w, h));
                 }
                 surface.pop();
             }
@@ -261,8 +262,9 @@ impl PdfRenderer {
                 ..
             } => {
                 let verbs = build_cropped_path_verbs(children, *crop_start, *crop_end);
+                let bounds = verbs_bounds(&verbs).unwrap_or((0.0, 0.0, 0.0, 0.0));
                 if let Some(path) = verbs_to_krilla_path(&verbs) {
-                    fill_and_stroke(surface, &path, style, parent_alpha);
+                    fill_and_stroke(surface, &path, style, parent_alpha, bounds);
                 }
             }
 
@@ -742,7 +744,9 @@ fn render_text_lines(
                         .copied()
                         .unwrap_or(0);
                     let byte_in_full = span_start_in_full + offset_in_span;
-                    let fallback = span.text_style.fill_color.value();
+                    // Gradients aren't supported on text fill — degrade to the
+                    // first stop as a solid color (`Paint::solid_or_first_stop`).
+                    let fallback = span.text_style.fill_color.value().solid_or_first_stop();
                     sh_colors.color_at(byte_in_full).or_else(|| {
                         if !fallback.is_transparent() {
                             Some(fallback.clone())
@@ -751,7 +755,7 @@ fn render_text_lines(
                         }
                     })
                 } else {
-                    let c = span.text_style.fill_color.value();
+                    let c = span.text_style.fill_color.value().solid_or_first_stop();
                     if !c.is_transparent() {
                         Some(c.clone())
                     } else {
@@ -759,7 +763,7 @@ fn render_text_lines(
                     }
                 }
             } else {
-                let c = span.text_style.fill_color.value();
+                let c = span.text_style.fill_color.value().solid_or_first_stop();
                 if !c.is_transparent() {
                     Some(c.clone())
                 } else {
@@ -909,6 +913,53 @@ fn color_fill(c: &Color, alpha: f32) -> Fill {
     }
 }
 
+/// Solid or gradient fill — `bounds` (local, untransformed space) resolves a
+/// gradient's `angle` into concrete line endpoints via the same
+/// `gradient_line_endpoints` formula renderer-skia uses, so raster and PDF
+/// output agree on gradient placement.
+fn paint_fill(paint: &RcPaint, alpha: f32, bounds: (f32, f32, f32, f32)) -> Fill {
+    match paint {
+        RcPaint::Solid(c) => color_fill(c, alpha),
+        RcPaint::LinearGradient { stops, angle } => {
+            let (start, end) = gradient_line_endpoints(*angle, bounds);
+            let krilla_stops: Vec<krilla::paint::Stop> = stops
+                .iter()
+                .map(|(offset, c)| {
+                    let (r, g, b, a) = c.to_rgba_f32();
+                    let opacity = (a * alpha).clamp(0.0, 1.0);
+                    krilla::paint::Stop {
+                        offset: NormalizedF32::new(*offset as f32).unwrap_or(NormalizedF32::ZERO),
+                        color: krilla::color::rgb::Color::new(
+                            (r * 255.0) as u8,
+                            (g * 255.0) as u8,
+                            (b * 255.0) as u8,
+                        )
+                        .into(),
+                        opacity: NormalizedF32::new(opacity).unwrap_or(NormalizedF32::ONE),
+                    }
+                })
+                .collect();
+            Fill {
+                paint: krilla::paint::LinearGradient {
+                    x1: start.0,
+                    y1: start.1,
+                    x2: end.0,
+                    y2: end.1,
+                    transform: to_krilla_transform(AffineTransform::identity()),
+                    spread_method: krilla::paint::SpreadMethod::Pad,
+                    stops: krilla_stops,
+                    anti_alias: true,
+                }
+                .into(),
+                // Per-stop opacity already carries `alpha` — the outer Fill
+                // opacity would otherwise apply a second time on top.
+                opacity: NormalizedF32::ONE,
+                rule: FillRule::NonZero,
+            }
+        }
+    }
+}
+
 fn color_stroke(
     c: &Color,
     width: f32,
@@ -935,10 +986,16 @@ fn color_stroke(
     }
 }
 
-fn fill_and_stroke(surface: &mut krilla::surface::Surface, path: &Path, style: &Style, alpha: f32) {
+fn fill_and_stroke(
+    surface: &mut krilla::surface::Surface,
+    path: &Path,
+    style: &Style,
+    alpha: f32,
+    bounds: (f32, f32, f32, f32),
+) {
     let effective_alpha = alpha * style.alpha as f32;
     if !style.fill_color.is_transparent() {
-        surface.set_fill(Some(color_fill(&style.fill_color, effective_alpha)));
+        surface.set_fill(Some(paint_fill(&style.fill_color, effective_alpha, bounds)));
         surface.set_stroke(None);
         surface.draw_path(path);
     }
@@ -974,4 +1031,70 @@ fn unpremultiply(data: &[u8]) -> Vec<u8> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use renderer_core::{Camera, Inheritable, NodeBox};
+
+    #[test]
+    fn gradient_fill_emits_a_pdf_shading_not_a_flat_color() {
+        let node_box = NodeBox {
+            position: Position { x: 0.0, y: 0.0 },
+            size: Size {
+                width: 100.0,
+                height: 40.0,
+            },
+            z_level: Inheritable::Own(0.0),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            pivot_x: 0.0,
+            pivot_y: 0.0,
+        };
+        let style = Style {
+            fill_color: RcPaint::LinearGradient {
+                stops: vec![
+                    (0.0, Color::from_rgba8(255, 0, 0, 255)),
+                    (1.0, Color::from_rgba8(0, 0, 255, 255)),
+                ],
+                angle: 90.0,
+            },
+            stroke_color: Color::from_rgba8(0, 0, 0, 0),
+            stroke_width: 0.0,
+            alpha: 1.0,
+            dash: None,
+            dash_offset: 0.0,
+        };
+        let scene = Scene {
+            width: 100.0,
+            height: 40.0,
+            fill_color: Color::from_rgba8(255, 255, 255, 255),
+            camera: Camera {
+                camera_zoom: 1.0,
+                camera_x: 50.0,
+                camera_y: 20.0,
+            },
+            children: vec![Node {
+                id: 0,
+                kind: NodeKind::Rect {
+                    node_box,
+                    style,
+                    radius: 0.0,
+                },
+            }],
+        };
+        let pdf_bytes = render_to_pdf(&[&scene]).unwrap();
+        // PDF's axial-shading dictionary type (`/ShadingType 2`) — appears as
+        // plain (uncompressed) object bytes, so a raw substring check is
+        // reliable without a PDF parser/rasterizer dependency. Confirms a
+        // real gradient shading was emitted, not a flattened solid fallback.
+        assert!(
+            pdf_bytes
+                .windows(b"/ShadingType".len())
+                .any(|w| w == b"/ShadingType"),
+            "expected the PDF to contain a /ShadingType object for the gradient fill"
+        );
+    }
 }

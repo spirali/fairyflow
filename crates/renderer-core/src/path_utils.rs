@@ -242,6 +242,43 @@ pub fn build_cropped_path_verbs(
     verbs
 }
 
+/// Bounding box `(x, y, width, height)` of a verb list — the convex hull of
+/// every point/control-point (control points are a superset of the true
+/// curve extrema, so this is always a valid, if occasionally slightly
+/// looser, bound). Used to resolve gradient fills on `Path` nodes, which
+/// (unlike `Rect`/`Ellipse`) carry no `NodeBox`/size of their own —
+/// see `renderer_core::transform::gradient_line_endpoints`.
+pub fn verbs_bounds(verbs: &[PathVerb]) -> Option<(f32, f32, f32, f32)> {
+    let mut min = (f32::INFINITY, f32::INFINITY);
+    let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let mut update = |x: f32, y: f32| {
+        min.0 = min.0.min(x);
+        min.1 = min.1.min(y);
+        max.0 = max.0.max(x);
+        max.1 = max.1.max(y);
+    };
+    for verb in verbs {
+        match *verb {
+            PathVerb::MoveTo(x, y) | PathVerb::LineTo(x, y) => update(x, y),
+            PathVerb::QuadTo(cx, cy, x, y) => {
+                update(cx, cy);
+                update(x, y);
+            }
+            PathVerb::CubicTo(c1x, c1y, c2x, c2y, x, y) => {
+                update(c1x, c1y);
+                update(c2x, c2y);
+                update(x, y);
+            }
+            PathVerb::Close => {}
+        }
+    }
+    if min.0.is_finite() {
+        Some((min.0, min.1, max.0 - min.0, max.1 - min.1))
+    } else {
+        None
+    }
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]

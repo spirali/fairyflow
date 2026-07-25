@@ -74,10 +74,60 @@ pub struct NodeBox {
     pub pivot_y: f64,
 }
 
+/// A fill: solid color or linear gradient (proposal §9.11). Only used for
+/// `fill_color` — `stroke_color` stays a plain `Color`.
+#[derive(Debug, Clone)]
+pub enum Paint {
+    Solid(Color),
+    LinearGradient {
+        stops: Vec<(f64, Color)>,
+        angle: f64,
+    },
+}
+
+/// `Solid` serializes exactly like a bare `Color` (the same hex string) —
+/// only consumed by the `/tree/{frame}` debug endpoint, but golden-image
+/// tests snapshot that JSON, so a solid fill must stay byte-identical to
+/// before this type existed. `LinearGradient` has no prior shape to match.
+impl Serialize for Paint {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Paint::Solid(c) => c.serialize(serializer),
+            Paint::LinearGradient { stops, angle } => {
+                use serde::ser::SerializeStruct;
+                let mut s = serializer.serialize_struct("LinearGradient", 2)?;
+                s.serialize_field("stops", stops)?;
+                s.serialize_field("angle", angle)?;
+                s.end()
+            }
+        }
+    }
+}
+
+impl Paint {
+    /// A gradient counts as transparent only when every stop is — a single
+    /// visible stop still needs to draw.
+    pub fn is_transparent(&self) -> bool {
+        match self {
+            Paint::Solid(c) => c.is_transparent(),
+            Paint::LinearGradient { stops, .. } => stops.iter().all(|(_, c)| c.is_transparent()),
+        }
+    }
+
+    /// The color to use where gradient fills aren't supported (text glyph
+    /// fill) — degrades to the gradient's first stop as a solid color.
+    pub fn solid_or_first_stop(&self) -> &Color {
+        match self {
+            Paint::Solid(c) => c,
+            Paint::LinearGradient { stops, .. } => &stops[0].1,
+        }
+    }
+}
+
 /// Mirrors StyleMixin (which extends AlphaMixin) in Python.
 #[derive(Debug, Clone, Serialize)]
 pub struct Style {
-    pub fill_color: Color,
+    pub fill_color: Paint,
     pub stroke_color: Color,
     pub stroke_width: f64,
     pub alpha: f64,
@@ -104,7 +154,7 @@ pub enum TextAlign {
 #[derive(Debug, Clone, Serialize)]
 pub struct TextStyle {
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
-    pub fill_color: Inheritable<Color>,
+    pub fill_color: Inheritable<Paint>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub stroke_color: Inheritable<Color>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]

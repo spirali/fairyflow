@@ -1,6 +1,6 @@
 import pytest
 
-from fairyflow import Rect, Group, Scene, cue, get_frame, next_frame, wait, Frames, Par
+from fairyflow import Frames, Group, Par, Rect, Scene, cue, get_frame, next_frame, wait
 from fairyflow.serializer import create_export
 
 

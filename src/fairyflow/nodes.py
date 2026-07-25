@@ -1675,6 +1675,7 @@ class Scene(
         self.max_frame = 0
         self.flow = flow
         self.cues = set()
+        self.notes = []
         ROOT_OBJECTS.get().append(self)
 
     def __enter__(self):
@@ -1723,6 +1724,10 @@ class Scene(
             result["flow"] = True
         if self.cues:
             result["cues"] = sorted(self.cues)
+        if self.notes:
+            result["notes"] = [
+                [f, t] for f, t in sorted(self.notes, key=lambda n: n[0])
+            ]
         if self._children:
             result["children"] = [serializer.add_node(c) for c in self._children]
         result["nodes"] = serializer.nodes

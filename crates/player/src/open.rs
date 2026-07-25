@@ -1,4 +1,5 @@
 use crate::config::PackageConfig;
+use crate::notes::{build_notes_scene, notes_for_segment};
 use engine::{AnimationDef, FrameId, SceneSelection};
 use rayon::prelude::*;
 use softbuffer::{Context, Surface};
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, mpsc};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -230,6 +231,25 @@ fn load_package(path: &Path) -> anyhow::Result<LoadedPackage> {
 
 // ── Winit application ──────────────────────────────────────────────────────
 
+/// A single window's own surface and speaker-notes visibility. Playback state
+/// (`current_frame`, `paused`, ...) lives on `PlayerApp` and is shared across
+/// every window — only the rendered output differs.
+struct PlayerWindow {
+    window: Arc<Window>,
+    surface: Surface<Arc<Window>, Arc<Window>>,
+    show_notes: bool,
+}
+
+/// Per-scene cue/note data in *local* frame numbers, plus this scene's global
+/// start frame, so the notes overlay can find "which scene, which local
+/// frame" for `current_frame` and look up that scene's own segment notes.
+struct SceneSegmentInfo {
+    global_start: u32,
+    frame_count: u32,
+    cues: Vec<u32>,
+    notes: Vec<(u32, String)>,
+}
+
 struct PlayerApp {
     // Loaded animation data (owns temp dir via _temp_dir)
     frame_map: Arc<Vec<(usize, u32)>>,
@@ -237,18 +257,19 @@ struct PlayerApp {
     cue_frames: HashSet<u32>,
     /// Last global frame of every non-`flow` scene — autoplay also pauses here.
     scene_end_frames: HashSet<u32>,
+    scene_segments: Vec<SceneSegmentInfo>,
     fps: u32,
     scene_width: u32,
     scene_height: u32,
+    twin_view: bool,
     // Playback state
     current_frame: u32,
     paused: bool,
     backward: bool,
     last_frame_time: Instant,
-    // Window/surface (created in `resumed`)
-    window: Option<Arc<Window>>,
-    surface: Option<Surface<Arc<Window>, Arc<Window>>>,
-    // Pre-render cache
+    // Windows (created in `resumed`), keyed by winit's WindowId
+    windows: HashMap<WindowId, PlayerWindow>,
+    // Pre-render cache — only consulted/filled by windows with notes off; see `render`.
     frame_cache: Arc<RwLock<FrameCache>>,
     cache_tx: mpsc::Sender<CacheRequest>,
     // Keeps temp dir alive for the session
@@ -319,19 +340,71 @@ impl PlayerApp {
         self.paused = true;
     }
 
-    fn render(&mut self) {
-        let (Some(window), Some(surface)) = (self.window.as_ref(), self.surface.as_mut()) else {
+    /// Speaker notes for the segment containing `current_frame`, resolved
+    /// against whichever scene that global frame falls into.
+    fn notes_for_current_frame(&self) -> Vec<&str> {
+        let Some(seg) = self.scene_segments.iter().find(|s| {
+            self.current_frame >= s.global_start
+                && self.current_frame < s.global_start + s.frame_count
+        }) else {
+            return Vec::new();
+        };
+        let local_frame = self.current_frame - seg.global_start;
+        notes_for_segment(&seg.cues, &seg.notes, local_frame, seg.frame_count)
+    }
+
+    fn render(&mut self, id: WindowId) {
+        // Peek size/mode immutably first — computing the scene and notes
+        // paragraphs below needs `&self`, which can't overlap a live `&mut`
+        // borrow of `self.windows` (held via the surface/buffer).
+        let Some(pw) = self.windows.get(&id) else {
             return;
         };
-        let size = window.inner_size();
+        let size = pw.window.inner_size();
         let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
             return;
         };
-        if surface.resize(w, h).is_err() {
+        let (win_w, win_h) = (size.width, size.height);
+        let show_notes = pw.show_notes;
+
+        if show_notes {
+            // The pre-render cache holds plain (no-overlay) frames; a notes
+            // window always renders fresh so the overlay is never stale.
+            let (anim_idx, local_frame) = self.frame_map[self.current_frame as usize];
+            let Ok(scene) = self.animations[anim_idx]
+                .build_scene(FrameId::new(local_frame), SceneSelection::All)
+            else {
+                return;
+            };
+            let paragraphs = self.notes_for_current_frame();
+            let strip_h = ((win_h as f32 * 0.22).max(80.0)).min(win_h as f32 * 0.5) as u32;
+            let notes_scene =
+                (!paragraphs.is_empty()).then(|| build_notes_scene(&paragraphs, win_w, strip_h));
+
+            let Some(pw) = self.windows.get_mut(&id) else {
+                return;
+            };
+            if pw.surface.resize(w, h).is_err() {
+                return;
+            }
+            let Ok(mut buffer) = pw.surface.buffer_mut() else {
+                return;
+            };
+            if let Some(notes_scene) = &notes_scene {
+                renderer_skia::render_scene_with_strip_to_buffer(
+                    &scene,
+                    notes_scene,
+                    strip_h,
+                    win_w,
+                    win_h,
+                    &mut buffer,
+                );
+            } else {
+                renderer_skia::render_scene_to_buffer(&scene, win_w, win_h, &mut buffer);
+            }
+            let _ = buffer.present();
             return;
         }
-
-        let (win_w, win_h) = (size.width, size.height);
 
         // Try to serve from the pre-render cache.
         let cached: Option<Vec<u32>> = {
@@ -343,7 +416,13 @@ impl PlayerApp {
             }
         };
 
-        let Ok(mut buffer) = surface.buffer_mut() else {
+        let Some(pw) = self.windows.get_mut(&id) else {
+            return;
+        };
+        if pw.surface.resize(w, h).is_err() {
+            return;
+        }
+        let Ok(mut buffer) = pw.surface.buffer_mut() else {
             return;
         };
 
@@ -362,7 +441,8 @@ impl PlayerApp {
 
         let _ = buffer.present();
 
-        // Ask the background thread to pre-render surrounding frames.
+        // Ask the background thread to pre-render surrounding frames. Only
+        // notes-off windows consult the cache, so only they fill it.
         let _ = self.cache_tx.send(CacheRequest {
             current_frame: self.current_frame,
             going_forward: !self.backward,
@@ -372,20 +452,23 @@ impl PlayerApp {
     }
 }
 
-impl ApplicationHandler for PlayerApp {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_size = event_loop
-            .primary_monitor()
-            .or_else(|| event_loop.available_monitors().next())
-            .map(|m| {
-                let s = m.size();
-                PhysicalSize::new(s.width / 2, s.height / 2)
-            })
-            .unwrap_or_else(|| PhysicalSize::new(self.scene_width, self.scene_height));
-
-        let attrs = Window::default_attributes()
-            .with_title("FairyFlow Player")
-            .with_inner_size(window_size);
+impl PlayerApp {
+    /// Creates one window (title/offset/initial notes visibility as given),
+    /// inserting it into `self.windows`. Exits the event loop on failure.
+    fn create_window(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        title: &str,
+        size: PhysicalSize<u32>,
+        offset: Option<PhysicalPosition<i32>>,
+        show_notes: bool,
+    ) {
+        let mut attrs = Window::default_attributes()
+            .with_title(title)
+            .with_inner_size(size);
+        if let Some(pos) = offset {
+            attrs = attrs.with_position(pos);
+        }
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
@@ -410,11 +493,55 @@ impl ApplicationHandler for PlayerApp {
                 return;
             }
         };
-        self.window = Some(window);
-        self.surface = Some(surface);
+        self.windows.insert(
+            window.id(),
+            PlayerWindow {
+                window,
+                surface,
+                show_notes,
+            },
+        );
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn request_redraw_all(&self) {
+        for pw in self.windows.values() {
+            pw.window.request_redraw();
+        }
+    }
+}
+
+impl ApplicationHandler for PlayerApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window_size = event_loop
+            .primary_monitor()
+            .or_else(|| event_loop.available_monitors().next())
+            .map(|m| {
+                let s = m.size();
+                PhysicalSize::new(s.width / 2, s.height / 2)
+            })
+            .unwrap_or_else(|| PhysicalSize::new(self.scene_width, self.scene_height));
+
+        if self.twin_view {
+            // Projector window: clean, no notes. Presenter window: notes on,
+            // offset so both title bars stay reachable even if bodies overlap.
+            self.create_window(event_loop, "FairyFlow Player", window_size, None, false);
+            let offset = PhysicalPosition::new(
+                (window_size.width / 4) as i32,
+                (window_size.height / 4) as i32,
+            );
+            self.create_window(
+                event_loop,
+                "FairyFlow Player — Presenter",
+                window_size,
+                Some(offset),
+                true,
+            );
+        } else {
+            self.create_window(event_loop, "FairyFlow Player", window_size, None, false);
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -429,9 +556,9 @@ impl ApplicationHandler for PlayerApp {
                 ..
             } => match code {
                 KeyCode::Escape => {
-                    if let Some(w) = &self.window {
-                        if w.fullscreen().is_some() {
-                            w.set_fullscreen(None);
+                    if let Some(pw) = self.windows.get(&id) {
+                        if pw.window.fullscreen().is_some() {
+                            pw.window.set_fullscreen(None);
                         } else {
                             event_loop.exit();
                         }
@@ -440,8 +567,14 @@ impl ApplicationHandler for PlayerApp {
                     }
                 }
                 KeyCode::F5 => {
-                    if let Some(w) = &self.window {
-                        w.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                    if let Some(pw) = self.windows.get(&id) {
+                        pw.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                    }
+                }
+                KeyCode::KeyN => {
+                    if let Some(pw) = self.windows.get_mut(&id) {
+                        pw.show_notes = !pw.show_notes;
+                        pw.window.request_redraw();
                     }
                 }
                 KeyCode::ArrowRight | KeyCode::PageDown => {
@@ -457,9 +590,7 @@ impl ApplicationHandler for PlayerApp {
                         // Playing backward → reverse direction to forward
                         self.backward = false;
                     }
-                    if let Some(w) = &self.window {
-                        w.request_redraw();
-                    }
+                    self.request_redraw_all();
                 }
                 KeyCode::ArrowLeft | KeyCode::PageUp => {
                     if self.paused {
@@ -474,28 +605,22 @@ impl ApplicationHandler for PlayerApp {
                         // Playing forward → reverse direction to backward
                         self.backward = true;
                     }
-                    if let Some(w) = &self.window {
-                        w.request_redraw();
-                    }
+                    self.request_redraw_all();
                 }
                 KeyCode::Home => {
                     self.current_frame = 0;
                     self.paused = true;
-                    if let Some(w) = &self.window {
-                        w.request_redraw();
-                    }
+                    self.request_redraw_all();
                 }
                 KeyCode::End => {
                     self.current_frame = self.total_frames().saturating_sub(1);
                     self.paused = true;
-                    if let Some(w) = &self.window {
-                        w.request_redraw();
-                    }
+                    self.request_redraw_all();
                 }
                 _ => {}
             },
             WindowEvent::RedrawRequested => {
-                self.render();
+                self.render(id);
             }
             _ => {}
         }
@@ -511,9 +636,7 @@ impl ApplicationHandler for PlayerApp {
         if now.duration_since(self.last_frame_time) >= frame_duration {
             self.last_frame_time = now;
             self.advance_frame();
-            if let Some(w) = &self.window {
-                w.request_redraw();
-            }
+            self.request_redraw_all();
         }
         event_loop.set_control_flow(ControlFlow::WaitUntil(
             self.last_frame_time + frame_duration,
@@ -523,7 +646,12 @@ impl ApplicationHandler for PlayerApp {
 
 // ── Public entry point ─────────────────────────────────────────────────────
 
-pub fn open_player(package_path: &Path, lookahead: u32, lookback: u32) -> anyhow::Result<()> {
+pub fn open_player(
+    package_path: &Path,
+    lookahead: u32,
+    lookback: u32,
+    twin_view: bool,
+) -> anyhow::Result<()> {
     renderer_skia::Resources::init();
 
     let package = load_package(package_path)?;
@@ -532,18 +660,27 @@ pub fn open_player(package_path: &Path, lookahead: u32, lookback: u32) -> anyhow
     let mut frame_map: Vec<(usize, u32)> = Vec::new();
     let mut cue_frames: HashSet<u32> = HashSet::new();
     let mut scene_end_frames: HashSet<u32> = HashSet::new();
+    let mut scene_segments: Vec<SceneSegmentInfo> = Vec::new();
 
     for (anim_idx, anim) in package.animations.iter().enumerate() {
         let base_offset = frame_map.len() as u32;
         for local_frame in 0..anim.frame_count(SceneSelection::All) {
             frame_map.push((anim_idx, local_frame));
         }
-        // Collect cue frames and non-`flow` scene end frames, with global offsets
+        // Collect cue frames, non-`flow` scene end frames, and per-scene
+        // segment info (local cues/notes + this scene's global start), all
+        // with global offsets.
         let mut within_anim = 0u32;
         for si in anim.scene_infos() {
             for &cf in &si.cue_frames {
                 cue_frames.insert(base_offset + within_anim + cf);
             }
+            scene_segments.push(SceneSegmentInfo {
+                global_start: base_offset + within_anim,
+                frame_count: si.frame_count,
+                cues: si.cue_frames,
+                notes: si.notes,
+            });
             within_anim += si.frame_count;
             if !si.flow && si.frame_count > 0 {
                 scene_end_frames.insert(base_offset + within_anim - 1);
@@ -584,15 +721,16 @@ pub fn open_player(package_path: &Path, lookahead: u32, lookback: u32) -> anyhow
         animations,
         cue_frames,
         scene_end_frames,
+        scene_segments,
         fps,
         scene_width,
         scene_height,
+        twin_view,
         current_frame: 0,
         paused: true,
         backward: false,
         last_frame_time: Instant::now(),
-        window: None,
-        surface: None,
+        windows: HashMap::new(),
         frame_cache,
         cache_tx,
         _temp_dir,

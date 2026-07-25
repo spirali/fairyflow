@@ -1,6 +1,17 @@
 import pytest
 
-from fairyflow import Frames, Group, Par, Rect, Scene, cue, get_frame, next_frame, wait
+from fairyflow import (
+    Frames,
+    Group,
+    Par,
+    Rect,
+    Scene,
+    cue,
+    get_frame,
+    next_frame,
+    note,
+    wait,
+)
 from fairyflow.serializer import create_export
 
 
@@ -184,3 +195,72 @@ def test_scene_flow_true_serialized():
 def test_scene_cue_at_start_removed():
     with pytest.raises(TypeError):
         Scene(100, 100, cue_at_start=True)
+
+
+# ── Speaker notes: note() (item 19) ─────────────────────────────────────────
+
+
+def test_note_absent_from_wire_when_never_called():
+    s = Scene(60, 40)
+    with s:
+        Rect().size(10, 10)
+    assert "notes" not in create_export(0, s)
+
+
+def test_note_serializes_frame_and_text():
+    s = Scene(60, 40)
+    with s:
+        note("Introduce the problem first.")
+    assert create_export(0, s)["notes"] == [[0, "Introduce the problem first."]]
+
+
+def test_note_does_not_move_the_clock():
+    s = Scene(60, 40)
+    with s:
+        note("no clock movement")
+        assert get_frame() == 0
+        Rect().size(10, 10)
+        assert get_frame() == 0
+
+
+def test_note_after_cue_lands_on_cue_frame():
+    # Matches the proposal's worked example: cue() then note() records the
+    # note at the cue's frame — the lazy advance hasn't fired yet — so it
+    # lands in the segment that starts at that cue, not the previous one.
+    s = Scene(60, 40)
+    with s:
+        Rect().size(10, 10)
+        next_frame()
+        cue()
+        note("Now the punchline.")
+    result = create_export(0, s)
+    assert result["cues"] == [1]
+    assert result["notes"] == [[1, "Now the punchline."]]
+
+
+def test_multiple_notes_in_one_segment_preserve_call_order():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        note("first paragraph")
+        note("second paragraph")
+    assert create_export(0, s)["notes"] == [
+        [0, "first paragraph"],
+        [0, "second paragraph"],
+    ]
+
+
+def test_notes_sorted_by_frame_with_stable_same_frame_order():
+    s = Scene(60, 40)
+    with s:
+        note("at frame 0")
+        next_frame()
+        note("first at frame 1")
+        note("second at frame 1")
+    result = create_export(0, s)["notes"]
+    # sorted by frame (0 before 1); call order preserved within frame 1
+    assert result == [
+        [0, "at frame 0"],
+        [1, "first at frame 1"],
+        [1, "second at frame 1"],
+    ]

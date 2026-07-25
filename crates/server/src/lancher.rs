@@ -38,6 +38,7 @@ pub struct SceneInfoMsg {
     pub key_frames: Vec<u32>,
     pub cue_frames: Vec<u32>,
     pub flow: bool,
+    pub notes: Vec<(u32, String)>,
     pub frame_count: u32,
     pub info: Vec<serde_json::Value>,
 }
@@ -65,6 +66,8 @@ pub enum BuildProcessMsg {
         key_frames: Vec<u32>,
         /// Combined cue frames for "All scenes" mode (absolute frame numbers).
         cue_frames: Vec<u32>,
+        /// Combined speaker notes for "All scenes" mode (absolute frame numbers).
+        notes: Vec<(u32, String)>,
         frame_count: u32,
         /// Per-scene metadata.
         scenes: Vec<SceneInfoMsg>,
@@ -168,18 +171,24 @@ pub async fn run_python(
                         .collect();
                     let frame_count = anim.frame_count(SceneSelection::All);
                     let scene_infos = anim.scene_infos();
-                    // Compute combined cue frames across all scenes (with offsets).
+                    // Compute combined cue frames and notes across all scenes
+                    // (with offsets) — same accumulation, one pass.
                     let mut cue_frames: Vec<u32> = Vec::new();
+                    let mut notes: Vec<(u32, String)> = Vec::new();
                     {
                         let mut offset = 0u32;
                         for si in &scene_infos {
                             for &cf in &si.cue_frames {
                                 cue_frames.push(cf + offset);
                             }
+                            for (nf, text) in &si.notes {
+                                notes.push((nf + offset, text.clone()));
+                            }
                             offset += si.frame_count;
                         }
                         cue_frames.sort_unstable();
                         cue_frames.dedup();
+                        notes.sort_by_key(|(f, _)| *f);
                     }
                     let scenes: Vec<SceneInfoMsg> = scene_infos
                         .into_iter()
@@ -188,6 +197,7 @@ pub async fn run_python(
                             key_frames: si.key_frames,
                             cue_frames: si.cue_frames,
                             flow: si.flow,
+                            notes: si.notes,
                             frame_count: si.frame_count,
                             info: si.info,
                         })
@@ -202,6 +212,7 @@ pub async fn run_python(
                     tx.send(BuildProcessMsg::Tree {
                         key_frames,
                         cue_frames,
+                        notes,
                         frame_count,
                         scenes,
                     })

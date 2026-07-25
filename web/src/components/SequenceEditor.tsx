@@ -212,6 +212,7 @@ export default function SequenceEditor({
       let frameCount = 0;
       let cueFrames: number[] = [];
       let flow = false;
+      let notes: [number, string][] = [];
       let treeDone = false;
 
       const handler = (msg: ServerMsg) => {
@@ -223,6 +224,7 @@ export default function SequenceEditor({
           frameCount = msg.frame_count;
           cueFrames = msg.cue_frames ?? [];
           flow = msg.scenes.at(-1)?.flow ?? false;
+          notes = msg.notes ?? [];
           treeDone = true;
         } else if (msg.type === "done") {
           if (!treeDone) {
@@ -287,6 +289,7 @@ export default function SequenceEditor({
                     frameCount,
                     cueFrames,
                     flow,
+                    notes,
                     frames,
                     width: scene.width,
                     height: scene.height,
@@ -349,7 +352,8 @@ export default function SequenceEditor({
     }
     const totalFrames = offset;
     if (totalFrames > 0 && !globalCues.includes(totalFrames - 1)) globalCues.push(totalFrames - 1);
-    if (totalFrames > 0 && !globalPauses.includes(totalFrames - 1)) globalPauses.push(totalFrames - 1);
+    if (totalFrames > 0 && !globalPauses.includes(totalFrames - 1))
+      globalPauses.push(totalFrames - 1);
     globalCues.sort((a, b) => a - b);
     globalPauses.sort((a, b) => a - b);
 

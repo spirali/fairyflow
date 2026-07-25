@@ -29,6 +29,11 @@ pub struct SceneInfo {
     pub cue_frames: Vec<u32>,
     /// If `true`, the player does not pause at the end of this scene.
     pub flow: bool,
+    /// Speaker notes: `(frame, text)` pairs, local frame numbers. A note
+    /// attaches to the segment starting at its frame (previous cue or scene
+    /// start, up to the next cue or scene end) — see `crates/player`'s
+    /// segment-lookup helper for how consumers group these.
+    pub notes: Vec<(u32, String)>,
     pub frame_count: u32,
     /// Opaque per-node debug info (`--debug`), each tagged with its node's
     /// wire id (array index); empty outside debug runs. The engine never
@@ -93,6 +98,8 @@ struct RawScene {
     #[serde(default)]
     flow: bool,
     #[serde(default)]
+    notes: Vec<(u32, String)>,
+    #[serde(default)]
     children: Vec<NodeId>,
     #[serde(default)]
     nodes: Vec<NodeDef>,
@@ -133,6 +140,7 @@ impl SingleScene {
             frames: raw.frames,
             cues: raw.cues,
             flow: raw.flow,
+            notes: raw.notes,
             children: raw.children,
         };
 
@@ -283,6 +291,7 @@ impl AnimationDef {
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
                     cue_frames: s.scene.cues.clone(),
                     flow: s.scene.flow,
+                    notes: s.scene.notes.clone(),
                     frame_count: s.frame_count(),
                     info: s.info.clone(),
                 }
@@ -493,6 +502,28 @@ mod tests {
         let json = serde_json::json!({"version": 2, "scenes": [scene]}).to_string();
         let anim = AnimationDef::from_json(&json).unwrap();
         assert!(anim.scene_infos()[0].flow);
+    }
+
+    #[test]
+    fn scene_notes_empty_when_absent() {
+        let anim = AnimationDef::from_json(SCENE_JSON).unwrap();
+        assert!(anim.scene_infos()[0].notes.is_empty());
+    }
+
+    #[test]
+    fn scene_notes_round_trip() {
+        let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
+        let mut scene = doc["scenes"][0].clone();
+        scene["notes"] = serde_json::json!([[0, "first note"], [1, "second note"]]);
+        let json = serde_json::json!({"version": 2, "scenes": [scene]}).to_string();
+        let anim = AnimationDef::from_json(&json).unwrap();
+        assert_eq!(
+            anim.scene_infos()[0].notes,
+            vec![
+                (0, "first note".to_string()),
+                (1, "second note".to_string())
+            ]
+        );
     }
 
     #[test]

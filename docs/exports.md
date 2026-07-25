@@ -26,6 +26,14 @@ Play a package with:
 fairyflow play <mypackage.ffpkg>
 ```
 
+Pass `--twin-view` to open two windows instead of one — a clean window (for a
+projector) and a presenter window with [speaker notes](cues.md#speaker-notes) on by
+default:
+
+```
+fairyflow play <mypackage.ffpkg> --twin-view
+```
+
 **Keyboard shortcuts in the player:**
 
 | Key | Action |
@@ -35,6 +43,7 @@ fairyflow play <mypackage.ffpkg>
 | ++home++ | Jump to first frame |
 | ++end++ | Jump to last frame |
 | ++f5++ | Toggle fullscreen |
+| ++n++ | Toggle the speaker-notes overlay for the focused window |
 
 The player automatically pauses at every [cue](cues.md), and at the end of every scene,
 unless the scene uses `flow=True`.

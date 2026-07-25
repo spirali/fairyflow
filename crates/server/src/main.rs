@@ -141,6 +141,12 @@ enum Cmd {
         /// Frames to keep rendered behind the current playback position (for fast reverse)
         #[arg(long, default_value_t = 30)]
         lookback: u32,
+
+        /// Open two windows: a clean one (for a projector) and a presenter
+        /// window with speaker notes always on. Either window's notes can
+        /// still be toggled with the N key.
+        #[arg(long)]
+        twin_view: bool,
     },
 }
 
@@ -223,8 +229,9 @@ async fn main() {
             package,
             lookahead,
             lookback,
+            twin_view,
         } => {
-            if let Err(e) = player::open_player(&package, lookahead, lookback) {
+            if let Err(e) = player::open_player(&package, lookahead, lookback, twin_view) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

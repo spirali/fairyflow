@@ -485,13 +485,57 @@ pub fn render_scene_fitted(scene: &Scene, target_w: u32, target_h: u32) -> Pixma
     canvas
 }
 
+/// Packs a `Pixmap` into `buffer` as `0x00RRGGBB` u32 values (softbuffer-compatible
+/// format). `buffer` must be at least `pixmap.width() * pixmap.height()` long.
+pub fn pack_pixmap_to_buffer(pixmap: &Pixmap, buffer: &mut [u32]) {
+    for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
+        *dst = ((src.red() as u32) << 16) | ((src.green() as u32) << 8) | (src.blue() as u32);
+    }
+}
+
 /// Renders `scene` fitted (letterboxed) into `width × height` and writes the
 /// result into `buffer` as `0x00RRGGBB` u32 values (softbuffer-compatible format).
 pub fn render_scene_to_buffer(scene: &Scene, width: u32, height: u32, buffer: &mut [u32]) {
     let pixmap = render_scene_fitted(scene, width, height);
-    for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
-        *dst = ((src.red() as u32) << 16) | ((src.green() as u32) << 8) | (src.blue() as u32);
-    }
+    pack_pixmap_to_buffer(&pixmap, buffer);
+}
+
+/// Renders `main` fitted into the top `width × (height - strip_height)` and `strip`
+/// fitted into a `width × strip_height` band at the bottom, composited into one
+/// `width × height` buffer (softbuffer-compatible `0x00RRGGBB` u32 values). Used by
+/// the standalone player's speaker-notes overlay — `strip` is a small synthetic
+/// `Scene` built from note text, reusing the same text-rendering pipeline as any
+/// other scene rather than needing separate UI-chrome font rasterization.
+pub fn render_scene_with_strip_to_buffer(
+    main: &Scene,
+    strip: &Scene,
+    strip_height: u32,
+    width: u32,
+    height: u32,
+    buffer: &mut [u32],
+) {
+    let main_h = height.saturating_sub(strip_height);
+    let main_pixmap = render_scene_fitted(main, width, main_h);
+    let strip_pixmap = render_scene_fitted(strip, width, strip_height);
+
+    let mut canvas = Pixmap::new(width, height).expect("invalid target resolution");
+    canvas.draw_pixmap(
+        0,
+        0,
+        main_pixmap.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
+        None,
+    );
+    canvas.draw_pixmap(
+        0,
+        main_h as i32,
+        strip_pixmap.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
+        None,
+    );
+    pack_pixmap_to_buffer(&canvas, buffer);
 }
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────

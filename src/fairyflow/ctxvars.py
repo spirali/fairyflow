@@ -42,6 +42,17 @@ def _flush_pending_cue_advance():
         COMPOSER.get().move_frame(1)
 
 
+@beartype
+def note(text: str):
+    """
+    Attach a speaker note to the current segment (from the previous cue or scene
+    start, to the next cue or scene end). Does not move the clock — several
+    `note()` calls in one segment stack as paragraphs in the presenter view.
+    """
+    node = CURRENT_NODE.get()
+    node.get_scene().notes.append((get_frame(), text))
+
+
 def get_frame() -> int:
     """
     Return the current frame number.

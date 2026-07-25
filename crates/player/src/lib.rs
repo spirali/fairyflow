@@ -1,5 +1,6 @@
 mod config;
 mod create;
+mod notes;
 mod open;
 
 pub use create::{CreateConfig, create_package};

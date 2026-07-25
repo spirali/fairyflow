@@ -65,6 +65,31 @@ non-`flow` scene boundary), making it suitable for use as a self-contained prese
 
 ---
 
+## Speaker notes
+
+Call `note(text)` to attach a speaker note to the current **segment** — the span from
+the previous cue (or scene start) up to the next cue (or scene end). Notes don't move
+the clock, and several `note()` calls in one segment stack as paragraphs:
+
+```python
+with Scene() as s:
+    note("Introduce the problem first.")   # first segment — no cue needed
+    ...
+    cue()
+    note("Now the punchline.")
+```
+
+Notes never appear in the rendered animation itself — they're for presenter view only:
+
+- In the **sequence player** (web), toggle the notes panel from the header button next
+  to fullscreen. It shows the current segment's notes as you scrub or play through.
+- In the **stand-alone player** (`fairyflow play`), press `N` to toggle a notes overlay
+  at the bottom of the window. Pass `--twin-view` to open two windows instead — a clean
+  one for a projector, and a presenter window with notes on by default (either window's
+  notes can still be toggled independently with `N`). See [Exports](exports.md).
+
+---
+
 ## Design patterns
 
 ### Cue + transition

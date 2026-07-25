@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
 import type { SequenceRenderResult } from "../types";
+import { notesForSegment } from "../notes";
 
 interface Props {
   result: SequenceRenderResult | null;
@@ -35,6 +36,7 @@ export default function SequencePlayer({
   const [frame, setFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -50,6 +52,15 @@ export default function SequencePlayer({
   const cueFrames = result?.globalCueFrames ?? [];
   const prevCue = cueFrames.filter((c) => c < frame).at(-1) ?? null;
   const nextCue = cueFrames.find((c) => c > frame) ?? null;
+
+  const currentNotes = currentScene
+    ? notesForSegment(
+        currentScene.cueFrames,
+        currentScene.notes,
+        localFrame,
+        currentScene.frameCount,
+      )
+    : [];
 
   // Scene boundary markers for the slider
   const sceneBoundaries: number[] = [];
@@ -203,6 +214,17 @@ export default function SequencePlayer({
         </span>
         <div className="seqp-header-actions">
           <button
+            className="seqp-action-btn seqp-notes-btn"
+            onClick={() => setShowNotes((v) => !v)}
+            title={showNotes ? "Hide speaker notes" : "Show speaker notes"}
+            disabled={!result}
+            aria-pressed={showNotes}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M1 1h12v8H4l-3 3V9H1V1zm2 2v1h8V3H3zm0 3v1h6V6H3z" />
+            </svg>
+          </button>
+          <button
             className="seqp-action-btn seqp-fullscreen-btn"
             onClick={toggleFullscreen}
             title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
@@ -304,6 +326,21 @@ export default function SequencePlayer({
           <span className="seqp-frame-label">{result ? `${frame} / ${maxFrame}` : "—"}</span>
         </div>
       </div>
+
+      {/* Speaker notes for the current segment */}
+      {showNotes && result && (
+        <div className="seqp-notes-panel">
+          {currentNotes.length > 0 ? (
+            currentNotes.map((text, i) => (
+              <p key={i} className="seqp-notes-para">
+                {text}
+              </p>
+            ))
+          ) : (
+            <p className="seqp-notes-empty">No notes for this segment.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

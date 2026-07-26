@@ -161,6 +161,8 @@ export default function App() {
   const [fps, setFps] = useState(24);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
+  const [maxPlayFramesInput, setMaxPlayFramesInput] = useState(""); // raw text; empty = no limit
+  const maxPlayFrames = Number(maxPlayFramesInput) || 0;
   const imageCacheRef = useRef<Map<string, string>>(new Map());
   const treeCacheRef = useRef<Map<string, SceneData>>(new Map());
   const [, setCacheVersion] = useState(0); // incremented to trigger re-render after caching
@@ -867,7 +869,8 @@ export default function App() {
   }
 
   function computeToFrame(startFrame: number, totalFrames: number, capturedCueFrames: number[]) {
-    return capturedCueFrames.find((c) => c > startFrame) ?? totalFrames - 1;
+    const target = capturedCueFrames.find((c) => c > startFrame) ?? totalFrames - 1;
+    return maxPlayFrames > 0 ? Math.min(target, startFrame + maxPlayFrames) : target;
   }
 
   async function doPrefetchAndPlay(toFrame: number, startFrame: number, returnToStart: boolean) {
@@ -1605,6 +1608,24 @@ export default function App() {
                             >
                               ⏭
                             </button>
+
+                            <span className="tl-sep" />
+
+                            <label
+                              className="tl-maxframes-label"
+                              title="Limit how many frames a single Play advances (0 = no limit)"
+                            >
+                              Max
+                              <input
+                                type="number"
+                                className="tl-maxframes-input"
+                                value={maxPlayFramesInput}
+                                placeholder="0"
+                                min={0}
+                                disabled={isActive}
+                                onChange={(e) => setMaxPlayFramesInput(e.target.value)}
+                              />
+                            </label>
 
                             <span className="tl-sep" />
 

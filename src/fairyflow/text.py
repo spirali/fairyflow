@@ -4,12 +4,13 @@ from dataclasses import dataclass, field
 from beartype import beartype
 from typing import Union, Literal, Self
 
-from .types import StringLike, BoolLike, FloatLike
+from .types import StringLike, BoolLike, FloatLike, FillLike
 from .animtime import Duration, Easing
 from .avalue import AnimatedValue
 from .sentinels import INHERITED_VALUE, DEFAULT, DefaultMarker, RelValue, resolve_rel
 from .ctxvars import Par, Seq
 from .config import DEFAULT_FONT, DEFAULT_CODE, normalize_font_style
+from .color import Color, Gradient
 
 from .nodes import (
     Node,
@@ -89,6 +90,72 @@ class TextStyleMethods:
             )
         return self
 
+    def underline(
+        self,
+        value: FloatLike | bool = 1,
+        *,
+        color: FillLike | None = None,
+        width: FloatLike | None = None,
+        offset: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Sweep an underline in (or out) under this text.
+
+        A 0..1 progress attribute, like `Text.type_on()`'s reveal — not a
+        boolean — so it animates: `w.underline(dur=0.4)` sweeps in left to
+        right over 0.4s; `w.underline(0)` sweeps it back out.
+
+        Args:
+            value: Progress in `[0, 1]` (`True`/`False` accepted as `1`/`0`).
+                Measured along the decoration's total length, so a run
+                wrapped across several lines draws in continuously.
+            color: Line color. Defaults to this run's own fill.
+            width: Line thickness in px. Defaults to the font's own
+                underline metric at this run's resolved size.
+            offset: Distance from the baseline in px. Defaults to the font's
+                own underline metric at this run's resolved size.
+            dur: Optional duration for animation.
+            ease: Optional easing curve (``"linear"`` default).
+
+        Returns:
+            self, for method chaining.
+        """
+        return self._decoration("underline", value, color, width, offset, dur, ease)
+
+    def strike(
+        self,
+        value: FloatLike | bool = 1,
+        *,
+        color: FillLike | None = None,
+        width: FloatLike | None = None,
+        offset: FloatLike | None = None,
+        dur: Duration = None,
+        ease: Easing = None,
+    ) -> Self:
+        """Cross this text out — same shape as `.underline()`, see there for
+        the full parameter docs.
+
+        Returns:
+            self, for method chaining.
+        """
+        return self._decoration("strike", value, color, width, offset, dur, ease)
+
+    def _decoration(self, prefix, value, color, width, offset, dur, ease) -> Self:
+        value = float(value)  # True/False -> 1.0/0.0; a bare bool would
+        # otherwise serialize as JSON true/false, which the engine's
+        # Expr<f64> deserializer rejects.
+        with Par():
+            self._set_attr(prefix, value, dur, ease)
+            if color is not None:
+                parsed = color if isinstance(color, Gradient) else Color.parse(color)
+                self._set_attr(f"{prefix}_color", parsed, dur, ease)
+            if width is not None:
+                self._set_attr(f"{prefix}_width", width, dur, ease)
+            if offset is not None:
+                self._set_attr(f"{prefix}_offset", offset, dur, ease)
+        return self
+
 
 @beartype
 class TextStyleMixin(StyleMixin, TextStyleMethods):
@@ -99,6 +166,14 @@ class TextStyleMixin(StyleMixin, TextStyleMethods):
         "font_size": 16,
         "font_weight": 400,
         "italic": False,
+        "underline": 0,
+        "underline_color": "",
+        "underline_width": 0,
+        "underline_offset": 0,
+        "strike": 0,
+        "strike_color": "",
+        "strike_width": 0,
+        "strike_offset": 0,
     }
 
 
@@ -116,6 +191,21 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
         "font_size": INHERITED_VALUE,
         "font_weight": INHERITED_VALUE,
         "italic": INHERITED_VALUE,
+        "underline": INHERITED_VALUE,
+        "strike": INHERITED_VALUE,
+        # The six styling knobs are deliberately *not* INHERITED_VALUE: on
+        # the wire/engine side they're sparse per-node overrides with no
+        # ancestor walk (color defaults to this run's own fill, width/offset
+        # to the font's own metrics — both resolved at render time, not by
+        # climbing the tree). These literals are placeholders only, matching
+        # `TextStyleMixin`'s below — always overwritten synchronously by the
+        # `.set()` call that first triggers them.
+        "underline_color": "",
+        "underline_width": 0,
+        "underline_offset": 0,
+        "strike_color": "",
+        "strike_width": 0,
+        "strike_offset": 0,
     }
 
 

@@ -88,6 +88,24 @@ pub struct TextStyle {
     pub font_size: AttrExpr<f64>,
     pub font_weight: AttrExpr<f64>,
     pub italic: AttrExpr<bool>,
+    /// `underline()`/`strike()` 0..1 progress (proposal §10.2) — inherited
+    /// exactly like `italic`, root default `0.0`.
+    pub underline: AttrExpr<f64>,
+    pub strike: AttrExpr<f64>,
+}
+
+/// Non-inherited per-node override for `underline()`/`strike()` styling
+/// (`color=`/`width=`/`offset=`). Unlike `TextStyle`, there is no
+/// ancestor-walk and no literal root default here — `color` defaults to the
+/// run's own resolved fill and `width`/`offset` default to the font's own
+/// underline/strikeout metrics, both resolved at render time from whichever
+/// concrete value is already in scope there (renderer-core/renderer-skia/
+/// renderer-pdf), not by climbing the node tree.
+#[derive(Debug)]
+pub struct DecorationStyle {
+    pub color: AttrExpr<Paint>,
+    pub width: AttrExpr<f64>,
+    pub offset: AttrExpr<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,6 +196,8 @@ pub enum NodeKind {
         /// Block-default alignment; `None` resolves to `Left` at eval time.
         text_align: Option<renderer_core::TextAlign>,
         text_style: TextStyle,
+        underline_style: DecorationStyle,
+        strike_style: DecorationStyle,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
         /// Typewriter-reveal fraction (proposal §9.6) — `1.0` (default) shows
@@ -198,6 +218,8 @@ pub enum NodeKind {
         /// text runs).
         node_box: NodeBox,
         text_style: TextStyle,
+        underline_style: DecorationStyle,
+        strike_style: DecorationStyle,
         /// Per-line alignment override; `None` inherits the owning `Text`
         /// block's own `text_align`.
         text_align: Option<renderer_core::TextAlign>,
@@ -208,6 +230,8 @@ pub enum NodeKind {
         /// See `TextGroup::node_box`.
         node_box: NodeBox,
         text_style: TextStyle,
+        underline_style: DecorationStyle,
+        strike_style: DecorationStyle,
         text: AttrExpr<Arc<String>>,
     },
 
@@ -414,6 +438,14 @@ pub(crate) struct NodeDef {
     pub font_size: Option<Expr<f64>>,
     pub font_weight: Option<Expr<f64>>,
     pub italic: Option<Expr<bool>>,
+    pub underline: Option<Expr<f64>>,
+    pub underline_color: Option<Expr<Paint>>,
+    pub underline_width: Option<Expr<f64>>,
+    pub underline_offset: Option<Expr<f64>>,
+    pub strike: Option<Expr<f64>>,
+    pub strike_color: Option<Expr<Paint>>,
+    pub strike_width: Option<Expr<f64>>,
+    pub strike_offset: Option<Expr<f64>>,
     pub text: Option<Expr<Arc<String>>>,
     pub sh_language: Option<Arc<String>>,
     pub sh_theme: Option<Arc<String>>,
@@ -487,6 +519,24 @@ impl NodeDef {
             font_size: AttrExpr(self.font_size.take()),
             font_weight: AttrExpr(self.font_weight.take()),
             italic: AttrExpr(self.italic.take()),
+            underline: AttrExpr(self.underline.take()),
+            strike: AttrExpr(self.strike.take()),
+        }
+    }
+
+    fn underline_style(&mut self) -> DecorationStyle {
+        DecorationStyle {
+            color: AttrExpr(self.underline_color.take()),
+            width: AttrExpr(self.underline_width.take()),
+            offset: AttrExpr(self.underline_offset.take()),
+        }
+    }
+
+    fn strike_style(&mut self) -> DecorationStyle {
+        DecorationStyle {
+            color: AttrExpr(self.strike_color.take()),
+            width: AttrExpr(self.strike_width.take()),
+            offset: AttrExpr(self.strike_offset.take()),
         }
     }
 
@@ -553,6 +603,8 @@ impl Node {
                 wrap: AttrExpr(def.wrap.take()),
                 text_align: def.text_align.take(),
                 text_style: def.text_style(),
+                underline_style: def.underline_style(),
+                strike_style: def.strike_style(),
                 sh_language: def.sh_language.take(),
                 sh_theme: def.sh_theme.take(),
                 reveal: AttrExpr(def.reveal.take()),
@@ -561,12 +613,16 @@ impl Node {
             Kind::TextGroup => NodeKind::TextGroup {
                 node_box: def.node_box(),
                 text_style: def.text_style(),
+                underline_style: def.underline_style(),
+                strike_style: def.strike_style(),
                 text_align: def.text_align.take(),
                 children,
             },
             Kind::TextSpan => NodeKind::TextSpan {
                 node_box: def.node_box(),
                 text_style: def.text_style(),
+                underline_style: def.underline_style(),
+                strike_style: def.strike_style(),
                 text: AttrExpr(def.text.take()),
             },
             Kind::Move => NodeKind::Move {

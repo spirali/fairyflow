@@ -1,7 +1,8 @@
 use crate::FrameId;
 use crate::basictypes::NodeId;
 use crate::nodes::{
-    AttrExpr, Camera, Node, NodeBox, NodeKind, Position, SceneDef, Style, TextStyle,
+    AttrExpr, Camera, DecorationStyle, Node, NodeBox, NodeKind, Position, SceneDef, Style,
+    TextStyle,
 };
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Paint, Value};
@@ -546,6 +547,31 @@ impl TextStyle {
             font_size: eval_text_inherited(ctx, owner, |ts| &ts.font_size, 16.0)?,
             font_weight: eval_text_inherited(ctx, owner, |ts| &ts.font_weight, 400.0)?,
             italic: eval_text_inherited(ctx, owner, |ts| &ts.italic, false)?,
+            underline: eval_text_inherited(ctx, owner, |ts| &ts.underline, 0.0)?,
+            strike: eval_text_inherited(ctx, owner, |ts| &ts.strike, 0.0)?,
+        })
+    }
+}
+
+/// A resolved `DecorationStyle`: each field `None` when this specific node
+/// never set it (no ancestor walk — see `DecorationStyle`'s own doc comment).
+pub(crate) struct DecorationValues {
+    pub color: Option<renderer_core::Paint>,
+    pub width: Option<f64>,
+    pub offset: Option<f64>,
+}
+
+impl DecorationStyle {
+    pub fn eval(&self, ctx: &EvalCtx) -> anyhow::Result<DecorationValues> {
+        Ok(DecorationValues {
+            color: self
+                .color
+                .get_expr()
+                .map(|e| e.eval(ctx))
+                .transpose()?
+                .map(|p| p.into_inner()),
+            width: self.width.get_expr().map(|e| e.eval(ctx)).transpose()?,
+            offset: self.offset.get_expr().map(|e| e.eval(ctx)).transpose()?,
         })
     }
 }
@@ -682,24 +708,36 @@ impl Node {
                 wrap,
                 text_align,
                 text_style,
+                underline_style,
+                strike_style,
                 sh_language,
                 sh_theme,
                 reveal,
                 children,
-            } => renderer_core::NodeKind::Text {
-                node_box: self.eval_node_box(node_box, ctx)?,
-                keep_aspect: keep_aspect.eval_or(ctx, true)?,
-                wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
-                text_align: text_align.unwrap_or_default(),
-                text_style: text_style.eval_as_inheritable(ctx, self)?,
-                sh_language: sh_language.clone(),
-                sh_theme: sh_theme.clone(),
-                reveal: reveal.eval_or(ctx, 1.0)?,
-                lines: children
-                    .iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
-                    .collect::<anyhow::Result<Vec<_>>>()?,
-            },
+            } => {
+                let underline = underline_style.eval(ctx)?;
+                let strike = strike_style.eval(ctx)?;
+                renderer_core::NodeKind::Text {
+                    node_box: self.eval_node_box(node_box, ctx)?,
+                    keep_aspect: keep_aspect.eval_or(ctx, true)?,
+                    wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
+                    text_align: text_align.unwrap_or_default(),
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    underline_color: underline.color,
+                    underline_width: underline.width,
+                    underline_offset: underline.offset,
+                    strike_color: strike.color,
+                    strike_width: strike.width,
+                    strike_offset: strike.offset,
+                    sh_language: sh_language.clone(),
+                    sh_theme: sh_theme.clone(),
+                    reveal: reveal.eval_or(ctx, 1.0)?,
+                    lines: children
+                        .iter()
+                        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                }
+            }
             NodeKind::Image {
                 node_box,
                 alpha,
@@ -811,17 +849,29 @@ impl Node {
             NodeKind::TextGroup {
                 node_box: _,
                 text_style,
+                underline_style,
+                strike_style,
                 text_align,
                 children,
-            } => Ok(renderer_core::TextGroup {
-                id: self.id.as_u64(),
-                text_style: text_style.eval_as_inheritable(ctx, self)?,
-                text_align: *text_align,
-                children: children
-                    .iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
-                    .collect::<anyhow::Result<Vec<_>>>()?,
-            }),
+            } => {
+                let underline = underline_style.eval(ctx)?;
+                let strike = strike_style.eval(ctx)?;
+                Ok(renderer_core::TextGroup {
+                    id: self.id.as_u64(),
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    underline_color: underline.color,
+                    underline_width: underline.width,
+                    underline_offset: underline.offset,
+                    strike_color: strike.color,
+                    strike_width: strike.width,
+                    strike_offset: strike.offset,
+                    text_align: *text_align,
+                    children: children
+                        .iter()
+                        .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                })
+            }
             _ => anyhow::bail!("expected tline node, got {:?}", self.id),
         }
     }
@@ -836,17 +886,29 @@ impl Node {
             NodeKind::TextGroup {
                 node_box: _,
                 text_style,
+                underline_style,
+                strike_style,
                 text_align,
                 children,
-            } => Ok(renderer_core::TextGroup {
-                id: self.id.as_u64(),
-                text_style: text_style.eval_as_inheritable(ctx, self)?,
-                text_align: *text_align,
-                children: children
-                    .iter()
-                    .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
-                    .collect::<anyhow::Result<Vec<_>>>()?,
-            }),
+            } => {
+                let underline = underline_style.eval(ctx)?;
+                let strike = strike_style.eval(ctx)?;
+                Ok(renderer_core::TextGroup {
+                    id: self.id.as_u64(),
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    underline_color: underline.color,
+                    underline_width: underline.width,
+                    underline_offset: underline.offset,
+                    strike_color: strike.color,
+                    strike_width: strike.width,
+                    strike_offset: strike.offset,
+                    text_align: *text_align,
+                    children: children
+                        .iter()
+                        .map(|&id| ctx.node(id)?.eval_as_text_child_for_layout(ctx))
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                })
+            }
             _ => anyhow::bail!("expected tline node, got {:?}", self.id),
         }
     }
@@ -874,8 +936,12 @@ impl Node {
             NodeKind::TextSpan {
                 node_box: _,
                 text_style,
+                underline_style,
+                strike_style,
                 text,
             } => {
+                let underline = underline_style.eval(ctx)?;
+                let strike = strike_style.eval(ctx)?;
                 // Two independent cascades (see `nearest_position_override_delta`/
                 // `nearest_run_transform_component`, `layout.rs`), kept as two
                 // separate fields rather than pre-composed here: `override_offset`
@@ -904,6 +970,12 @@ impl Node {
                     id: self.id.as_u64(),
                     text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
                     text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    underline_color: underline.color,
+                    underline_width: underline.width,
+                    underline_offset: underline.offset,
+                    strike_color: strike.color,
+                    strike_width: strike.width,
+                    strike_offset: strike.offset,
                     override_offset,
                     override_transform,
                 })
@@ -925,14 +997,26 @@ impl Node {
             NodeKind::TextSpan {
                 node_box: _,
                 text_style,
+                underline_style,
+                strike_style,
                 text,
-            } => Ok(renderer_core::TextSpan {
-                id: self.id.as_u64(),
-                text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
-                text_style: text_style.eval_as_inheritable(ctx, self)?,
-                override_offset: None,
-                override_transform: None,
-            }),
+            } => {
+                let underline = underline_style.eval(ctx)?;
+                let strike = strike_style.eval(ctx)?;
+                Ok(renderer_core::TextSpan {
+                    id: self.id.as_u64(),
+                    text: text.eval_or(ctx, std::sync::Arc::new(String::new()))?,
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                    underline_color: underline.color,
+                    underline_width: underline.width,
+                    underline_offset: underline.offset,
+                    strike_color: strike.color,
+                    strike_width: strike.width,
+                    strike_offset: strike.offset,
+                    override_offset: None,
+                    override_transform: None,
+                })
+            }
             _ => anyhow::bail!("expected TextSpan node, got {:?}", self.id),
         }
     }

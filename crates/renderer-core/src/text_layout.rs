@@ -92,6 +92,7 @@ impl TextLayoutEngine {
                     width: 0.0,
                     height: 0.0,
                     glyphs: vec![],
+                    decorations: vec![],
                 })
             } else {
                 let align = line_align(line, default_align);
@@ -186,6 +187,7 @@ impl TextLayoutEngine {
                 width: 0.0,
                 height: 0.0,
                 glyphs: vec![],
+                decorations: vec![],
             });
         }
 
@@ -200,6 +202,7 @@ impl TextLayoutEngine {
         let width = layout.width();
         let height = layout.height();
         let mut glyphs = Vec::new();
+        let mut decorations: Vec<Option<glyph_cache::DecorationMetrics>> = vec![None; spans.len()];
 
         for layout_line in layout.lines() {
             // Top of this visual row within the (possibly multi-row, once
@@ -234,6 +237,24 @@ impl TextLayoutEngine {
                 let font_ref = ReadFontsRef::from_index(font.data.as_ref(), font.index).unwrap();
                 let outlines = font_ref.outline_glyphs();
 
+                // A GlyphRun is inherently one physical font (font/script
+                // changes are exactly what split parley's runs), so every
+                // span_idx whose glyphs land in this run shares these
+                // metrics — computed once per run, not per glyph.
+                let run_metrics = font_ref.metrics(
+                    SkrifaSize::new(font_size),
+                    LocationRef::new(&normalized_coords),
+                );
+                let run_decoration_metrics = match (run_metrics.underline, run_metrics.strikeout) {
+                    (Some(u), Some(s)) => Some(glyph_cache::DecorationMetrics {
+                        underline_offset: u.offset,
+                        underline_thickness: u.thickness,
+                        strikeout_offset: s.offset,
+                        strikeout_thickness: s.thickness,
+                    }),
+                    _ => None,
+                };
+
                 // Build a flat table: for each glyph index in this font run,
                 // what is the cluster's byte offset in full_text?
                 let cluster_bytes: Vec<u32> = run
@@ -264,6 +285,10 @@ impl TextLayoutEngine {
                         .unwrap_or(0)
                         .min(spans.len().saturating_sub(1));
 
+                    if decorations[span_idx].is_none() {
+                        decorations[span_idx] = run_decoration_metrics;
+                    }
+
                     let gx = run_x + glyph.x;
                     let gy = baseline - glyph.y;
                     run_x += glyph.advance;
@@ -283,6 +308,7 @@ impl TextLayoutEngine {
                         span_idx,
                         x: gx,
                         y: row_top,
+                        baseline_y: baseline,
                         path: VectorPath { verbs: pen.verbs },
                         cluster: cluster_byte,
                     });
@@ -298,6 +324,7 @@ impl TextLayoutEngine {
                 width,
                 height,
                 glyphs,
+                decorations,
             },
         )
     }
@@ -499,11 +526,11 @@ impl OutlinePen for GlyphPen {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{Color, Inheritable, Paint, TextStyle};
 
-    fn test_style() -> TextStyle {
+    pub(crate) fn test_style() -> TextStyle {
         TextStyle {
             fill_color: Inheritable::Own(Paint::Solid(Color::from_rgba8(0, 0, 0, 255))),
             stroke_color: Inheritable::Own(Color::from_rgba8(0, 0, 0, 0)),
@@ -513,23 +540,41 @@ mod tests {
             font_size: Inheritable::Own(16.0),
             font_weight: Inheritable::Own(400.0),
             italic: Inheritable::Own(false),
+            underline: Inheritable::Own(0.0),
+            strike: Inheritable::Own(0.0),
         }
     }
 
-    fn span(id: u64, text: &str) -> TextSpan {
+    pub(crate) fn span(id: u64, text: &str) -> TextSpan {
         TextSpan {
             id,
             text: Arc::new(text.to_string()),
             text_style: test_style(),
+            underline_color: None,
+            underline_width: None,
+            underline_offset: None,
+            strike_color: None,
+            strike_width: None,
+            strike_offset: None,
             override_offset: None,
             override_transform: None,
         }
     }
 
-    fn group(id: u64, children: Vec<TextChild>, text_align: Option<TextAlign>) -> TextGroup {
+    pub(crate) fn group(
+        id: u64,
+        children: Vec<TextChild>,
+        text_align: Option<TextAlign>,
+    ) -> TextGroup {
         TextGroup {
             id,
             text_style: test_style(),
+            underline_color: None,
+            underline_width: None,
+            underline_offset: None,
+            strike_color: None,
+            strike_width: None,
+            strike_offset: None,
             text_align,
             children,
         }

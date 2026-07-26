@@ -1,7 +1,8 @@
 use renderer_core::glyph_cache::{PathVerb, VectorPath};
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
-use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs};
+use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs, offset_verbs};
 use renderer_core::resources::Resources;
+use renderer_core::text_decorations::{DecorationKind, DecorationRect, decoration_rects};
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
     AffineTransform, gradient_line_endpoints, node_z_level,
@@ -472,9 +473,50 @@ impl RasterRenderer {
                 }
             }
 
+            let local = |span: &TextSpan| -> AffineTransform {
+                raw_local_transform(span).concat(AffineTransform::from_translate(0.0, y_cursor))
+            };
+            for kind in [DecorationKind::Underline, DecorationKind::Strike] {
+                for rect in decoration_rects(cached, &spans, kind) {
+                    let span = spans[rect.span_idx];
+                    let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
+                    draw_decoration_rect(&rect, &local(span), alpha, pixmap, parent_transform);
+                }
+            }
+
             y_cursor += cached.height;
         }
     }
+}
+
+/// Paint one underline/strike rect — reuses the exact same row-local ->
+/// screen transform pipeline glyph painting already goes through
+/// (`vector_path_to_skia`/`local`), so a decoration correctly follows the
+/// same per-run rotate/scale/pivot/position override and `y_cursor` row
+/// stacking a glyph would. `rect`'s x/y/width/thickness are already in that
+/// same raw, row-local coordinate space (see `DecorationRect`'s own docs).
+fn draw_decoration_rect(
+    rect: &DecorationRect,
+    local: &AffineTransform,
+    alpha: f32,
+    pixmap: &mut Pixmap,
+    parent_transform: Transform,
+) {
+    let verbs = offset_verbs(
+        &build_rounded_rect_verbs(rect.width, rect.thickness, 0.0),
+        rect.x,
+        rect.y,
+    );
+    let vp = VectorPath { verbs };
+    let Some(path) = vector_path_to_skia(&vp, local) else {
+        return;
+    };
+    let mut color = color_to_skia(&rect.color);
+    color.set_alpha(color.alpha() * alpha);
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
 }
 
 // ── Public free functions ─────────────────────────────────────────────────────
@@ -1031,6 +1073,8 @@ mod tests {
             font_size: Inheritable::Own(24.0),
             font_weight: Inheritable::Own(400.0),
             italic: Inheritable::Own(false),
+            underline: Inheritable::Own(0.0),
+            strike: Inheritable::Own(0.0),
         }
     }
 
@@ -1065,6 +1109,12 @@ mod tests {
                     wrap: None,
                     text_align: TextAlign::Left,
                     text_style: text_style_for_test(),
+                    underline_color: None,
+                    underline_width: None,
+                    underline_offset: None,
+                    strike_color: None,
+                    strike_width: None,
+                    strike_offset: None,
                     sh_language: None,
                     sh_theme: None,
                     reveal,
@@ -1072,6 +1122,12 @@ mod tests {
                         id: 1,
                         text: Arc::new("Hello fairyflow".to_string()),
                         text_style: text_style_for_test(),
+                        underline_color: None,
+                        underline_width: None,
+                        underline_offset: None,
+                        strike_color: None,
+                        strike_width: None,
+                        strike_offset: None,
                         override_offset: None,
                         override_transform: None,
                     })],

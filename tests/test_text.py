@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from fairyflow import next_frame
+from fairyflow import gradient, next_frame
 from fairyflow.nodes import Image, Rect, Scene
 from fairyflow.sentinels import DEFAULT, rel
 from fairyflow.serializer import create_export
-from fairyflow.text import Text, TextGroup, TextSpan, stext
+from fairyflow.text import Text, TextGroup, TextSpan, code, stext
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -865,3 +865,157 @@ def test_type_on_starts_from_the_current_frame():
     node = _node(s)
     assert node["reveal"]["k"][0] == [2, 0]
     assert node["reveal"]["k"][1] == [14, 1, "linear"]
+
+
+# ── Text decorations: underline()/strike() (proposal §10.2, item C2) ────────
+
+
+def test_underline_absent_when_never_called():
+    s = Scene(100, 100)
+    with s:
+        Text("hi")
+    node = _node(s)
+    assert "underline" not in node
+    assert "strike" not in node
+
+
+def test_underline_default_call_writes_progress_one():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline()
+    node = _node(s)
+    assert node["underline"] == 1.0
+
+
+def test_underline_zero_is_explicit_not_absent():
+    """.underline(0) must round-trip as a present, explicit 0 -- this is how
+    a run opts out of an inherited decoration, so it must be distinguishable
+    from "never called" (which stays fully absent, see the test above)."""
+    s = Scene(100, 100)
+    with s:
+        t = Text("hi")
+        span = t.span("bye")
+        span.underline(0)
+    nodes = _nodes(s)
+    node = next(n for n in nodes if n["kind"] == "tspan" and n["text"] == "bye")
+    assert node["underline"] == 0.0
+
+
+def test_strike_and_underline_are_independent():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline().strike(0.5)
+    node = _node(s)
+    assert node["underline"] == 1.0
+    assert node["strike"] == 0.5
+
+
+def test_underline_bool_coerces_to_float():
+    s = Scene(100, 100)
+    with s:
+        Text("a").underline(True)
+        Text("b").strike(False)
+    nodes = _nodes(s)
+    assert nodes[0]["underline"] == 1.0
+    assert isinstance(nodes[0]["underline"], float)
+    assert nodes[2]["strike"] == 0.0
+
+
+def test_underline_styling_knobs_each_independently_sparse():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline(width=3)
+    node = _node(s)
+    assert node["underline_width"] == 3
+    assert "underline_color" not in node
+    assert "underline_offset" not in node
+
+
+def test_underline_color_and_offset_round_trip():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline(color="red", offset=2)
+    node = _node(s)
+    assert node["underline_color"] == "red"
+    assert node["underline_offset"] == 2
+
+
+def test_underline_color_accepts_gradient():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline(color=gradient("tomato", "gold"))
+    node = _node(s)
+    assert node["underline_color"][0] == "gradient"
+
+
+def test_underline_on_span_absent_falls_back_to_block_on_wire():
+    """The span itself carries no `underline` key when it never called
+    `.underline()` -- inheritance is resolved by the engine (verified by a
+    Rust unit test, `animdef.rs`), not observable from the Python-serialized
+    wire shape alone."""
+    s = Scene(100, 100)
+    with s:
+        t = Text("hi").underline()
+        t.span("bye")
+    nodes = _nodes(s)
+    span = next(n for n in nodes if n["kind"] == "tspan" and n["text"] == "bye")
+    assert "underline" not in span
+
+
+def test_underline_dur_animates():
+    s = Scene(100, 100)
+    with s:
+        Text("hi").underline(dur=1)
+    node = _node(s)
+    assert node["underline"] == {"k": [[0, 0], [24, 1.0, "linear"]]}
+
+
+def test_strike_over_tspan():
+    s = Scene(100, 100)
+    with s:
+        t = Text("a ")
+        span = t.span("word")
+        span.strike(color="darkred", width=2)
+    nodes = _nodes(s)
+    span_node = next(n for n in nodes if n["kind"] == "tspan" and n["text"] == "word")
+    assert span_node["strike"] == 1.0
+    assert span_node["strike_color"] == "darkred"
+    assert span_node["strike_width"] == 2
+
+
+# ── Text decorations: golden images ─────────────────────────────────────────
+
+
+def test_underline_progress_zero_half_and_full(test_scene):
+    test_scene.pdf_tolerance = 60  # thin decoration rects cross many AA edges
+    with test_scene.size(320, 60):
+        t = Text().font(size=24).fill("black")
+        t.span("zero").underline(0)
+        t.span(" ")
+        t.span("half").underline(0.5, color="darkorange")
+        t.span(" ")
+        t.span("full").underline(color="darkred")
+
+
+def test_strike_default_color_matches_own_fill(test_scene):
+    test_scene.pdf_tolerance = 60
+    with test_scene.size(200, 60):
+        t = Text("crossed out").font(size=24).fill("darkblue")
+        t.strike()
+
+
+def test_underline_wraps_continuously_across_rows(test_scene):
+    # Three lines of text -> proportionally more AA edges.
+    test_scene.pdf_tolerance = 200
+    with test_scene.size(220, 150):
+        t = Text().font(size=20).wrap(180).fill("black")
+        t.span("one two three four five six seven eight nine").underline()
+
+
+def test_strike_over_syntax_highlighted_line(test_scene):
+    """The decoration must take the run's own fill, not each token's
+    syntax-highlight color -- a strike line with per-token colors would
+    indicate `decoration_rects` picked up the wrong color source."""
+    with test_scene.size(260, 60).background("#2b303b"):
+        t = code('x = "hello world"', "python", theme="base16-ocean.dark")
+        t.strike()

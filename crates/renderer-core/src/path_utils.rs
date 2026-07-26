@@ -71,6 +71,27 @@ pub fn build_rounded_rect_verbs(w: f32, h: f32, radius: f32) -> Vec<PathVerb> {
     ]
 }
 
+/// Shift every point of `verbs` by `(dx, dy)` — plain coordinate math, no
+/// rotation/scale (a caller applies those separately, e.g. via the same
+/// per-run transform glyph paths already go through). Used to place a
+/// `0,0`-origin shape (like `build_rounded_rect_verbs`'s output) at a
+/// specific raw, row-local position before handing it to a backend's own
+/// transform-application step.
+pub fn offset_verbs(verbs: &[PathVerb], dx: f32, dy: f32) -> Vec<PathVerb> {
+    verbs
+        .iter()
+        .map(|v| match *v {
+            PathVerb::MoveTo(x, y) => PathVerb::MoveTo(x + dx, y + dy),
+            PathVerb::LineTo(x, y) => PathVerb::LineTo(x + dx, y + dy),
+            PathVerb::QuadTo(cx, cy, x, y) => PathVerb::QuadTo(cx + dx, cy + dy, x + dx, y + dy),
+            PathVerb::CubicTo(c0x, c0y, c1x, c1y, x, y) => {
+                PathVerb::CubicTo(c0x + dx, c0y + dy, c1x + dx, c1y + dy, x + dx, y + dy)
+            }
+            PathVerb::Close => PathVerb::Close,
+        })
+        .collect()
+}
+
 /// Convert `PathCommand` list to backend-independent path verbs, cropping to
 /// `[crop_start, crop_end]` (both in `[0.0, 1.0]` as fractions of total arc length).
 pub fn build_cropped_path_verbs(

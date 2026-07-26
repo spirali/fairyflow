@@ -1509,4 +1509,76 @@ mod tests {
         let span4 = find_text_span(lines, 4).expect("span 4 present");
         assert!(span4.override_transform.is_none());
     }
+
+    /// `underline()`/`strike()` (proposal §10.2): the two progress attrs
+    /// (`underline`/`strike`) are inherited exactly like `italic`/`font_weight`
+    /// (climb to the nearest ancestor with an explicit value, `Own` vs.
+    /// `Inherited` distinguishing the two); the six styling knobs
+    /// (`underline_color`/`_width`/`_offset`, `strike_*`) are deliberately
+    /// **not** inherited — sparse per-node `Option`s that stay `None` unless
+    /// *this* node set them, with no ancestor walk at all.
+    const DECORATIONS_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "Decorations", "width": 200, "height": 100, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "text", "x": 0, "y": 0, "underline": 1, "children": [1, 2]},
+       {"kind": "tspan", "text": "inherits"},
+       {"kind": "tspan", "text": "explicit", "underline": 0, "strike": 0.5,
+        "underline_color": "red", "underline_width": 3}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn decoration_progress_inherits_and_styling_fields_stay_sparse() {
+        renderer_core::Resources::init();
+        let anim = AnimationDef::from_json(DECORATIONS_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        let renderer_core::NodeKind::Text {
+            lines, text_style, ..
+        } = &find_node(&scene.children, 0).unwrap().kind
+        else {
+            panic!("expected a text node");
+        };
+        // The block's own explicit underline=1 -> Own(1.0).
+        match &text_style.underline {
+            renderer_core::Inheritable::Own(v) => assert_eq!(*v, 1.0),
+            other => panic!("expected the block's own underline, got {other:?}"),
+        }
+
+        let span1 = find_text_span(lines, 1).expect("span 1 present");
+        // No own underline -> climbs to the Text block's 1.0, tagged Inherited.
+        match &span1.text_style.underline {
+            renderer_core::Inheritable::Inherited(v) => assert_eq!(*v, 1.0),
+            other => panic!("expected inherited underline, got {other:?}"),
+        }
+        // Styling knobs never set anywhere -> sparse, no ancestor climb.
+        assert!(span1.underline_color.is_none());
+        assert!(span1.underline_width.is_none());
+        assert!(span1.underline_offset.is_none());
+        assert!(span1.strike_color.is_none());
+
+        let span2 = find_text_span(lines, 2).expect("span 2 present");
+        // Explicit 0 on the span itself -> Own(0.0), *not* Inherited — this
+        // is exactly how a run opts out of an inherited decoration.
+        match &span2.text_style.underline {
+            renderer_core::Inheritable::Own(v) => assert_eq!(*v, 0.0),
+            other => panic!("expected the span's own (explicit) underline, got {other:?}"),
+        }
+        // strike progress is independent of underline.
+        match &span2.text_style.strike {
+            renderer_core::Inheritable::Own(v) => assert_eq!(*v, 0.5),
+            other => panic!("expected the span's own strike, got {other:?}"),
+        }
+        // Explicitly-set styling knobs round-trip; the untouched ones on the
+        // same node stay sparse.
+        assert!(span2.underline_color.is_some());
+        assert_eq!(span2.underline_width, Some(3.0));
+        assert!(span2.underline_offset.is_none());
+        assert!(span2.strike_color.is_none());
+    }
 }

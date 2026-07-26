@@ -8,8 +8,11 @@ use krilla_svg::{SurfaceExt, SvgSettings};
 use renderer_core::glyph_cache::PathVerb;
 use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
-use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs, verbs_bounds};
+use renderer_core::path_utils::{
+    build_cropped_path_verbs, build_rounded_rect_verbs, offset_verbs, verbs_bounds,
+};
 use renderer_core::resources::Resources;
+use renderer_core::text_decorations::{DecorationKind, DecorationRect, decoration_rects};
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
     AffineTransform, camera_transform, gradient_line_endpoints, node_z_level, positional_transform,
@@ -274,6 +277,12 @@ impl PdfRenderer {
                 wrap,
                 text_align,
                 text_style: _,
+                underline_color: _,
+                underline_width: _,
+                underline_offset: _,
+                strike_color: _,
+                strike_width: _,
+                strike_offset: _,
                 sh_language,
                 sh_theme,
                 reveal,
@@ -818,8 +827,45 @@ fn render_text_lines(
             }
         }
 
+        let local = |span: &TextSpan| -> AffineTransform {
+            raw_local_transform(span).concat(AffineTransform::from_translate(0.0, y_cursor))
+        };
+        for kind in [DecorationKind::Underline, DecorationKind::Strike] {
+            for rect in decoration_rects(cached, &spans, kind) {
+                let span = spans[rect.span_idx];
+                let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
+                draw_decoration_rect(surface, &rect, &local(span), alpha);
+            }
+        }
+
         y_cursor += cached.height;
     }
+}
+
+/// Paint one underline/strike rect — reuses the exact same row-local ->
+/// page transform pipeline glyph painting already goes through
+/// (`shift_verb`/`local`), so a decoration correctly follows the same
+/// per-run rotate/scale/pivot/position override and `y_cursor` row
+/// stacking a glyph would. `rect`'s x/y/width/thickness are already in that
+/// same raw, row-local coordinate space (see `DecorationRect`'s own docs).
+fn draw_decoration_rect(
+    surface: &mut krilla::surface::Surface,
+    rect: &DecorationRect,
+    local: &AffineTransform,
+    alpha: f32,
+) {
+    let verbs = offset_verbs(
+        &build_rounded_rect_verbs(rect.width, rect.thickness, 0.0),
+        rect.x,
+        rect.y,
+    );
+    let shifted: Vec<PathVerb> = verbs.iter().map(|v| shift_verb(v, local)).collect();
+    let Some(path) = verbs_to_krilla_path(&shifted) else {
+        return;
+    };
+    surface.set_fill(Some(color_fill(&rect.color, alpha)));
+    surface.set_stroke(None);
+    surface.draw_path(&path);
 }
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
@@ -1063,6 +1109,8 @@ mod tests {
             font_size: Inheritable::Own(24.0),
             font_weight: Inheritable::Own(400.0),
             italic: Inheritable::Own(false),
+            underline: Inheritable::Own(0.0),
+            strike: Inheritable::Own(0.0),
         }
     }
 
@@ -1097,6 +1145,12 @@ mod tests {
                     wrap: None,
                     text_align: TextAlign::Left,
                     text_style: text_style_for_test(),
+                    underline_color: None,
+                    underline_width: None,
+                    underline_offset: None,
+                    strike_color: None,
+                    strike_width: None,
+                    strike_offset: None,
                     sh_language: None,
                     sh_theme: None,
                     reveal,
@@ -1104,6 +1158,12 @@ mod tests {
                         id: 1,
                         text: Arc::new("Hello fairyflow".to_string()),
                         text_style: text_style_for_test(),
+                        underline_color: None,
+                        underline_width: None,
+                        underline_offset: None,
+                        strike_color: None,
+                        strike_width: None,
+                        strike_offset: None,
                         override_offset: None,
                         override_transform: None,
                     })],

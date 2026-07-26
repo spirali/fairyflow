@@ -142,6 +142,72 @@ A few things worth knowing:
 
 ---
 
+## Text decorations
+
+`.underline()` and `.strike()` are **animatable 0→1 progress attributes**, not
+booleans — a presentation tool underlines a word *at a moment*, so the line
+sweeps in rather than blinking on:
+
+```ffpy frame="0"
+with Scene():
+    t = Text().font(size=28).fill("black")
+    w = t.span("prime").fill("darkred")
+    w.underline()
+    t.span(" numbers")
+```
+
+```python
+w.underline(dur=0.4)   # sweeps left-to-right over 0.4s
+w.underline(0)         # sweeps back out
+Text("old value").strike(dur=0.3)   # cross out a superseded number
+```
+
+```python
+underline(value=1, *, color=None, width=None, offset=None, dur=None, ease=None)
+strike(value=1, *, color=None, width=None, offset=None, dur=None, ease=None)
+```
+
+- `value` is a fraction in `[0, 1]` (`True`/`False` are accepted as `1`/`0`),
+  measured along the decoration's **total** length — a run wrapped across
+  several visual rows draws in continuously across all of them:
+
+  ```ffpy frame="0"
+  with Scene():
+      t = Text().font(size=20).wrap(180).fill("black")
+      t.span("one two three four five six seven eight nine").underline()
+  ```
+
+- `color=` defaults to the run's own fill; `width=`/`offset=` default to the
+  font's own underline/strikeout metrics at the run's resolved size, so
+  decorations scale with `font(size=)` for free — the three knobs are rarely
+  touched:
+
+  ```python
+  w.underline(color="darkorange", width=3, offset=6)
+  ```
+
+- Available on `Text`, `TextGroup` and `TextSpan`, and **inherited** like
+  `italic` — a run with no `.underline()`/`.strike()` of its own picks up its
+  enclosing block's value; `.underline(0)` on a run opts it out of an
+  inherited decoration. `color=`/`width=`/`offset=` are **not** inherited —
+  each defaults independently per run, which is what makes a `strike()` over
+  a `.sh()`-highlighted line take each token's own color rather than one
+  flat color:
+
+  ```ffpy frame="0"
+  with Scene(background="#2b303b"):
+      t = code('x = "hello world"', "python", theme="base16-ocean.dark")
+      t.strike()
+  ```
+
+- `dur=`/`ease=` behave like every other animatable setter — per-call,
+  `.anim()` proxy, or an enclosing `anim()` block default. No `dur=` means an
+  instant change, matching the rest of the API.
+- `strike()` and `underline()` are independent — combine them freely, or in
+  a `Par()` if they should animate together.
+
+---
+
 ## Sizing
 
 By default a `Text` node's box is the *measured* extent of the laid-out text —

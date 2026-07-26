@@ -22,6 +22,7 @@ from .avalue import AnimatedValue
 from .color import Color, Gradient
 from .exprs import (
     Call,
+    Expr,
     to_expr,
 )
 from .ctxvars import (
@@ -123,7 +124,6 @@ class Node(AnimatedObject):
         "height": "h",
         "fill_color": "fill",
         "stroke_color": "stroke",
-        "z_level": "z",
         "path": "file",
     }
 
@@ -299,14 +299,13 @@ class AlphaMixin:
 
 @beartype
 class ZLevelMixin:
-    """Mixin that adds a `z_level` attribute for controlling rendering order.
-    Always inherited-from-parent when unset — there is no "own" variant."""
+    """Mixin that adds a `z()` setter for the node's z-level (rendering
+    order). Always inherited-from-parent when unset — there is no "own"
+    variant."""
 
-    _ATTR_DEFAULTS = {"z_level": INHERITED_VALUE}
+    _ATTR_DEFAULTS = {"z": INHERITED_VALUE}
 
-    def z_level(
-        self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
-    ) -> Self:
+    def z(self, value: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the z-level (rendering order) of the node.
 
         Nodes with higher z-levels are drawn on top of nodes with lower values.
@@ -319,7 +318,7 @@ class ZLevelMixin:
         Returns:
             self, for method chaining.
         """
-        self._set_attr("z_level", value, dur, ease)
+        self._set_attr("z", value, dur, ease)
         return self
 
 
@@ -546,6 +545,46 @@ class PositionQueryMixin:
         # Scene guard both key off this same "self is its own frame" case).
         frame = self._parent if self._parent is not None else self
         return Position(frame, px, py)
+
+    def get_x(self) -> Expr:
+        """Return the node's x position as a live expression.
+
+        Returns:
+            An `Expr` for the node's x coordinate, usable in arithmetic and
+            as an argument to other setters.
+        """
+        return self._get_attr("x")
+
+    def get_y(self) -> Expr:
+        """Return the node's y position as a live expression.
+
+        Returns:
+            An `Expr` for the node's y coordinate, usable in arithmetic and
+            as an argument to other setters.
+        """
+        return self._get_attr("y")
+
+    def get_w(self) -> FloatLike:
+        """Return the node's effective width as a live expression.
+
+        Returns:
+            An `Expr` for the node's width — its own `width` attribute if it
+            has one, or the engine's measured/computed extent otherwise (e.g.
+            for `Text`-like nodes). The literal `0` for zero-size path
+            command handles, matching `.at()`'s own handling of them.
+        """
+        return _effective_width(self)
+
+    def get_h(self) -> FloatLike:
+        """Return the node's effective height as a live expression.
+
+        Returns:
+            An `Expr` for the node's height — its own `height` attribute if
+            it has one, or the engine's measured/computed extent otherwise
+            (e.g. for `Text`-like nodes). The literal `0` for zero-size path
+            command handles, matching `.at()`'s own handling of them.
+        """
+        return _effective_height(self)
 
 
 @beartype
@@ -1648,9 +1687,9 @@ class Scene(
     kind = "scene"
 
     # Scene has no z-ordering of its own — this exists purely to terminate
-    # every top-level node's inherited z_level walk (`ZLevelMixin`) at a real
+    # every top-level node's inherited z-level walk (`ZLevelMixin`) at a real
     # value instead of the parent chain running out with nothing declared.
-    _ATTR_DEFAULTS = {"z_level": 0}
+    _ATTR_DEFAULTS = {"z": 0}
 
     def __init__(
         self,

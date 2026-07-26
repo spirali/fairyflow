@@ -173,6 +173,60 @@ def test_next_to_scene_exports_without_circular_reference(sc):
     json.dumps(exported)  # must not raise
 
 
+# ── Expression accessors: get_x()/get_y()/get_w()/get_h() ──────────────────
+
+
+def test_get_x_get_y_return_the_live_x_y_attrs(sc):
+    r = Rect().size(40, 20).xy(10, 10)
+    assert r.get_x() == r._get_attr("x")
+    assert r.get_y() == r._get_attr("y")
+
+
+def test_get_w_get_h_on_sized_node_return_the_live_width_height_attrs(sc):
+    r = Rect().size(40, 20)
+    assert r.get_w() == r._get_attr("width")
+    assert r.get_h() == r._get_attr("height")
+
+
+def test_get_w_get_h_on_text_returns_its_own_width_height_attrs(sc):
+    # Text has SizeMixin (unlike TextSpan/TextGroup below), so get_w()/get_h()
+    # return its real width/height attr, defaulted to the measured extent -
+    # same as the sized-node case above, just via the default value.
+    t = Text()
+    t.span("hello")
+    assert t.get_w() == t._get_attr("width")
+    assert t.get_h() == t._get_attr("height")
+
+
+def test_get_w_get_h_on_span_falls_back_to_measured_extent(sc):
+    # TextSpan/TextGroup have no SizeMixin of their own - get_w()/get_h() must
+    # fall back to the engine's measured extent (Call.auto_width/height),
+    # exactly like .at() already does for these node kinds.
+    span = Text().span("hello")
+    assert repr(span.get_w()) == repr(Call.auto_width(span))
+    assert repr(span.get_h()) == repr(Call.auto_height(span))
+
+
+def test_get_w_get_h_on_path_handle_is_zero(sc):
+    handle = Path().move_to(5, 7)
+    assert handle.get_w() == 0
+    assert handle.get_h() == 0
+
+
+def test_get_w_arithmetic_composes_into_another_setter(sc):
+    # Proposal §4.3's own example: `r.size(w=sidebar.get_w() - 2 * PADDING)`.
+    # sidebar's width is an unanimated single value, so this also exercises
+    # constant folding (item 6c) end to end: the exported wire value should
+    # be a plain number, not a nested expression tree.
+    from fairyflow.serializer import serialize_expr
+
+    sidebar = Rect().size(100, 50)
+    PADDING = 8
+    r = Rect()
+    r.size(w=sidebar.get_w() - 2 * PADDING)
+    assert serialize_expr(r._attrs["width"]) == 84.0
+
+
 # ── Visual placement (golden image) ─────────────────────────────────────────
 
 

@@ -1722,7 +1722,7 @@ class Scene(
         ROOT_OBJECTS.get().append(self)
 
     def __enter__(self):
-        super().__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args):
         self.max_frame = end_frame()

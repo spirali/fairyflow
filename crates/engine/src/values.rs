@@ -35,7 +35,7 @@ impl Color {
     }
 }
 
-/// A fill: either a solid color or a linear gradient (proposal §9.11). Only
+/// A fill: either a solid color or a linear gradient. Only
 /// `Style.fill_color`/`TextStyle.fill_color` use this — `stroke_color` and
 /// `Scene.fill_color` (background) stay plain `Color`, rejected at the
 /// Python layer (`.stroke()`/`.background()`) before a `Paint` ever reaches
@@ -107,7 +107,7 @@ impl<T: Clone + Value + DeserializeOwned> Eval<T> for Expr<T> {
     }
 }
 
-/// The v2 value grammar (`api-v2-impl.md` §A.2-A.4): a constant, an `["op", ...]`
+/// The value grammar: a constant, an `["op", ...]`
 /// s-expr array, or a `{"k": [...]}` keyframes object. One hand-written visitor
 /// dispatches on the JSON shape directly (`deserialize_any`) instead of the
 /// buffered/retried `#[serde(untagged)]` trial-parsing v1 used.

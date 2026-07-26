@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn notes_for_segment_matches_worked_example() {
-        // proposal §5.1 worked example: cue at 0 and 1, notes at 0 and 1.
+        // Worked example: cue at 0 and 1, notes at 0 and 1.
         let cues = [1u32];
         let notes = [(0u32, "first".to_string()), (1u32, "second".to_string())];
         assert_eq!(notes_for_segment(&cues, &notes, 0, 2), vec!["first"]);

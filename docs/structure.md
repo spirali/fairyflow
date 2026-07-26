@@ -76,7 +76,7 @@ before any scene exists, so it is not animatable — it only makes sense in
 
 ### Group
 
-A `Group` is a container node. It has its own coordinate system, optional layout (column/row), and an animatable clipping window. Children are positioned relative to the group's origin.
+A `Group` is a container node. It has its own coordinate system, optional layout (column/row/grid), an animatable clipping window, and its own [`.camera`](anim.md#camera) for zooming/panning its content independently of its own box. Children are positioned relative to the group's origin.
 
 ```python
 with Scene():
@@ -96,5 +96,9 @@ Leaf nodes are the building blocks of a scene:
 | `Path` | Arbitrary vector path (lines, cubic curves) |
 | `Text` | Multi-span text block |
 | `Image` | Raster image (PNG, JPEG, SVG, ORA) |
+| `Table` | Grid of cells built from tabular data |
 
-All nodes support animatable position, alpha, and z-ordering. Shape nodes also support color and stroke. See the individual pages for details.
+All nodes support animatable position, alpha, and z-ordering, and every drawable
+node except `Path` also supports rotation, scale, and pivot (see
+[Rotation and scale](anim.md#rotation-and-scale)). Shape nodes also support fill
+and stroke. See the individual pages for details.

@@ -128,7 +128,7 @@ pub fn positional_transform(
         .concat(parent)
 }
 
-/// Content-space camera transform (api-v2-proposal §4.7/§4.8): maps a point
+/// Content-space camera transform: maps a point
 /// `p` in this node's own content frame to `box_center + (p - camera_center)
 /// * zoom` — composed *before* (as the innermost step relative to) the
 /// node's own box transform, never folded into it. See the plan/commit for

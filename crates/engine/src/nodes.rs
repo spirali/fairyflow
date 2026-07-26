@@ -88,7 +88,7 @@ pub struct TextStyle {
     pub font_size: AttrExpr<f64>,
     pub font_weight: AttrExpr<f64>,
     pub italic: AttrExpr<bool>,
-    /// `underline()`/`strike()` 0..1 progress (proposal §10.2) — inherited
+    /// `underline()`/`strike()` 0..1 progress — inherited
     /// exactly like `italic`, root default `0.0`.
     pub underline: AttrExpr<f64>,
     pub strike: AttrExpr<f64>,
@@ -200,7 +200,7 @@ pub enum NodeKind {
         strike_style: DecorationStyle,
         sh_language: Option<Arc<String>>,
         sh_theme: Option<Arc<String>>,
-        /// Typewriter-reveal fraction (proposal §9.6) — `1.0` (default) shows
+        /// Typewriter-reveal fraction — `1.0` (default) shows
         /// every glyph; the renderer applies the per-glyph cutoff.
         reveal: AttrExpr<f64>,
         children: Vec<NodeId>,
@@ -383,7 +383,7 @@ pub(crate) enum Kind {
     Layer,
 }
 
-/// The one sparse struct actually deserialized from JSON (`api-v2-impl.md` §A.5/§A.7):
+/// The one sparse struct actually deserialized from JSON:
 /// no `#[serde(flatten)]`, no `#[serde(tag = ...)]` payload dispatch — `kind` is an
 /// ordinary fieldless-enum field, and every attribute is `Option`. `Node::from_def`
 /// (below) converts this into the internal `NodeKind` enum used by `eval.rs`/`layout.rs`.

@@ -253,7 +253,7 @@ impl<T: Value + DeserializeOwned + Debug + Clone> AttrExpr<T> {
 /// otherwise walk `node.parent` until an ancestor has one, or fall back to
 /// `root_default` at the top of the tree (`Inherited`). This reproduces v1's
 /// `Inherited(...)` expression-chain semantics, which is now represented purely
-/// by attribute *absence* instead of an explicit wrapper (`api-v2-impl.md` §A.4).
+/// by attribute *absence* instead of an explicit wrapper.
 fn eval_inherited<'a, T, F>(
     ctx: &'a EvalCtx<'a>,
     node: &'a Node,

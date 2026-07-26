@@ -654,7 +654,7 @@ fn render_text_lines(
     fit_scale: (f32, f32),
     reveal: f32,
 ) {
-    // Typewriter reveal (proposal §9.6) — see renderer-skia's `render_text_lines`
+    // Typewriter reveal — see renderer-skia's `render_text_lines`
     // for the full rationale. A hard per-glyph cutoff, no-op at `reveal >= 1.0`.
     let total_glyphs: usize = cached_lines.iter().map(|l| l.glyphs.len()).sum();
     let reveal_count = (reveal as f64 * total_glyphs as f64).floor() as usize;
@@ -881,7 +881,7 @@ fn to_krilla_transform(t: AffineTransform) -> KTransform {
 /// (0, 0), so rotation/scale/pivot (which assume that) are not applied here;
 /// doing so can swing content arbitrarily far from view. Deferred until layer
 /// content has a real local bounding box to rotate/scale/pivot around (same
-/// category of gap as Path's, `api-v2-impl.md` item 2).
+/// category of gap as Path's lack of a box).
 fn image_layer_translate(
     override_: Option<&ImageLayer>,
     base_transform: AffineTransform,

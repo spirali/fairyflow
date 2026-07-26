@@ -18,46 +18,41 @@ multiples are marked red and then hidden, leaving only the primes at the end.
 with Scene(1280, 720):
     with Group().column(40).align(y=0.6):
         with Group() as g2:
-            t = Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
+            t = Text("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
             Image("docs/ff_logo.png").height(200)
-        wait(0.2)        
+        wait(0.2)
         g2.fade_out(dur=0.5)
         g3.hide(dur=0.5)
         wait(0.2)
-        
-with Scene(1280, 720):
+
+with Scene(1280, 720) as s:
     numbers = []
-    with Group().size(1000, 400) as g:
-        with Par():
+    with Group().grid(cols=20, gap=10) as g:
+        with Par(stagger=0.01), anim(0.3):
             for i in range(0, 100):
-                with Seq():
-                    wait(0.01 * i)
-                    with Group().xy(50 * (i % 20), (i // 20) * 50) as n:                    
-                        Rect().stroke("black").fill("#ccc").size(40, 40)
-                        Text().span(str(i + 1))
-                        n.fade_in(dur=0.3)
+                with Group() as n:
+                    Rect().stroke("black").fill("#ccc").size(40, 40)
+                    Text(str(i + 1))
+                    n.fade_in()
                 numbers.append(n)
         wait(0.2)
 
-        arrow = Path().stroke("green", 4)
-        arrow_start = arrow.move_to(-150, -10)
-        arrow_end = arrow.line_to(-150, -50)
-        arrow_head = arrow.arrow("start")
+        arrow = Arrow((-150, -10), (-150, -50), head="start").stroke("green", 4)
 
         for step in [2, 3]:
             idx = step - 1
-            with Par():
-                g.scale(1.90, dur=0.8)
-                g.xy(550, 400, dur=0.8)
+            with Par(), anim(0.8):
+                s.camera.zoom(1.9)
+                s.camera.center(numbers[idx].at("center"))
             if step == 2:
                 numbers[0].fade_out(dur=0.5)
                 wait(0.5)
 
             wait(0.5)
-            with Par():
-                arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
-                arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)
+            with Par(), anim(0.5):
+                arrow.start.pos(numbers[idx].at("top").move(-5, -5))
+                arrow.end.pos(numbers[idx].at("top").move(-5, -40))
 
             r = numbers[idx].get_child(kind="rect")
             wait(0.3)
@@ -65,48 +60,44 @@ with Scene(1280, 720):
             wait(0.2)
 
             with Group() as m:
-                m.pos(numbers[idx].at())
+                m.pos(numbers[idx].at("top"))
                 p = Path().stroke("red", 2)
                 a = p.move_to(0, 0)
                 b = p.line_to(0, 0)
-                p.move_to(a.at()).move(0, -4)
-                p.line_to(a.at()).move(0, 4)
-                p.move_to(b.at()).move(0, -4)
-                p.line_to(b.at()).move(0, 4)        
-                t = Text().pos(numbers[idx].get_child(kind="text").at())
-                t.span(str(step)).fill("red")            
+                p.move_to(a.at().move(0, -4))
+                p.line_to(a.at().move(0, 4))
+                p.move_to(b.at().move(0, -4))
+                p.line_to(b.at().move(0, 4))
+                t = Text(str(step)).fill("red")
+                t.pos(numbers[idx].get_child(kind="text").at())
                 m.fade_in(dur=0.5)
-           
+
             for i in range(3):
-                with Par():
-                    a.pos(numbers[idx + i * step].at().move(0, -6), dur=0.5)            
-                    b.pos(numbers[idx + (i + 1) * step].at().move(0, -6), dur=0.5)
-                    t.pos(numbers[idx + i * step].at("top_left").move(70, -30), dur=0.5)
-                #g.pos(numbers[1 + i * 2].at())
+                with Par(), anim(0.5):
+                    a.pos(numbers[idx + i * step].at("top").move(0, -6))
+                    b.pos(numbers[idx + (i + 1) * step].at("top").move(0, -6))
+                    t.pos(numbers[idx + i * step].at().move(70, -30))
                 wait(0.2)
-                r = numbers[idx + (i + 1) * step].get_child(kind="rect")              
+                r = numbers[idx + (i + 1) * step].get_child(kind="rect")
                 r.fill("red", dur=0.5)
                 wait(0.5)
 
-            with Par():
-                m.alpha(0, dur=0.5)
-                g.scale(1, dur=0.5)
-                g.xy(DEFAULT, DEFAULT, dur=0.5)
+            with Par(), anim(0.5):
+                m.alpha(0)
+                s.camera.reset()
 
             wait(0.5)
 
-            with Par():
+            with Par(stagger=0.02 * step), anim(0.3):
                 for i in range(idx + (i * step), 100, step):
-                    with Seq():
-                        wait(i * 0.02)
-                        numbers[i].get_child(kind="rect").fill("red", dur=0.3)
+                    numbers[i].get_child(kind="rect").fill("red")
 
         for step in [5, 7, 11]:
             idx = step - 1
             wait(0.3)
-            with Par():
-                arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
-                arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)                                  
+            with Par(), anim(0.5):
+                arrow.start.pos(numbers[idx].at("top").move(-5, -5))
+                arrow.end.pos(numbers[idx].at("top").move(-5, -40))
             wait(0.2)
             r = numbers[idx].get_child(kind="rect")
             r.fill("green", dur=0.4)
@@ -115,42 +106,36 @@ with Scene(1280, 720):
             if step == 11:
                 break
 
-            with Par():
+            with Par(stagger=0.01 * step), anim(0.3):
                 for i in range(idx + 3 * step, 100, step):
-                    with Seq():
-                        wait(i * 0.01)
-                        numbers[i].get_child(kind="rect").fill("red", dur=0.3)       
-        with Par():
-            arrow.alpha(0, dur=0.3)
-            arrow_head.alpha(0, dur=0.3)            
+                    numbers[i].get_child(kind="rect").fill("red")
+
+        arrow.alpha(0, dur=0.3)
 
         PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
-        with Par():
-            for i, p in enumerate(PRIMES[5:]):
-                with Seq():
-                    idx = p - 1
-                    wait(i * 0.02)
-                    numbers[idx].get_child(kind="rect").fill("green", dur=0.3)                           
+        with Par(stagger=0.02), anim(0.3):
+            for p in PRIMES[5:]:
+                numbers[p - 1].get_child(kind="rect").fill("green")
 
         wait(0.5)
-        with Par():
-            for i in range(1, 100):            
+        with Par(), anim(0.5):
+            for i in range(1, 100):
                 if (i + 1) in PRIMES:
-                    continue  
-                numbers[i].alpha(0, dur=0.5)
+                    continue
+                numbers[i].alpha(0)
 
-        with Par():
+        with Par(), anim(0.5):
             for i, p in enumerate(PRIMES):
                 idx = p - 1
-                numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, dur=0.5)
-        
+                numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300)
+
         wait(0.5)
 
     with Group().column(40).align(y=0.2) as g:
         with Group() as g2:
-            Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
+            Text("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
-            Image("docs/ff_logo.png").height(200)    
+            Image("docs/ff_logo.png").height(200)
         g.fade_in(dur=1)
         wait(1)
 ```
@@ -171,9 +156,12 @@ multi-scene video where the player transitions from one scene to the next automa
 with Scene(1280, 720):
     ...   # intro
 
-with Scene(1280, 720):
+with Scene(1280, 720) as s:
     ...   # main sieve + outro
 ```
+
+The main scene is captured as `s` — `with Scene(...) as s:` returns the scene itself,
+and `s` is needed later to reach `s.camera` (see "Zooming in", below).
 
 ### The intro screen
 
@@ -181,9 +169,9 @@ with Scene(1280, 720):
 with Scene(1280, 720):
     with Group().column(40).align(y=0.6):
         with Group() as g2:
-            Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
+            Text("Sieve of Eratosthenes").font(size=40, bold=True)
         with Group() as g3:
-            Image("../docs/ff_logo.png").height(200)
+            Image("docs/ff_logo.png").height(200)
         wait(0.2)
         g2.fade_out(dur=0.5)
         g3.hide(dur=0.5)
@@ -208,61 +196,52 @@ run sequentially here — use `Par` to run them simultaneously.)
 
 ```python
 numbers = []
-with Group().size(1000, 400) as g:
-    with Par():
+with Group().grid(cols=20, gap=10) as g:
+    with Par(stagger=0.01), anim(0.3):
         for i in range(0, 100):
-            with Seq():
-                wait(0.01 * i)
-                with Group().xy(50 * (i % 20), (i // 20) * 50) as n:
-                    Rect().stroke("black").fill("#ccc").size(40, 40)
-                    Text().span(str(i + 1))
-                    n.fade_in(dur=0.3)
+            with Group() as n:
+                Rect().stroke("black").fill("#ccc").size(40, 40)
+                Text(str(i + 1))
+                n.fade_in()
             numbers.append(n)
     wait(0.2)
 ```
 
-The outer `Group` with an explicit `size(1000, 400)` acts as the stage for the whole sieve
-animation. Its 100 children are positioned manually with `.xy()` using simple integer arithmetic:
+`Group().grid(cols=20, gap=10)` lays out its children automatically in a 20-column grid with
+10 px of spacing, sizing every column/row to fit the widest/tallest cell — no manual `.xy()`
+arithmetic needed. Each cell is a `Group` containing a grey 40 × 40 `Rect` and a `Text` label
+built directly from the constructor (`Text(str(i + 1))`). The `numbers` list keeps a reference
+to every cell so the sieve loop can look up any cell by its 0-based index later.
 
-- **x** = `50 * (i % 20)` — 20 columns spaced 50 px apart (0, 50, 100 … 950)
-- **y** = `(i // 20) * 50` — a new row every 20 numbers (0, 50, 100, 150, 200)
-
-This gives a 20-column × 5-row grid. Each cell is a `Group` containing a grey 40 × 40 `Rect`
-and a `Text` label. The `numbers` list keeps a reference to every cell so the sieve loop can
-look up any cell by its 0-based index later.
-
-### Staggered fade-in with `Par` and `Seq`
+### Staggered fade-in with `Par(stagger=)`
 
 ```python
-with Par():
+with Par(stagger=0.01), anim(0.3):
     for i in range(0, 100):
-        with Seq():
-            wait(0.01 * i)
-            ...
-            n.fade_in(dur=0.3)
+        ...
+        n.fade_in()
 ```
 
-`Par` starts all 100 children at the same time (t = 0). Each child is a `Seq` that first
-calls `wait(0.01 * i)` to offset its start, then fades the cell in. Cell 0 starts immediately;
-cell 99 starts 0.99 seconds later — creating a cascade effect. The `Par` block advances the
+`Par(stagger=0.01)` starts all 100 cells at the same time, but offsets each one's start by
+`i × 0.01` seconds — cell 0 starts immediately, cell 99 starts 0.99 seconds later — creating
+the same cascade effect as manually nesting `Seq(): wait(0.01 * i); ...` inside a `Par()`,
+without writing the offset by hand. The enclosing `anim(0.3)` block supplies `dur=0.3` to the
+bare `n.fade_in()` call, so no per-call `dur=` is needed either. The `Par` block advances the
 outer clock to the longest child's end time (≈ 0.99 + 0.3 = 1.3 s), followed by a short
 `wait(0.2)` pause.
 
 ### The arrow indicator
 
 ```python
-arrow = Path().stroke("green", 4)
-arrow_start = arrow.move_to(-150, -10)
-arrow_end   = arrow.line_to(-150, -50)
-arrow_head  = arrow.arrow("start")
+arrow = Arrow((-150, -10), (-150, -50), head="start").stroke("green", 4)
 ```
 
-`Path` builds a vector path from a sequence of commands. Each command (`move_to(x, y)`,
-`line_to(x, y)`) returns a node whose position can be animated independently. `arrow("start")`
-attaches a filled triangle arrowhead at the start endpoint.
+`Arrow(start, end, head=)` builds a two-point connector with an arrowhead in one call —
+`head="start"` puts the head at the first point. `.start`/`.end` expose the underlying
+`move_to`/`line_to` handles, so the endpoints animate independently later.
 
 The arrow begins at x = −150 — off the left edge of the canvas so it is invisible at first. It
-will be repositioned later by animating `arrow_start` and `arrow_end` to the coordinates of the
+will be repositioned later by animating `arrow.start` and `arrow.end` to the coordinates of the
 target cell.
 
 ### Zooming in and pointing to a prime
@@ -271,25 +250,30 @@ target cell.
 for step in [2, 3]:
     idx = step - 1
 
-    with Par():
-        g.scale(1.90, dur=0.8)
-        g.xy(550, 400, dur=0.8)
+    with Par(), anim(0.8):
+        s.camera.zoom(1.9)
+        s.camera.center(numbers[idx].at("center"))
 ```
 
-`Par` runs both the scale and position change simultaneously. Passing `dur=0.8` on each attribute
-creates a smooth animated transition over 0.8 seconds and advances the clock to the end of the
-transition. The grid zooms in and shifts in one fluid move.
+`s.camera` is the scene's own animatable viewpoint onto its content — distinct from
+`.scale()`, which would transform a node's own box as a widget. `.camera.zoom(1.9)` magnifies
+the content around the current camera center; `.camera.center(...)` re-points the camera at
+the target cell (`numbers[idx].at("center")`). Running both inside `Par(), anim(0.8)` animates
+zoom and re-centering together over 0.8 seconds — the grid zooms in and shifts in one fluid
+move, and the scene's own layout is untouched (see [Camera](anim.md#camera) for the full
+zoom/center/reset story).
 
 ```python
-    with Par():
-        arrow_start.pos(numbers[idx].at().move(-5, -5), dur=0.5)
-        arrow_end.pos(numbers[idx].at().move(-5, -40), dur=0.5)
+    with Par(), anim(0.5):
+        arrow.start.pos(numbers[idx].at("top").move(-5, -5))
+        arrow.end.pos(numbers[idx].at("top").move(-5, -40))
 ```
 
-`.at()` with no arguments returns the center of a cell as a `Position` object (the center is
-`at()`'s default point — see [Positioning](positioning.md#cross-group-positioning-at-and-pos)).
-Passing that `Position` to `.pos()` animates the path endpoint to the cell's center. The
-`.move(-5, -40)` call applies a small relative offset, nudging the arrowhead above the cell.
+`.at("top")` returns the top-center point of a cell as a `Position` object (see
+[Positioning](positioning.md#cross-group-positioning-at-and-pos) for the full list of named
+anchors). Passing that `Position` to `.pos()` animates the arrow endpoint to the cell's top
+edge. The `.move(-5, -40)` call applies a small relative offset, nudging the arrowhead above
+the cell.
 
 ```python
     r = numbers[idx].get_child(kind="rect")
@@ -297,13 +281,13 @@ Passing that `Position` to `.pos()` animates the path endpoint to the cell's cen
 ```
 
 `get_child(kind="rect")` searches the cell's children for a `Rect` node and returns it.
-`color("green", dur=0.4)` creates a smooth colour transition from grey to green over 0.4 seconds.
+`.fill("green", dur=0.4)` creates a smooth colour transition from grey to green over 0.4 seconds.
 
 ### The crossing-line animation
 
 ```python
 with Group() as m:
-    m.pos(numbers[idx].at())
+    m.pos(numbers[idx].at("top"))
     p = Path().stroke("red", 2)
     a = p.move_to(0, 0)
     b = p.line_to(0, 0)
@@ -311,13 +295,15 @@ with Group() as m:
     p.line_to(a.at()).move(0, 4)
     p.move_to(b.at()).move(0, -4)
     p.line_to(b.at()).move(0, 4)
-    t = Text().pos(numbers[idx].get_child(kind="text").at())
-    t.span(str(step)).fill("red")
+    t = Text(str(step)).fill("red")
+    t.pos(numbers[idx].get_child(kind="text").at())
     m.fade_in(dur=0.5)
 ```
 
 This builds a red bracket: a horizontal line from `a` to `b` with a short vertical tick at each
-end. The path has 6 commands in total:
+end. Unlike the simple two-point arrow above, this shape needs two ticks plus a main line — not
+a case `Arrow`/`Line` covers directly — so it's still built command-by-command from `Path`. The
+path has 6 commands in total:
 
 1. The main line: `move_to(0, 0)` → `a`, `line_to(0, 0)` → `b`
 2. Left tick: `move_to(a.at())` offset by (0, −4), `line_to(a.at())`
@@ -332,10 +318,10 @@ The text label `t` sits next to the starting cell and shows the prime value in r
 
 ```python
 for i in range(3):
-    with Par():
-        a.pos(numbers[idx + i * step].at().move(0, -6), dur=0.5)
-        b.pos(numbers[idx + (i + 1) * step].at().move(0, -6), dur=0.5)
-        t.pos(numbers[idx + i * step].at("top_left").move(70, -30), dur=0.5)
+    with Par(), anim(0.5):
+        a.pos(numbers[idx + i * step].at("top").move(0, -6))
+        b.pos(numbers[idx + (i + 1) * step].at("top").move(0, -6))
+        t.pos(numbers[idx + i * step].at().move(70, -30))
     wait(0.2)
     r = numbers[idx + (i + 1) * step].get_child(kind="rect")
     r.fill("red", dur=0.5)
@@ -343,23 +329,22 @@ for i in range(3):
 ```
 
 Each iteration advances the bracket one step: `a` and `b` slide to the next multiple in
-parallel (using `Par`), and then the target cell's rect transitions to red. The bracket hops
-across the first three multiples of the prime with colour changes in sync.
+parallel (`Par(), anim(0.5)` supplies the shared 0.5 s duration to all three calls), and then
+the target cell's rect transitions to red. The bracket hops across the first three multiples
+of the prime with colour changes in sync.
 
 ### Marking all remaining multiples
 
 ```python
-with Par():
+with Par(stagger=0.02 * step), anim(0.3):
     for i in range(idx + (i * step), 100, step):
-        with Seq():
-            wait(i * 0.02)
-            numbers[i].get_child(kind="rect").fill("red", dur=0.3)
+        numbers[i].get_child(kind="rect").fill("red")
 ```
 
 After the animated demonstration the rest of the multiples are coloured red in a rapid sweep.
-The outer `Par` starts all cells at the same time; each inner `Seq` delays its cell by
-`i * 0.02` seconds and then transitions the rect to red over 0.3 seconds. This is the same
-staggered-parallel pattern used for the initial cascade fade-in.
+`Par(stagger=0.02 * step)` starts each cell's transition `0.02 * step` seconds after the
+previous one, and `anim(0.3)` supplies the 0.3 s fill duration — the same staggered-parallel
+pattern used for the initial cascade fade-in, without a manual `wait()`/`Seq()` per cell.
 
 ### Quick pass for 5, 7, 11
 
@@ -368,11 +353,9 @@ for step in [5, 7, 11]:
     idx = step - 1
     # move arrow to the prime, highlight it green
     ...
-    with Par():
+    with Par(stagger=0.01 * step), anim(0.3):
         for i in range(idx + 3 * step, 100, step):
-            with Seq():
-                wait(i * 0.01)
-                numbers[i].get_child(kind="rect").fill("red", dur=0.3)
+            numbers[i].get_child(kind="rect").fill("red")
 ```
 
 Primes 5, 7, and 11 get a simpler treatment: the arrow moves to each prime and its background
@@ -384,36 +367,36 @@ the 2 and 3 passes.
 
 ```python
 wait(0.5)
-with Par():
+with Par(), anim(0.5):
     for i in range(1, 100):
         if (i + 1) in PRIMES:
             continue
-        numbers[i].alpha(0, dur=0.5)
+        numbers[i].alpha(0)
 ```
 
-All non-prime cells fade out simultaneously in a single `Par` block. Using `dur=0.5` on each
-`alpha(0)` call creates a smooth 0.5-second fade, and since they are all inside `Par` they all
-start at the same moment.
+All non-prime cells fade out simultaneously — `anim(0.5)` supplies `dur=0.5` to every bare
+`alpha(0)` call, and since they are all inside `Par` they all start at the same moment.
 
 ```python
-with Par():
+with Par(), anim(0.5):
     for i, p in enumerate(PRIMES):
         idx = p - 1
-        numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300, dur=0.5)
+        numbers[idx].xy(50 * (i % 20), (i // 20) * 50 + 300)
 ```
 
-The surviving primes are then repositioned together. Each `.xy()` call uses `dur=0.5` so all
-cells slide smoothly to their new positions simultaneously inside `Par`. The new coordinates
-use the same column/row formula but shifted 300 px down to keep them within the canvas.
+The surviving primes are then repositioned together. Each `.xy()` call picks up the same
+0.5 s duration from the enclosing `anim()` block, so all cells slide smoothly to their new
+positions simultaneously inside `Par`. The new coordinates use the same column/row formula but
+shifted 300 px down to keep them within the canvas.
 
 ### The outro
 
 ```python
 with Group().column(40).align(y=0.2) as g:
     with Group() as g2:
-        Text().span("Sieve of Eratosthenes").font(size=40, bold=True)
+        Text("Sieve of Eratosthenes").font(size=40, bold=True)
     with Group() as g3:
-        Image("../docs/ff_logo.png").height(200)
+        Image("docs/ff_logo.png").height(200)
     g.fade_in(dur=1)
     wait(1)
 ```

@@ -52,6 +52,7 @@ nav = [
     "examples.md",    
     "shapes.md",
     "text.md",
+    "code.md",
     "images.md",
     "positioning.md",
     "layout.md",

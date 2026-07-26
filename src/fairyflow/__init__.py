@@ -4,13 +4,16 @@ from .animtime import time_to_frames, Frames, frames_to_time
 from .sentinels import DEFAULT, rel
 
 from .color import Color, Gradient, gradient
-from .text import stext, Text
+from .text import stext, Text, code
 from .shapes import Line, Arrow, Polygon, RegularPolygon, Star
 from .helpers import Table
-from .config import set_default_scene
+from .config import set_default_scene, set_default_font, set_default_code
 
 __all__ = [
     "set_default_scene",
+    "set_default_font",
+    "set_default_code",
+    "code",
     "Group",
     "Rect",
     "Path",

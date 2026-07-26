@@ -1,4 +1,5 @@
 import re
+import textwrap
 from dataclasses import dataclass, field
 from beartype import beartype
 from typing import Union, Literal, Self
@@ -8,6 +9,7 @@ from .animtime import Duration, Easing
 from .avalue import AnimatedValue
 from .sentinels import INHERITED_VALUE, DEFAULT, DefaultMarker, RelValue, resolve_rel
 from .ctxvars import Par, Seq
+from .config import DEFAULT_FONT, DEFAULT_CODE, normalize_font_style
 
 from .nodes import (
     Node,
@@ -43,16 +45,7 @@ class TextStyleMethods:
         dur: Duration = None,
         ease: Easing = None,
     ):
-        if bold is not None:
-            if weight is not None:
-                raise TypeError("font(): pass either weight= or bold=, not both")
-            weight = 800 if bold else 400
-        if mono is not None:
-            if family is not None:
-                raise TypeError(
-                    "font(): pass either family (positional) or mono=, not both"
-                )
-            family = "monospace" if mono else "sans-serif"
+        family, weight = normalize_font_style(family, weight, bold=bold, mono=mono)
         with Par():
             if family is not None:
                 self._set_attr("font", family, dur, ease)
@@ -62,6 +55,38 @@ class TextStyleMethods:
                 self._set_attr("font_weight", weight, dur, ease)
             if italic is not None:
                 self._set_attr("italic", italic, dur, ease)
+        return self
+
+    def code(
+        self, language: StringLike | None = None, *, theme: StringLike | None = None
+    ) -> Self:
+        """Apply the configured code style (`set_default_code()`): a mono
+        family/size on any text node, plus syntax highlighting when called on
+        a `Text` block.
+
+        Args:
+            language: Highlight language. Only valid on a `Text` block — a
+                run cannot be highlighted independently (`sh_language` is a
+                block-level flag). Falls back to `set_default_code()`'s
+                configured language when omitted.
+            theme: Optional highlight theme, same fallback as `language`.
+
+        Returns:
+            self, for method chaining.
+        """
+        self.font(DEFAULT_CODE.get("family", "monospace"), DEFAULT_CODE.get("size"))
+        if hasattr(self, "sh"):  # only Text defines .sh() — the block-level flag
+            lang = language if language is not None else DEFAULT_CODE.get("language")
+            if lang is not None:
+                self.sh(
+                    lang,
+                    theme=theme if theme is not None else DEFAULT_CODE.get("theme"),
+                )
+        elif language is not None:
+            raise TypeError(
+                ".code(): language= only applies to a Text block — sh_language is "
+                "block-level, a run cannot be highlighted independently"
+            )
         return self
 
 
@@ -160,8 +185,18 @@ class Text(
 
     def __init__(self, text: StringLike | None = None):
         super().__init__()
-        self.fill("black")
+        if "fill" in DEFAULT_FONT:
+            # Already Color/Gradient-parsed by set_default_font(); write it
+            # directly like Scene.__init__ does for `background` (config.py's
+            # DEFAULT_SCENE_CONFIG) rather than through self.fill(), which
+            # would try (and fail) to re-parse an already-parsed Color.
+            self._add_attr("fill_color", DEFAULT_FONT["fill"])
+        else:
+            self.fill("black")
         self._add_attr("keep_aspect", True)
+        for attr, value in DEFAULT_FONT.items():
+            if attr != "fill":  # not a raw wire attr — applied above
+                self._add_attr(attr, value)
         self.sh_language = None
         self.sh_theme = None
         self._text_align = None
@@ -477,6 +512,41 @@ def _add_nodes_as_lines(parent, nodes):
         else:
             current_line.append(node)
     _flush_line(parent, current_line)
+
+
+@beartype
+def code(
+    source: StringLike,
+    language: StringLike | None = None,
+    *,
+    theme: StringLike | None = None,
+    dedent: bool = True,
+) -> Text:
+    """Build a `Text` block for a source-code snippet.
+
+    Unlike `stext()`, this never runs the markup parser — `<`, `>` and `&` in
+    the source are kept literally, so a snippet containing a generic
+    (`Vec<T>`) or a comparison (`a < b`) is not misread as a tag.
+
+    Args:
+        source: The code, typically a triple-quoted string.
+        language: Highlight language. Falls back to `set_default_code()`'s
+            configured language; with neither set, the block is plain
+            (unhighlighted) monospace text rather than an error.
+        theme: Optional highlight theme, same fallback as `language`.
+        dedent: Strip the common leading whitespace (`textwrap.dedent`) and
+            any leading/trailing blank lines, so the snippet can be indented
+            to match the surrounding scene code.
+
+    Returns:
+        A `Text` node, so everything downstream (`.xy()`, `.size()`,
+        `.type_on()`, `.line()`, `.at()`, transforms, ...) works as usual.
+    """
+    if dedent:
+        source = textwrap.dedent(source).strip("\n")
+    t = Text(source)
+    t.code(language, theme=theme)
+    return t
 
 
 @beartype

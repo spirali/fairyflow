@@ -50,6 +50,30 @@ The default scene size is **300 × 200** pixels; **white** background.
 Note that width and height is a logical size; **not** a target resolution.
 All rendering information are stored as vector graphics and rasterized into the final resolution at very last moment.
 
+### Project-wide scene defaults
+
+Call `set_default_scene(width=, height=, background=, flow=)` once in `prologue.py`
+to change these defaults for the whole project — every bare `Scene()` (no
+arguments) then picks them up:
+
+```python
+# prologue.py
+from fairyflow import *
+
+set_default_scene(width=1280, height=720, background="#111")
+```
+
+```python
+# any scene file
+with Scene():   # 1280×720, background "#111" — from the project default above
+    ...
+```
+
+Arguments passed directly to `Scene(...)` still override the project default for
+that one scene. `set_default_scene()` is evaluated once when the prologue runs,
+before any scene exists, so it is not animatable — it only makes sense in
+`prologue.py`, not inside a scene file.
+
 ### Group
 
 A `Group` is a container node. It has its own coordinate system, optional layout (column/row), and an animatable clipping window. Children are positioned relative to the group's origin.

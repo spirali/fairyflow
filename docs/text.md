@@ -104,6 +104,42 @@ Any CSS generic family name is accepted as a key: `serif`, `sans-serif`, `monosp
 
 The target font must be loaded — either from `font_directories` or from system fonts — before the alias takes effect.
 
+### Project-wide defaults
+
+A deck is usually one font, at one size, in one color. Rather than repeating
+`.font("Inter", 28).fill("white")` on every `Text` node, call
+`set_default_font()` once in `prologue.py`:
+
+```python
+# prologue.py
+from fairyflow import *
+
+set_default_font("Inter", 28, fill="white")
+```
+
+```ffpy frame="0"
+set_default_font("monospace", 22, bold=True, fill="steelblue")
+with Scene(280, 40):
+    Text("Styled by default")
+```
+
+`set_default_font(family=None, size=None, *, weight=, italic=, bold=, mono=,
+fill=None)` takes the same style parameters as `.font()`, plus `fill=` for the
+default text color (accepts anything `.fill()` does — a color string or a
+`gradient()`). Passing nothing for a parameter leaves that default alone, so
+calls compose: `set_default_font("Inter")` followed later by
+`set_default_font(size=28)` is the same as one call with both.
+
+A few things worth knowing:
+
+- **Text only.** `fill=` only changes the default for `Text` nodes — a bare
+  `Rect()`/`Ellipse()`/`Path()` is unaffected.
+- **A later `.font()`/`.fill()` call on a node always wins** — the configured
+  default only fills in whatever the node doesn't set itself.
+- Like `set_default_scene()`, this is evaluated once when the prologue runs,
+  before any scene exists, so it is not animatable and belongs in
+  `prologue.py`, not inside a scene file.
+
 ---
 
 ## Sizing
@@ -388,42 +424,9 @@ stext("path/to/<file>")  # → tag named "file" — wrap in a real tag name only
 
 By default `stext` uses `<tag>...</tag>` syntax. Pass `delimiters="[]"` to use `[tag]...[/tag]` instead.
 
----
-
-## Syntax highlighting
-
-Enable source-code syntax highlighting on a `Text` node with `.sh(language)`.
-
-```ffpy frame="0"
-with Scene():
-    stext(
-"""
-x = "world"
-print(f"Hello {x}!")
-"""
-    ).sh("Python").font("monospace")
-```
-
-An optional `.sh(language, theme=...)` argument selects the color theme.
-Preinstalled themes: 
-
-* "InspiredGitHub" (default)
-* "base16-ocean.dark"
-* "base16-eighties.dark"
-* "base16-mocha.dark"
-* "base16-ocean.light"
-* "Solarized (dark)"
-* "Solarized (light)"
-
-```ffpy frame="0"
-with Scene(background="#2b303b"):
-    stext(
-"""
-x = "world"
-print(f"Hello {x}!")
-"""
-    ).sh("Python", theme="base16-ocean.dark").font("monospace")
-```
+For source-code snippets with syntax highlighting, see [Code](code.md) —
+`stext()` runs everything through its markup parser, which is a trap for code
+containing `<`, `>`, or `&`.
 
 ---
 

@@ -445,7 +445,7 @@ async fn run_init(directory: PathBuf) {
         ),
         (
             "prologue.py",
-            "from fairyflow import *\n\nset_default_scene(width=300, height=200, background=\"white\")\n",
+            "from fairyflow import *\n\nset_default_scene(width=300, height=200, background=\"white\")\n\n# Uncomment to set a project-wide default font for every Text node:\n# set_default_font(\"Inter\", 28, fill=\"black\")\n\n# Uncomment to set a project-wide default language/theme for every code() block:\n# set_default_code(\"python\", theme=\"base16-ocean.dark\")\n",
         ),
         (
             "scenes/scene1.ffpy",

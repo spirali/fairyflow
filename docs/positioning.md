@@ -95,9 +95,15 @@ cases:
 | call | point returned |
 |---|---|
 | `node.at()` | center of the node (the default — also the only point for a size-less node) |
-| `node.at("top_left")` | top-left corner |
-| `node.at("right")` | right-center edge |
+| `node.at("center")` | center (same as bare `at()`) |
 | `node.at("top")` | top-center edge |
+| `node.at("bottom")` | bottom-center edge |
+| `node.at("left")` | left-center edge |
+| `node.at("right")` | right-center edge |
+| `node.at("top_left")` | top-left corner |
+| `node.at("top_right")` | top-right corner |
+| `node.at("bottom_left")` | bottom-left corner |
+| `node.at("bottom_right")` | bottom-right corner |
 | `node.at(0.2, 0.7)` | 20% across, 70% down |
 
 `.pos(position)` sets the node's position to a `Position` returned by `.at()`.
@@ -204,7 +210,7 @@ accepts `dur=`/`ease=` like any other position change.
 `.follow_path(path, dur=1, start=0, end=1)` animates a node along a `Path` over the given
 duration. The node travels from `start` to `end` (both are path parameters in the range
 0–1, where 0 is the path's start and 1 is its end), centered on the curve at every frame.
-The clock advances automatically by `tr` seconds.
+The clock advances automatically by `dur` seconds.
 
 Any `Path` shape works as the track — straight lines, multi-segment paths, or Bézier curves.
 Use `cubic_to(x, y, c1=, c2=)` to add a cubic Bézier segment; `c1`/`c2` are `(dx, dy)`

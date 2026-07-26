@@ -12,7 +12,7 @@ INHERITED_VALUE = InheritedValue()
 class DefaultMarker:
     """Sentinel accepted by structured setters (`xy()`, `size()`, ...) to mean
     "reset this axis/field to its layout default" — as opposed to `None`, which means
-    "leave it untouched" (api-v2-proposal.md §4.1)."""
+    "leave it untouched"."""
 
     __slots__ = ()
 

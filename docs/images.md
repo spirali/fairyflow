@@ -52,10 +52,12 @@ with Scene():
 ```
 
 
-### Positioning and alpha
+### Positioning, transforms, and alpha
 
 `Image` supports the same `.xy()`, `.align()`, and `.alpha()` methods as shape nodes — see
-[Positioning](positioning.md) for details.
+[Positioning](positioning.md) for details. It also supports `.rotate()`, `.scale()`,
+`.pivot()`, and its own `.camera` like every other drawable node — see
+[Rotation and scale](anim.md#rotation-and-scale) and [Camera](anim.md#camera).
 
 ---
 

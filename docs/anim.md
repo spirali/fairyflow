@@ -273,9 +273,13 @@ with Scene():
 
 ## Rotation and scale
 
-`Group` nodes support `.rotate()` and `.scale()` animations. The pivot defaults to the
-group's centre — `pivot_x`/`pivot_y` hold an absolute pixel offset from the group's own
-top-left, unset defaulting to `width * 0.5`/`height * 0.5`. Set it with `.pivot()`, e.g.
+**Every drawable node supports `.rotate()` and `.scale()`** — `Rect`, `Ellipse`,
+`Text` (and its lines/spans), `Image`, and `Group`, not just `Group`. The one
+exception is `Path` itself (a path's points are already coordinates in its parent's
+frame, so it has no local box to rotate/scale around — nest it in a `Group` and
+transform that instead). The pivot defaults to the node's centre — `pivot_x`/
+`pivot_y` hold an absolute pixel offset from the node's own top-left, unset
+defaulting to `width * 0.5`/`height * 0.5`. Set it with `.pivot()`, e.g.
 `g.pivot("top_left")` or `g.pivot(x=rel(0.3), y=rel(0.7))` for an own-box fraction.
 
 ```ffpy video="mp4"
@@ -293,6 +297,32 @@ with Scene():
     g.scale(0.2, dur=1)
     g.scale(1, dur=1)
 ```
+
+A single `Rect` rotates the same way, with no enclosing `Group` needed:
+
+```ffpy video="mp4"
+with Scene():
+    Rect().size(100, 60).fill("mediumseagreen").align(0.5, 0.5).rotate(30, dur=1)
+```
+
+---
+
+## Z-ordering
+
+`.z(level, dur=, ease=)` controls paint order among siblings — higher `z` paints on
+top, regardless of creation order. It is available on every drawable node except
+text runs (`TextGroup`/`TextSpan`), where paragraph order is always the draw order.
+The default `z` is `0`, and nodes with equal `z` paint in creation order.
+
+```ffpy frame="0"
+with Scene():
+    Rect().size(100, 100).fill("steelblue").xy(20, 20)
+    Rect().size(100, 100).fill("tomato").xy(60, 50).z(-1)
+```
+
+Here the tomato rect is created *after* the blue one (so it would normally paint on
+top), but `z(-1)` sends it behind instead. `.z()` is animatable, so a node can be
+brought to the front or sent to the back partway through a scene.
 
 ---
 

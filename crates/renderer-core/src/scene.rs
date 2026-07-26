@@ -74,7 +74,7 @@ pub struct NodeBox {
     pub pivot_y: f64,
 }
 
-/// A fill: solid color or linear gradient (proposal §9.11). Only used for
+/// A fill: solid color or linear gradient. Only used for
 /// `fill_color` — `stroke_color` stays a plain `Color`.
 #[derive(Debug, Clone)]
 pub enum Paint {
@@ -138,7 +138,7 @@ pub struct Style {
 }
 
 /// Paragraph alignment for a `Text` block or a per-line `TextGroup` override.
-/// Mirrors `TextAlignMode` in Python (api-v2-proposal.md §4.10).
+/// Mirrors `TextAlignMode` in Python.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TextAlign {
@@ -169,7 +169,7 @@ pub struct TextStyle {
     pub font_weight: Inheritable<f64>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub italic: Inheritable<bool>,
-    /// `underline()`/`strike()` 0..1 progress (proposal §10.2) — inherited
+    /// `underline()`/`strike()` 0..1 progress — inherited
     /// exactly like `italic`.
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub underline: Inheritable<f64>,
@@ -203,7 +203,7 @@ pub struct TextSpan {
     /// anywhere in this span's ancestor chain).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_transform: Option<crate::AffineTransform>,
-    /// `underline()`/`strike()` styling overrides (proposal §10.2) — sparse,
+    /// `underline()`/`strike()` styling overrides — sparse,
     /// per-node only (not inherited, unlike the progress fields on
     /// `TextStyle` above). Absent means "use the run's own resolved fill"
     /// (`color`) or "use the font's own underline/strikeout metrics at this
@@ -369,7 +369,7 @@ pub enum NodeKind {
         sh_language: Option<Arc<String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         sh_theme: Option<Arc<String>>,
-        /// Typewriter-reveal fraction (proposal §9.6): `1.0` shows every
+        /// Typewriter-reveal fraction: `1.0` shows every
         /// glyph; renderers apply a per-glyph cutoff based on this value.
         /// Sparse like `wrap`/`sh_language` above — omitted at the default so
         /// existing golden-image snapshots of the `/tree/{frame}` debug JSON
@@ -436,7 +436,7 @@ pub struct Node {
     pub kind: NodeKind,
 }
 
-/// Content-space viewpoint (api-v2-proposal §4.7/§4.8): `camera_zoom = 1.0`
+/// Content-space viewpoint: `camera_zoom = 1.0`
 /// with `camera_x/y` at the box's own center is the identity camera.
 /// Applied only when recursing into a container's children — never folded
 /// into `NodeBox`'s own transform, so it never affects layout, world-

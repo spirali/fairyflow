@@ -46,7 +46,7 @@ pub struct CachedGlyph {
     pub cluster: u32,
 }
 
-/// Font-derived underline/strikeout geometry for one span (proposal §10.2).
+/// Font-derived underline/strikeout geometry for one span.
 /// Captured for free while a span's font is already resolved during
 /// glyph-run building, in the same pixel-space `CachedGlyph` positions use —
 /// no separate scaling needed at use time. `offset` follows skrifa's raw
@@ -88,8 +88,7 @@ pub struct SpanKey {
 }
 
 /// Normalized cache key for a complete built line: the spans plus the
-/// wrap/alignment parameters used to lay them out (`api-v2-impl.md` §7 item
-/// 9's deferred note: "into the CachedLine cache key") — two lines with
+/// wrap/alignment parameters used to lay them out — two lines with
 /// identical spans but a different wrap width or alignment reference are
 /// different renders and must not collide in the cache.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -292,7 +292,7 @@ impl RasterRenderer {
         fit_scale: (f32, f32),
         reveal: f32,
     ) {
-        // Typewriter reveal (proposal §9.6): a hard per-glyph cutoff over the
+        // Typewriter reveal: a hard per-glyph cutoff over the
         // already-laid-out glyphs, in reading order across all lines — never
         // a reflow. At `reveal >= 1.0` every glyph's index is below the
         // cutoff, so this is a no-op for the common (never called `type_on`)
@@ -658,7 +658,7 @@ fn skia_from_affine(t: AffineTransform) -> Transform {
 /// (0, 0), so rotation/scale/pivot (which assume that) are not applied here;
 /// doing so can swing content arbitrarily far from view. Deferred until layer
 /// content has a real local bounding box to rotate/scale/pivot around (same
-/// category of gap as Path's, `api-v2-impl.md` item 2).
+/// category of gap as Path's lack of a box).
 fn image_layer_translate(override_: Option<&ImageLayer>, node_transform: Transform) -> Transform {
     let Some(ov) = override_ else {
         return node_transform;

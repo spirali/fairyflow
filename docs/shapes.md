@@ -112,7 +112,9 @@ with Scene(width=300, height=180):
 
 ### Positioning
 
-See [Positioning](positioning.md) for `.xy()`, `.align()`, and `.move()`.
+See [Positioning](positioning.md) for `.xy()`, `.align()`, and `.move()`. `Rect` and
+`Ellipse` also support `.rotate()`, `.scale()`, and `.pivot()` like any other
+drawable node — see [Rotation and scale](anim.md#rotation-and-scale).
 
 ---
 
@@ -231,6 +233,35 @@ with Scene(width=200, height=200):
         p.arrow("end", style=style, width=20)
 ```
 
+### Connectors: `Line` and `Arrow`
+
+For the common two-point case, `Line(start, end)` and
+`Arrow(start, end, gap=0, head="end", style="triangle")` build the same path in one
+call — both are plain `Path` subclasses, so `.stroke()`/`.fill()`/`.alpha()` and
+every other `Path` method still apply. Endpoints accept a plain `(x, y)` pair or a
+live `Position` (e.g. `other.at("right")`), tracked the same way `move_to()`/
+`line_to()` are.
+
+```ffpy frame="0"
+with Scene(width=200, height=60):
+    Line((20, 30), (180, 30)).stroke("steelblue", 3)
+```
+
+```ffpy frame="0"
+with Scene(width=200, height=60):
+    Arrow((20, 30), (180, 30), style="open").stroke("tomato", 3)
+```
+
+`gap` shifts the end(s) that get an arrowhead inward by that many pixels, so the
+head doesn't touch whatever it points at; `head="start"`/`"both"` puts the head at
+the other end(s) instead. `.start`/`.end` expose the underlying `move_to`/`line_to`
+handles, so a connector re-targets like any other path:
+
+```python
+arrow = Arrow(a.at("right"), b.at("left"), gap=6).stroke("steelblue", 3)
+arrow.end.pos(c.at("left"), dur=0.5)   # retarget the arrowhead end
+```
+
 ### Path cropping
 
 `.crop(start=, end=)` trims the path from either end. Values are in `[0.0, 1.0]` where
@@ -258,3 +289,39 @@ with Scene():
     p.line_to(270, 100)
     p.draw(dur=1)
 ```
+
+---
+
+## Polygon, RegularPolygon, and Star
+
+All three build a closed `Path` from computed vertices, so `.fill()`/`.stroke()`
+work exactly as on any other `Path` — including the arrow/crop/draw features above,
+since a polygon is still just a `Path` underneath.
+
+`Polygon(points)` takes an explicit list of `(x, y)` vertices:
+
+```ffpy frame="0"
+with Scene(width=120, height=100):
+    Polygon([(60, 10), (110, 90), (10, 90)]).fill("steelblue")
+```
+
+`RegularPolygon(n, radius, *, center=(0, 0), rotation=0)` places `n` vertices evenly
+around `center`, first vertex pointing up by default:
+
+```ffpy frame="0"
+with Scene(width=120, height=120):
+    RegularPolygon(6, 50, center=(60, 60)).fill("mediumseagreen")
+```
+
+`Star(points, outer, inner, *, center=(0, 0), rotation=0)` alternates between an
+`outer` and `inner` radius for a `points`-pointed star:
+
+```ffpy frame="0"
+with Scene(width=120, height=120):
+    Star(5, outer=50, inner=20, center=(60, 60)).fill("gold")
+```
+
+`rotation` (degrees) rotates the starting vertex on both `RegularPolygon` and
+`Star`. `center` places the shape within its own vertex coordinates — like `Path`,
+none of these three have their own `.xy()`/`.rotate()`/`.scale()`; nest one inside a
+`Group` and transform that if you need to move or spin the whole shape as a unit.

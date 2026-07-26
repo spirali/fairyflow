@@ -76,7 +76,7 @@ impl CubicBezier {
 }
 
 /// Remap a linear progress fraction `t` ∈ [0, 1] through the named easing
-/// preset (api-v2-proposal.md §3.2). `t` outside the loop's actual usage is
+/// preset. `t` outside the loop's actual usage is
 /// always ∈ [0, 1] since it's a fraction between two adjacent keyframes.
 pub(crate) fn remap(name: &str, t: f64) -> f64 {
     // Control points are the standard CSS equivalents for in/out/in_out;

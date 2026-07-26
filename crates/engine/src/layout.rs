@@ -678,7 +678,7 @@ fn text_raw_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
 /// Unscaled position of a text-run node (`TextGroup`/`TextSpan`) within its
 /// owning `Text`'s laid-out paragraph, then mapped through that `Text`'s
 /// content-fit scale/offset (`text_content_fit`) so `word.at("right")` lands
-/// on the glyph in scaled space (proposal §4.1), not the raw glyph-space one.
+/// on the glyph in scaled space, not the raw glyph-space one.
 fn text_default_pos(node: &Node, ctx: &EvalCtx) -> anyhow::Result<(f32, f32)> {
     let text_node = node.text_ancestor(ctx)?;
     let (lx, ly) = text_raw_pos(node, ctx)?;
@@ -701,8 +701,8 @@ pub(crate) enum PosAxis {
 /// self-or-ancestor with an explicit override on `axis`. Returns the delta to add to
 /// `leaf`'s own natural (paragraph-layout) position on that axis —
 /// `override_value - that_node's_own_natural_position` — so the whole subtree under
-/// the winning node moves as a rigid unit (proposal §4.1: "siblings keep their
-/// places... the overridden run just draws elsewhere"). `None` if no ancestor-or-self
+/// the winning node moves as a rigid unit — siblings keep their places, the
+/// overridden run just draws elsewhere. `None` if no ancestor-or-self
 /// has that axis set — the common case, and cheap: no `text_default_pos` re-layout
 /// call happens unless a winner is actually found.
 pub(crate) fn nearest_position_override_delta(

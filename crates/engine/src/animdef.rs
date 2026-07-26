@@ -70,7 +70,7 @@ impl AnimationDef {
 
 // ────────────────────────── Deserialization: wire format v2 ──────────────────
 
-/// Top-level document (`api-v2-impl.md` §A.1): one well-defined shape, no more
+/// Top-level document: one well-defined shape, no more
 /// "single object vs. bare array of objects" polymorphism.
 #[derive(Deserialize)]
 struct RawDocument {
@@ -378,7 +378,7 @@ fn collect_world_bounds(
     // `Layer` carries a `NodeBox` (rotation/scale/pivot are wired at the data
     // layer), but the renderer deliberately does not paint them yet - a
     // layer's position is a translate-only nudge, not a real local origin
-    // (see api-v2-impl.md). World bounds must match what's actually painted,
+    // World bounds must match what's actually painted,
     // so `Layer` stays on the flat/translate-only path below rather than
     // joining the generic `node_box()` branch.
     let child_transform = if !matches!(node.kind, NodeKind::Layer { .. })
@@ -1041,7 +1041,7 @@ mod tests {
     /// an axis-aligned world-bounds entry, and its rotation never propagated to
     /// its `Layer` children. `Layer` itself is deliberately excluded from the
     /// generalization - its own rotation/scale/pivot are wired but not yet
-    /// painted (see api-v2-impl.md), so its own AABB must stay on the flat
+    /// painted, so its own AABB must stay on the flat
     /// path to match what's actually rendered; only its *position* (inherited
     /// from the parent's transform) should move.
     const ROTATED_IMAGE_WORLD_BOUNDS_JSON: &str = r#"{
@@ -1191,7 +1191,7 @@ mod tests {
         assert_eq!(explicit.camera_y, 13.0);
     }
 
-    /// `Text` gained a `size`/`keep_aspect` (proposal §4.10). Uses `text` nodes
+    /// `Text` gained a `size`/`keep_aspect`. Uses `text` nodes
     /// with **no** `tspan`/`tline` children so `measure_text`'s empty-lines
     /// path (`measure_text_lines`, `text_layout.rs`) short-circuits to
     /// `(0.0, 0.0)` before touching any font machinery — keeps this a
@@ -1290,8 +1290,8 @@ mod tests {
         assert!(text_keep_aspect(&scene, 1));
     }
 
-    /// `Text` gained `rotate()`/`scale()`/`pivot()` (item 16, proposal §4.1's
-    /// transform tier) by adopting a real `NodeBox` (previously deliberately
+    /// `Text` gained `rotate()`/`scale()`/`pivot()` by adopting a real
+    /// `NodeBox` (previously deliberately
     /// absent, per item 14's "Text doesn't get a NodeBox" decision). Same
     /// childless-`text`-node trick as `text_explicit_w_h_keep_aspect_round_trip`
     /// to stay independent of font machinery.
@@ -1342,7 +1342,7 @@ mod tests {
         assert_eq!(node_box.pivot_y, 0.0);
     }
 
-    /// Placeable text runs (item 16, proposal §4.1/§4.10): `tline`/`tspan`
+    /// Placeable text runs: `tline`/`tspan`
     /// gain a real, wire-honored `x`/`y` that overrides the paragraph-layout
     /// position without reflowing siblings. Three lines: one untouched, one
     /// whose `tline` has an override that should cascade to its one
@@ -1432,7 +1432,7 @@ mod tests {
         assert!((dx4, dy4) != (dx5, dy5));
     }
 
-    /// Per-run `rotate()`/`scale()`/`pivot()` (item 17, proposal §4.1/§4.10):
+    /// Per-run `rotate()`/`scale()`/`pivot()`:
     /// a `tline`'s rotation cascades to a child `tspan` with no transform of
     /// its own, but a *different* child `tspan` with its own `scale_x`/
     /// `scale_y` wins over the parent's rotation for its own subtree — same
@@ -1510,7 +1510,7 @@ mod tests {
         assert!(span4.override_transform.is_none());
     }
 
-    /// `underline()`/`strike()` (proposal §10.2): the two progress attrs
+    /// `underline()`/`strike()`: the two progress attrs
     /// (`underline`/`strike`) are inherited exactly like `italic`/`font_weight`
     /// (climb to the nearest ancestor with an explicit value, `Own` vs.
     /// `Inherited` distinguishing the two); the six styling knobs

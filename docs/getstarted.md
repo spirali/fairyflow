@@ -48,9 +48,14 @@ with Scene():
 ## Next steps
 
 - [Project Structure](structure.md) — scenes, groups, and files
-- [Shapes](shapes.md) — Rect, Ellipse, Path
+- [Shapes](shapes.md) — Rect, Ellipse, Path, Polygon/Star, gradients
 - [Text](text.md) — Text and font styling
-- [Animations](anim.md) — transitions, fades, path following
+- [Code](code.md) — syntax-highlighted code blocks
+- [Images](images.md) — raster images and layered SVG/ORA
 - [Positioning](positioning.md) — coordinates, alignment, and cross-group positioning
-- [Layout](layout.md) — column and row layouts
-- [Cues](cues.md) — interactive presentations
+- [Layout](layout.md) — column, row, and grid layouts
+- [Table](table.md) — tabular data as an animatable node
+- [Animations](anim.md) — transitions, fades, rotation/scale, camera
+- [Cues](cues.md) — interactive presentations and speaker notes
+- [Exports](exports.md) — video, PDF, and player packages
+- [Examples](examples.md) — a full worked-through animation

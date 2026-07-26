@@ -59,19 +59,66 @@ impl TextLayoutEngine {
         }
     }
 
-    /// Lay out a whole `Text` block: a measure pass to find the cross-line
-    /// reference width (the widest wrapped line, needed by
-    /// `center`/`right`/`justify` alignment before any individual line can be
-    /// positioned), then an align+extract pass per line using that width.
-    /// `"left"` alignment never needs the reference width, so a block that
-    /// never calls `text_align()` pays no extra cost over the old
-    /// always-left-aligned behavior.
+    /// Lay out a whole `Text` block.
+    ///
+    /// Fast path: if every line resolves to `Left` alignment (the default —
+    /// this is the common case), skip straight to the align+extract pass
+    /// with a constant `alignment_width` of `0.0`. This is sound because
+    /// parley's `align()` is a documented no-op for `Left` regardless of the
+    /// width passed to it (verified against parley 0.7.0's
+    /// `layout/alignment.rs`: the `Left` branch of `align_impl` is literally
+    /// "do nothing"), and `align()` never touches `Layout::width()` (a
+    /// separate field) — so each line's own cached `.width` is always its
+    /// true natural width, giving us `block_width` for free instead of
+    /// needing a separate measure pass first.
+    ///
+    /// Slow path: `Center`/`Right`/`Justify` alignment genuinely need the
+    /// cross-line reference width (the widest line, possibly after wrap)
+    /// *before* any individual line can be positioned, so those still pay a
+    /// dedicated measure pass ahead of the align+extract pass.
     pub fn layout_text(
         &mut self,
         lines: &[TextChild],
         wrap: Option<f32>,
         default_align: TextAlign,
     ) -> LaidOutText {
+        let all_left = lines
+            .iter()
+            .all(|line| line_align(line, default_align) == TextAlign::Left);
+
+        if all_left {
+            let mut block_width = 0.0f32;
+            let mut total_height = 0.0f32;
+            let mut cached_lines = Vec::with_capacity(lines.len());
+            for line in lines {
+                let mut spans: Vec<&TextSpan> = Vec::new();
+                collect_spans(line, &mut spans);
+                let cached = if spans.is_empty() {
+                    Arc::new(CachedLine {
+                        width: 0.0,
+                        height: 0.0,
+                        glyphs: vec![],
+                        decorations: vec![],
+                    })
+                } else {
+                    let key = make_line_key(&spans, wrap, TextAlign::Left, 0.0);
+                    if let Some(cached) = glyph_cache::cache_get(&key) {
+                        cached
+                    } else {
+                        self.build_cached_line(&spans, wrap, TextAlign::Left, 0.0, key)
+                    }
+                };
+                block_width = block_width.max(cached.width);
+                total_height += cached.height;
+                cached_lines.push(cached);
+            }
+            return LaidOutText {
+                width: block_width,
+                height: total_height,
+                lines: cached_lines,
+            };
+        }
+
         let mut block_width = 0.0f32;
         for line in lines {
             let mut spans: Vec<&TextSpan> = Vec::new();

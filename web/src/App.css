@@ -452,6 +452,36 @@
   opacity: 0.4;
 }
 
+.tl-maxframes-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tl-maxframes-input {
+  width: 48px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 1px 4px;
+  text-align: center;
+}
+.tl-maxframes-input::-webkit-outer-spin-button,
+.tl-maxframes-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.tl-maxframes-input[type=number] {
+  -moz-appearance: textfield;
+}
+.tl-maxframes-input:disabled {
+  opacity: 0.4;
+}
+
 .tl-scene-select {
   background: var(--bg-primary);
   border: 1px solid var(--border);

@@ -11,12 +11,34 @@ use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::rc::Rc;
+
+/// Per-column widths and per-row heights of a `Layout::Grid` container (see
+/// `layout::grid_dims`).
+pub(crate) type GridDims = (Rc<[f64]>, Rc<[f64]>);
 
 pub(crate) struct EvalCtx<'a> {
     frame: FrameId,
     scene_def: &'a SceneDef,
     nodes: &'a HashMap<NodeId, Node>,
     evaluating_exprs: RefCell<HashSet<usize>>,
+    /// Memoized `(col_widths, row_heights)` for a `Layout::Grid` container,
+    /// keyed by the container's `NodeId` and whether outer (rotation/scale-
+    /// aware) or inner child dimensions were measured. Populated by
+    /// `layout::grid_dims`, which is otherwise called once per grid child per
+    /// queried attribute (x/y/width/height) and would redo a full O(children)
+    /// rescan — including reshaping every child's text — for each one.
+    /// Scoped to this `EvalCtx`, which is itself rebuilt fresh once per frame,
+    /// so it never needs explicit invalidation.
+    grid_dims_cache: RefCell<HashMap<(NodeId, bool), GridDims>>,
+    /// Cumulative (gap + outer-size) offsets for a `Layout::Row`/
+    /// `Layout::Column` container's children, in `children` order —
+    /// `offsets[i]` is the flow-axis position *before* `children[i]`. Keyed
+    /// by the container's `NodeId`; unlike `grid_dims_cache` there's only one
+    /// axis worth caching per container (the other axis is an O(1)
+    /// alignment-fraction formula already), so no second key dimension is
+    /// needed. Same per-frame scoping and rationale as `grid_dims_cache`.
+    flow_offsets_cache: RefCell<HashMap<NodeId, Rc<[f64]>>>,
 }
 
 impl<'a> EvalCtx<'a> {
@@ -26,7 +48,55 @@ impl<'a> EvalCtx<'a> {
             scene_def,
             nodes,
             evaluating_exprs: RefCell::new(HashSet::new()),
+            grid_dims_cache: RefCell::new(HashMap::new()),
+            flow_offsets_cache: RefCell::new(HashMap::new()),
         }
+    }
+
+    /// Look up (or compute and cache) the `(col_widths, row_heights)` pair for
+    /// one `Layout::Grid` container. `compute` must not itself try to borrow
+    /// this cache for the *same* key — it may safely do so for a different
+    /// key (e.g. a grid nested inside another grid's cell), since the cache
+    /// borrow from a miss is dropped before `compute` runs, and the borrow for
+    /// the insert is taken only after `compute` has already returned. A
+    /// `compute` failure is not cached — the next caller simply retries it.
+    pub(crate) fn grid_dims_cached(
+        &self,
+        key: (NodeId, bool),
+        compute: impl FnOnce() -> anyhow::Result<(Vec<f64>, Vec<f64>)>,
+    ) -> anyhow::Result<GridDims> {
+        if let Some((cw, rh)) = self.grid_dims_cache.borrow().get(&key) {
+            return Ok((Rc::clone(cw), Rc::clone(rh)));
+        }
+        let (cw, rh) = compute()?;
+        let cw = Rc::from(cw);
+        let rh = Rc::from(rh);
+        self.grid_dims_cache
+            .borrow_mut()
+            .insert(key, (Rc::clone(&cw), Rc::clone(&rh)));
+        Ok((cw, rh))
+    }
+
+    /// Look up (or compute and cache) the prefix-offsets array for one
+    /// `Layout::Row`/`Layout::Column` container. Same borrow discipline as
+    /// `grid_dims_cached`: the miss-lookup borrow is dropped before
+    /// `compute` runs, and the insert-borrow is taken only after `compute`
+    /// has already returned, so a `compute` that recurses into a *different*
+    /// key (e.g. a row nested inside another row's cell) is safe. A
+    /// `compute` failure is not cached.
+    pub(crate) fn flow_offsets_cached(
+        &self,
+        parent_id: NodeId,
+        compute: impl FnOnce() -> anyhow::Result<Vec<f64>>,
+    ) -> anyhow::Result<Rc<[f64]>> {
+        if let Some(offsets) = self.flow_offsets_cache.borrow().get(&parent_id) {
+            return Ok(Rc::clone(offsets));
+        }
+        let offsets = Rc::from(compute()?);
+        self.flow_offsets_cache
+            .borrow_mut()
+            .insert(parent_id, Rc::clone(&offsets));
+        Ok(offsets)
     }
 
     pub fn scene_width(&self) -> anyhow::Result<f64> {

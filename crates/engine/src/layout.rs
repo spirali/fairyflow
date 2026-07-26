@@ -5,6 +5,7 @@ use crate::values::Eval;
 use renderer_core::{
     AffineTransform, Position as RcPosition, Size as RcSize, positional_transform,
 };
+use std::rc::Rc;
 
 impl Node {
     pub fn get_position(&self) -> Option<&Position> {
@@ -225,22 +226,28 @@ impl Node {
                         pl + (parent_w - pl - pr - self_w) * align.eval(ctx)? - off.x
                     }
                     Layout::Row { gap, reserve, .. } => {
-                        let parent = ctx.node(self.parent.unwrap())?;
+                        let parent_id = self.parent.unwrap();
+                        let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
-                        let mut x = pl;
                         let gap = gap.eval(ctx)?;
-                        for child in children {
-                            if *child == self.id {
-                                return Ok(x - off.x);
+                        let offsets = ctx.flow_offsets_cached(parent_id, || {
+                            let mut offsets = Vec::with_capacity(children.len());
+                            let mut x = 0.0f64;
+                            for &child_id in children {
+                                offsets.push(x);
+                                let node = ctx.node(child_id)?;
+                                if *reserve || node.is_active(ctx.frame()) {
+                                    x += gap + node.get_outer_width(ctx)?;
+                                }
                             }
-                            let node = ctx.node(*child)?;
-                            if *reserve || node.is_active(ctx.frame()) {
-                                x += gap + node.get_outer_width(ctx)?;
-                            }
+                            Ok(offsets)
+                        })?;
+                        match children.iter().position(|&c| c == self.id) {
+                            Some(i) => pl + offsets[i] - off.x,
+                            None => 0.0,
                         }
-                        0.0
                     }
                     Layout::Grid {
                         cols,
@@ -248,13 +255,21 @@ impl Node {
                         reserve,
                         ..
                     } => {
-                        let parent = ctx.node(self.parent.unwrap())?;
+                        let parent_id = self.parent.unwrap();
+                        let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
                         let cols = (*cols).max(1) as usize;
-                        let (col_widths, _row_heights, idx) =
-                            grid_dims(ctx, children, cols, *reserve, Some(self.id), true)?;
+                        let (col_widths, _row_heights, idx) = grid_dims(
+                            ctx,
+                            parent_id,
+                            children,
+                            cols,
+                            *reserve,
+                            Some(self.id),
+                            true,
+                        )?;
                         match idx {
                             Some(idx) => {
                                 let col = idx % cols;
@@ -295,22 +310,28 @@ impl Node {
                         pt + (parent_h - pt - pb - self_h) / 2.0 - off.y
                     }
                     Layout::Column { gap, reserve, .. } => {
-                        let parent = ctx.node(self.parent.unwrap())?;
+                        let parent_id = self.parent.unwrap();
+                        let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
-                        let mut y = pt;
                         let gap = gap.eval(ctx)?;
-                        for child in children {
-                            if *child == self.id {
-                                return Ok(y - off.y);
+                        let offsets = ctx.flow_offsets_cached(parent_id, || {
+                            let mut offsets = Vec::with_capacity(children.len());
+                            let mut y = 0.0f64;
+                            for &child_id in children {
+                                offsets.push(y);
+                                let node = ctx.node(child_id)?;
+                                if *reserve || node.is_active(ctx.frame()) {
+                                    y += gap + node.get_outer_height(ctx)?;
+                                }
                             }
-                            let node = ctx.node(*child)?;
-                            if *reserve || node.is_active(ctx.frame()) {
-                                y += gap + node.get_outer_height(ctx)?;
-                            }
+                            Ok(offsets)
+                        })?;
+                        match children.iter().position(|&c| c == self.id) {
+                            Some(i) => pt + offsets[i] - off.y,
+                            None => 0.0,
                         }
-                        0.0
                     }
                     Layout::Row { align, .. } => {
                         let parent_h = self.get_parent_height(ctx)?;
@@ -323,13 +344,21 @@ impl Node {
                         reserve,
                         ..
                     } => {
-                        let parent = ctx.node(self.parent.unwrap())?;
+                        let parent_id = self.parent.unwrap();
+                        let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
                         let cols = (*cols).max(1) as usize;
-                        let (_col_widths, row_heights, idx) =
-                            grid_dims(ctx, children, cols, *reserve, Some(self.id), true)?;
+                        let (_col_widths, row_heights, idx) = grid_dims(
+                            ctx,
+                            parent_id,
+                            children,
+                            cols,
+                            *reserve,
+                            Some(self.id),
+                            true,
+                        )?;
                         match idx {
                             Some(idx) => {
                                 let row = idx / cols;
@@ -407,7 +436,7 @@ impl Node {
                     } => {
                         let cols = (*cols).max(1) as usize;
                         let (col_widths, row_heights, _) =
-                            grid_dims(ctx, children, cols, *reserve, None, false)?;
+                            grid_dims(ctx, self.id, children, cols, *reserve, None, false)?;
                         if row_heights.is_empty() {
                             0.0
                         } else {
@@ -534,7 +563,7 @@ impl Node {
                     } => {
                         let cols = (*cols).max(1) as usize;
                         let (_col_widths, row_heights, _) =
-                            grid_dims(ctx, children, cols, *reserve, None, false)?;
+                            grid_dims(ctx, self.id, children, cols, *reserve, None, false)?;
                         if row_heights.is_empty() {
                             0.0
                         } else {
@@ -816,39 +845,71 @@ fn resolve_text_wrap_align(
 /// `col_widths` always has exactly `cols` entries; `row_heights` grows to
 /// however many rows the counted children actually fill. If `find` matches
 /// a counted child, also returns its 0-based row-major index.
+///
+/// The `col_widths`/`row_heights` measurement pass (the expensive part —
+/// it measures every counted child, which for a text-bearing child means a
+/// full text-shaping pass) is memoized on `ctx` per `(parent_id, outer)` for
+/// the lifetime of the current frame's `EvalCtx`: every child in the grid
+/// asks for its own x/y/width/height once per frame, and without this cache
+/// each of those queries would redo the full scan over every *other* child
+/// too — O(children²) measurements per frame for a grid that never changes
+/// shape within a single frame. `find` doesn't affect the measurement, so it
+/// stays a separate, uncached, cheap scan (no measurement calls) run fresh
+/// every time — the caller-supplied `find` differs per call whereas the
+/// measurement doesn't, so caching by `find` would defeat the cache instead
+/// of serving it.
+#[allow(clippy::type_complexity)]
 fn grid_dims(
     ctx: &EvalCtx,
+    parent_id: NodeId,
     children: &[NodeId],
     cols: usize,
     reserve: bool,
     find: Option<NodeId>,
     outer: bool,
-) -> anyhow::Result<(Vec<f64>, Vec<f64>, Option<usize>)> {
-    let mut col_widths = vec![0.0f64; cols];
-    let mut row_heights: Vec<f64> = Vec::new();
-    let mut i = 0usize;
-    let mut found = None;
-    for &child_id in children {
-        let node = ctx.node(child_id)?;
-        if !(reserve || node.is_active(ctx.frame())) {
-            continue;
+) -> anyhow::Result<(Rc<[f64]>, Rc<[f64]>, Option<usize>)> {
+    let (col_widths, row_heights) = ctx.grid_dims_cached((parent_id, outer), || {
+        let mut col_widths = vec![0.0f64; cols];
+        let mut row_heights: Vec<f64> = Vec::new();
+        let mut i = 0usize;
+        for &child_id in children {
+            let node = ctx.node(child_id)?;
+            if !(reserve || node.is_active(ctx.frame())) {
+                continue;
+            }
+            let (row, col) = (i / cols, i % cols);
+            if row >= row_heights.len() {
+                row_heights.resize(row + 1, 0.0);
+            }
+            let (w, h) = if outer {
+                (node.get_outer_width(ctx)?, node.get_outer_height(ctx)?)
+            } else {
+                (node.get_width(ctx)?, node.get_height(ctx)?)
+            };
+            col_widths[col] = col_widths[col].max(w);
+            row_heights[row] = row_heights[row].max(h);
+            i += 1;
         }
-        if Some(child_id) == find {
-            found = Some(i);
+        Ok((col_widths, row_heights))
+    })?;
+
+    let found = find.and_then(|target| {
+        let mut i = 0usize;
+        for &child_id in children {
+            let Ok(node) = ctx.node(child_id) else {
+                return None;
+            };
+            if !(reserve || node.is_active(ctx.frame())) {
+                continue;
+            }
+            if child_id == target {
+                return Some(i);
+            }
+            i += 1;
         }
-        let (row, col) = (i / cols, i % cols);
-        if row >= row_heights.len() {
-            row_heights.resize(row + 1, 0.0);
-        }
-        let (w, h) = if outer {
-            (node.get_outer_width(ctx)?, node.get_outer_height(ctx)?)
-        } else {
-            (node.get_width(ctx)?, node.get_height(ctx)?)
-        };
-        col_widths[col] = col_widths[col].max(w);
-        row_heights[row] = row_heights[row].max(h);
-        i += 1;
-    }
+        None
+    });
+
     Ok((col_widths, row_heights, found))
 }
 /*

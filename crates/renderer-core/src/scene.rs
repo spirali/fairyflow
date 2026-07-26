@@ -169,6 +169,12 @@ pub struct TextStyle {
     pub font_weight: Inheritable<f64>,
     #[serde(skip_serializing_if = "Inheritable::is_inherited")]
     pub italic: Inheritable<bool>,
+    /// `underline()`/`strike()` 0..1 progress (proposal §10.2) — inherited
+    /// exactly like `italic`.
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub underline: Inheritable<f64>,
+    #[serde(skip_serializing_if = "Inheritable::is_inherited")]
+    pub strike: Inheritable<f64>,
 }
 
 /// A single styled text run.
@@ -197,6 +203,24 @@ pub struct TextSpan {
     /// anywhere in this span's ancestor chain).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_transform: Option<crate::AffineTransform>,
+    /// `underline()`/`strike()` styling overrides (proposal §10.2) — sparse,
+    /// per-node only (not inherited, unlike the progress fields on
+    /// `TextStyle` above). Absent means "use the run's own resolved fill"
+    /// (`color`) or "use the font's own underline/strikeout metrics at this
+    /// span's resolved size" (`width`/`offset`), both computed by the
+    /// renderer at draw time, not here.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_offset: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_offset: Option<f64>,
 }
 
 /// A node in the text tree — either a nested group or a leaf span.
@@ -219,6 +243,19 @@ pub struct TextGroup {
     /// own `text_align`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_align: Option<TextAlign>,
+    /// See `TextSpan`'s identically-named fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_offset: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_offset: Option<f64>,
     pub children: Vec<TextChild>,
 }
 
@@ -339,6 +376,20 @@ pub enum NodeKind {
         /// (predating this field) still match byte-for-byte.
         #[serde(skip_serializing_if = "is_fully_revealed")]
         reveal: f64,
+        /// See `TextSpan`'s identically-named fields — the block-level
+        /// default when no run overrides it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        underline_color: Option<Paint>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        underline_width: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        underline_offset: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        strike_color: Option<Paint>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        strike_width: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        strike_offset: Option<f64>,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
     },

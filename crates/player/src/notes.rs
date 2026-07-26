@@ -42,6 +42,8 @@ fn notes_text_style() -> TextStyle {
         font_size: Inheritable::Own(FONT_SIZE),
         font_weight: Inheritable::Own(400.0),
         italic: Inheritable::Own(false),
+        underline: Inheritable::Own(0.0),
+        strike: Inheritable::Own(0.0),
     }
 }
 
@@ -60,6 +62,12 @@ pub fn build_notes_scene(paragraphs: &[&str], width: u32, height: u32) -> Scene 
                 id: i as u64 + 1,
                 text: Arc::new(text.to_string()),
                 text_style: notes_text_style(),
+                underline_color: None,
+                underline_width: None,
+                underline_offset: None,
+                strike_color: None,
+                strike_width: None,
+                strike_offset: None,
                 override_offset: None,
                 override_transform: None,
             })
@@ -89,6 +97,12 @@ pub fn build_notes_scene(paragraphs: &[&str], width: u32, height: u32) -> Scene 
             wrap: Some((w - 2.0 * PADDING).max(1.0)),
             text_align: TextAlign::Left,
             text_style: notes_text_style(),
+            underline_color: None,
+            underline_width: None,
+            underline_offset: None,
+            strike_color: None,
+            strike_width: None,
+            strike_offset: None,
             sh_language: None,
             sh_theme: None,
             reveal: 1.0,

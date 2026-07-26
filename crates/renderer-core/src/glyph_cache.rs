@@ -33,11 +33,32 @@ pub struct CachedGlyph {
     /// used for painting (the glyph's `path` already has its own baseline
     /// position baked in).
     pub y: f32,
+    /// This glyph's row's baseline, in the same coordinate space as `y`
+    /// (0 = top of the line). For decoration positioning only (underline/
+    /// strikeout sit at a font-metric offset from the baseline) — like `y`,
+    /// not used for painting the glyph itself, which already has it baked
+    /// into `path`.
+    pub baseline_y: f32,
     /// Outline at y_cursor = 0 with (run_x + glyph.x, baseline - glyph.y) applied.
     pub path: VectorPath,
     /// Byte offset of this glyph's cluster in the concatenated span text string
     /// that was passed to parley.  Used to map glyphs to SH token colors.
     pub cluster: u32,
+}
+
+/// Font-derived underline/strikeout geometry for one span (proposal §10.2).
+/// Captured for free while a span's font is already resolved during
+/// glyph-run building, in the same pixel-space `CachedGlyph` positions use —
+/// no separate scaling needed at use time. `offset` follows skrifa's raw
+/// (design-space, positive = above the baseline) convention; consumers
+/// apply it the same way `CachedGlyph`'s own glyph positions already do
+/// (`baseline - offset`), not by re-deriving a sign convention here.
+#[derive(Debug, Clone, Copy)]
+pub struct DecorationMetrics {
+    pub underline_offset: f32,
+    pub underline_thickness: f32,
+    pub strikeout_offset: f32,
+    pub strikeout_thickness: f32,
 }
 
 /// A fully laid-out line of text, ready to render or measure.
@@ -46,6 +67,11 @@ pub struct CachedLine {
     pub width: f32,
     pub height: f32,
     pub glyphs: Vec<CachedGlyph>,
+    /// Per-span-index decoration metrics (see `DecorationMetrics`), indexed
+    /// in parallel with the `spans` slice this line was built from. `None`
+    /// for a span whose font yielded no usable metrics (defensive — real
+    /// fonts virtually always have `post`/`OS2` tables) or for an empty line.
+    pub decorations: Vec<Option<DecorationMetrics>>,
 }
 
 /// Normalized cache key for one span: text content + font properties only.

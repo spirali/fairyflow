@@ -62,6 +62,21 @@ def test_arrow_shaft_has_only_move_and_line_children():
     assert len(arrow._children) == 2
 
 
+def test_arrow_alpha_propagates_to_arrowheads():
+    """The arrowhead is a separate sibling node (see
+    `test_arrow_shaft_has_only_move_and_line_children`), so `.alpha()` on the
+    `Arrow` must be explicitly forwarded to it - same as `stroke_color`/
+    `stroke_width` already are in `Path.arrow()`. The forwarded value is a
+    live reference to the shaft's own `AnimatedValue`, not a snapshot, so a
+    later `.alpha()` call on the shaft is picked up by the head too."""
+    s = Scene(100, 100)
+    with s:
+        arrow = Arrow((0, 0), (50, 50), head="both").alpha(0.3)
+    assert _attr_value(arrow, "alpha") == 0.3
+    for head in arrow.arrowheads:
+        assert _attr_value(head, "alpha") is arrow._attrs["alpha"]
+
+
 def test_arrow_gap_shifts_end_toward_start():
     """Both endpoints are plain literals (no live `Position`), so the whole
     gap/direction expression is constant-foldable — the exported wire
@@ -185,6 +200,15 @@ def test_line_and_arrow_styles(test_scene):
 def test_arrow_head_both(test_scene):
     with test_scene.size(200, 60):
         Arrow((20, 30), (180, 30), head="both").stroke("darkorange", 3)
+
+
+def test_arrow_alpha_dims_arrowhead(test_scene):
+    """Both the shaft and the arrowhead must dim together under `.alpha()` -
+    regression test for the arrowhead staying fully opaque while the shaft
+    faded (see `test_arrow_alpha_propagates_to_arrowheads` for the unit-level
+    check)."""
+    with test_scene.size(200, 60):
+        Arrow((20, 30), (180, 30)).stroke("darkorange", 3).alpha(0.3)
 
 
 def test_arrow_gap_leaves_space_before_target(test_scene):

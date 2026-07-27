@@ -2,8 +2,7 @@
 
 ## 0.5.0
 
-A major redesign of the Python scene API. Not backwards compatible with 0.4 scene
-scripts — see the docs for the current API.
+A major redesign of the Python scene API. Not backwards compatible with 0.4.
 
 ### New
 

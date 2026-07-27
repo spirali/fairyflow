@@ -2145,6 +2145,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             "dot": self._create_dot_arrow,
         }[style]
         head = builder(*dir, length, width)
+        head.alpha(self._get_attr("alpha"))
         if style in ("triangle", "stealth", "dot"):
             head.fill(self._get_attr("stroke_color"))
         else:

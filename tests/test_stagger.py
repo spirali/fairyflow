@@ -28,7 +28,7 @@ def test_stagger_offsets_bare_calls(sc):
         start = base + i * stagger_frames
         end = start + dur_frames
         assert end in values and values[end] == 10
-        assert transitions[end] == "linear"
+        assert transitions[end] == "in_out"
 
     assert get_frame() == base + 2 * stagger_frames + dur_frames
 
@@ -47,7 +47,7 @@ def test_stagger_with_fade_in(sc):
         start = base + i * stagger_frames
         end = start + dur_frames
         assert values[end] == 1
-        assert transitions[end] == "linear"
+        assert transitions[end] == "in_out"
 
     assert get_frame() == base + 2 * stagger_frames + dur_frames
 

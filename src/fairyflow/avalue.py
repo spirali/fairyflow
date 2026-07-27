@@ -40,12 +40,12 @@ class AnimatedValue(Generic[T], Expr):
             if frame != new_frame:
                 if frame not in self.values:
                     self.values[frame] = HOLD
-                self.transitions[new_frame] = ease or "linear"
+                self.transitions[new_frame] = ease or "in_out"
                 frame = new_frame
             else:
-                self.transitions[frame] = "S"
+                self.transitions[frame] = "step"
         else:
-            self.transitions[frame] = "S"
+            self.transitions[frame] = "step"
         self.values[frame] = value
         if frame != self.init_frame:
             self.single_value = False
@@ -94,7 +94,7 @@ def serialize_frame_value(frame, obj, transitions):
 
     if obj == HOLD:
         return [frame]
-    tr = transitions.get(frame, "S")
-    if tr == "S":
+    tr = transitions.get(frame, "step")
+    if tr == "step":
         return [frame, serialize_expr(obj)]
     return [frame, serialize_expr(obj), tr]

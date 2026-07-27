@@ -116,7 +116,7 @@ class TextStyleMethods:
             offset: Distance from the baseline in px. Defaults to the font's
                 own underline metric at this run's resolved size.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -313,7 +313,7 @@ class Text(
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.

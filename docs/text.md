@@ -448,7 +448,7 @@ with Scene():
 
 ```ffpy frame="0"
 with Scene():
-    stext('<span color="#e06c75" bold>ERROR</span> something went wrong').font("monospace", 22)
+    stext('<span color="#e06c75" bold>ERROR</span> something\nwent wrong').font("monospace", 22)
 ```
 
 ### Supported attributes

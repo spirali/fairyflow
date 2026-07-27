@@ -61,8 +61,8 @@ directly:
 
 ```ffpy frame="0"
 with Scene():
-    Rect().size(80, 50).fill("steelblue").align(x=0.5).xy(0, 30)
-    Rect().size(80, 50).fill("coral").align(x=0.5).xy(0, 110)
+    Rect().size(80, 50).fill("steelblue").align(x=0.5).xy(y=30)
+    Rect().size(80, 50).fill("coral").align(x=0.5).y(110)
 ```
 
 ---

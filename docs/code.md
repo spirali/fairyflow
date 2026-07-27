@@ -82,3 +82,26 @@ arguments to just pick up the configured family/size.
 For lower-level control — styling a `Text` block you didn't build with `code()` —
 `.sh(language, theme=None)` enables highlighting directly; `code()`/`.code()` use it
 internally.
+
+## Manually highlighting part of a snippet
+
+`.sh()` only colors runs whose fill is still the default — a run with its own
+explicit `.fill()` keeps that color instead. That makes it possible to combine
+automatic syntax highlighting with a manual highlight on just one identifier:
+build the block with `stext()` (whose tags apply `.fill()` immediately) and
+chain `.sh()` onto the result, so the tagged word keeps its manual color while
+every other run still gets normal per-token syntax colors:
+
+```ffpy frame="0"
+with Scene(background="#2b303b"):
+    stext(
+        """
+def total(items):
+    return sum(<s bold color="yellow">items</s>)
+        """
+    ).sh("python", theme="base16-ocean.dark").font("monospace", 20)
+```
+
+`stext()` runs its markup parser over the whole string, which misreads bare
+`<`, `>` or `&` as tags (see [stext](text.md#stext)); so reconfigure delimiters or build the block with `.line()`/`.span()` instead (plain
+strings, no parsing) and call `.fill()` on the run you want to stand out.

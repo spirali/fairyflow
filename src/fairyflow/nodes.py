@@ -194,7 +194,7 @@ class Node(AnimatedObject):
         """
         return self._parent.get_scene()
 
-    def anim(self, dur: Duration, *, ease: Easing = None) -> AnimProxy:
+    def anim(self, dur: Duration = None, *, ease: Easing = None) -> AnimProxy:
         """Return a proxy for animating several attributes of this node at once.
 
         Every setter called on the returned proxy is pre-filled with `dur`/

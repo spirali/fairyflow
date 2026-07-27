@@ -185,7 +185,7 @@ class Par(Composer):
 class anim(Composer):
     """block-scoped `dur`/`ease` defaults"""
 
-    def __init__(self, dur: Duration, *, ease: Easing = None):
+    def __init__(self, dur: Duration = None, *, ease: Easing = None):
         # Deliberately not calling Composer.__init__: it does `self.frame =
         # 0`, which would hit the read-only `frame` property below.
         self.parent = None
@@ -221,7 +221,7 @@ class anim(Composer):
 class AnimProxy:
     """Lightweight proxy returned by `Node.anim()`."""
 
-    def __init__(self, node, dur: Duration, ease: Easing = None):
+    def __init__(self, node, dur: Duration = None, ease: Easing = None):
         self._node = node
         self._dur = dur
         self._ease = ease

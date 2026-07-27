@@ -4,13 +4,18 @@ from .sentinels import INHERITED_VALUE
 
 
 def _resolve_dur_ease(dur, ease):
-    if dur is not None:
-        return dur, ease
-    composer = COMPOSER.get()
-    while composer is not None:
-        if composer.dur is not None:
-            return composer.dur, ease if ease is not None else composer.ease
-        composer = composer.parent
+    if dur is None:
+        composer = COMPOSER.get()
+        while composer is not None and composer.dur is None:
+            composer = composer.parent
+        if composer is not None:
+            dur = composer.dur
+    if ease is None:
+        composer = COMPOSER.get()
+        while composer is not None and composer.ease is None:
+            composer = composer.parent
+        if composer is not None:
+            ease = composer.ease
     return dur, ease
 
 

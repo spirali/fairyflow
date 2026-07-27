@@ -845,15 +845,15 @@ def test_type_on_produces_snap_to_zero_then_animate_to_one():
     with s:
         Text("hi").type_on(dur=1)
     node = _node(s)
-    assert node["reveal"] == {"k": [[0, 0], [24, 1, "linear"]]}
+    assert node["reveal"] == {"k": [[0, 0], [24, 1, "in_out"]]}
 
 
 def test_type_on_respects_custom_ease():
     s = Scene(100, 100)
     with s:
-        Text("hi").type_on(dur=1, ease="in_out")
+        Text("hi").type_on(dur=1, ease="out")
     node = _node(s)
-    assert node["reveal"]["k"][1] == [24, 1, "in_out"]
+    assert node["reveal"]["k"][1] == [24, 1, "out"]
 
 
 def test_type_on_starts_from_the_current_frame():
@@ -864,7 +864,7 @@ def test_type_on_starts_from_the_current_frame():
         Text("hi").type_on(dur=0.5)
     node = _node(s)
     assert node["reveal"]["k"][0] == [2, 0]
-    assert node["reveal"]["k"][1] == [14, 1, "linear"]
+    assert node["reveal"]["k"][1] == [14, 1, "in_out"]
 
 
 # ── Text decorations: underline()/strike() (proposal §10.2, item C2) ────────
@@ -967,7 +967,7 @@ def test_underline_dur_animates():
     with s:
         Text("hi").underline(dur=1)
     node = _node(s)
-    assert node["underline"] == {"k": [[0, 0], [24, 1.0, "linear"]]}
+    assert node["underline"] == {"k": [[0, 0], [24, 1.0, "in_out"]]}
 
 
 def test_strike_over_tspan():

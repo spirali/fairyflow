@@ -154,13 +154,30 @@ def test_call_site_ease_overrides_anim_block_ease(sc):
     assert _transitions(r, "x")[end] == "out_back"
 
 
+def test_call_site_ease_step_holds_then_jumps(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    with anim(ease="in_out"):
+        r.x(10, dur=0.5, ease="step")
+    end = base + time_to_frames(0.5)
+    assert _transitions(r, "x")[end] == "step"
+
+    from fairyflow.serializer import create_export
+
+    node = create_export(0, sc)["nodes"][0]
+    keyframes = node["x"]["k"]
+    last = keyframes[-1]
+    assert last[0] == end
+    assert len(last) == 2
+
+
 def test_anim_block_ease_without_any_dur_is_instant(sc):
     r = Rect().size(10, 10)
     base = get_frame()
     with anim(ease="in_out"):
         r.x(10)
     assert get_frame() == base
-    assert _transitions(r, "x")[base] == "S"
+    assert _transitions(r, "x")[base] == "step"
 
 
 def test_anim_proxy_ease_only_with_call_site_dur(sc):

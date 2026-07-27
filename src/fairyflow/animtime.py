@@ -23,7 +23,7 @@ class Frames:
 
 type Duration = SupportsFloat | Frames | None
 
-type Easing = Literal["linear", "in", "out", "in_out", "out_back"] | None
+type Easing = Literal["linear", "in", "out", "in_out", "out_back", "step"] | None
 
 
 def duration_to_frames(dur: Duration):

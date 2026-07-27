@@ -248,7 +248,7 @@ class AlphaMixin:
             value: Opacity in the range ``[0.0, 1.0]``, where ``0.0`` is fully
                 transparent and ``1.0`` is fully opaque.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -266,7 +266,7 @@ class AlphaMixin:
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -286,7 +286,7 @@ class AlphaMixin:
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -313,7 +313,7 @@ class ZLevelMixin:
         Args:
             value: The z-level. Higher values appear in front.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -348,7 +348,7 @@ class SizeMixin:
             value: The new width in pixels. `rel(f)` sets it to `f` times the
                 parent's width instead.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -369,7 +369,7 @@ class SizeMixin:
             value: The new height in pixels. `rel(f)` sets it to `f` times the
                 parent's height instead.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -393,7 +393,7 @@ class SizeMixin:
             h: The new height in pixels, or `rel(f)`. ``None`` (default)
                 leaves the height untouched.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -410,7 +410,7 @@ class SizeMixin:
 
         Args:
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -605,7 +605,7 @@ class PositionMixin(PositionQueryMixin):
                 `rel(f)` sets it to `f` times the parent's width; ``DEFAULT``
                 resets it to the layout-computed position.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -628,7 +628,7 @@ class PositionMixin(PositionQueryMixin):
                 `rel(f)` sets it to `f` times the parent's height; ``DEFAULT``
                 resets it to the layout-computed position.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -655,7 +655,7 @@ class PositionMixin(PositionQueryMixin):
                 ``None`` (default) leaves y untouched; ``DEFAULT`` resets it to
                 the layout-computed position.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -685,7 +685,7 @@ class PositionMixin(PositionQueryMixin):
                 ``0.5`` to the center, ``1.0`` to the bottom edge. ``None``
                 (default) leaves the y axis untouched.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -726,7 +726,7 @@ class PositionMixin(PositionQueryMixin):
         Args:
             position: The target position, resolved relative to the parent node.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -746,7 +746,7 @@ class PositionMixin(PositionQueryMixin):
             dx: Horizontal offset in pixels.
             dy: Vertical offset in pixels.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -775,7 +775,7 @@ class PositionMixin(PositionQueryMixin):
             align: Placement along the perpendicular axis: ``0.0`` start-aligned,
                 ``0.5`` centered, ``1.0`` end-aligned.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -838,7 +838,7 @@ class PositionMixin(PositionQueryMixin):
         Args:
             path: The `Path` to follow.
             dur: Duration of the animation in seconds.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
             start: Path parameter at the start of the animation (0 = path start, 1 = path end).
             end: Path parameter at the end of the animation.
 
@@ -879,7 +879,7 @@ class StyleMethods:
                 string, an RGB tuple, or a `Color` instance), or a
                 `gradient(...)`.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -913,7 +913,7 @@ class StyleMethods:
                 a "marching ants" effect. Only meaningful together with
                 `dash` (own or previously set).
             dur: Optional duration for animation (`color`/`width`/`offset`).
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1082,7 +1082,7 @@ class RotAndScaleMixin:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the width.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1099,7 +1099,7 @@ class RotAndScaleMixin:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the height.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1116,7 +1116,7 @@ class RotAndScaleMixin:
             value: Scale factor applied to both x and y. ``1.0`` is the
                 original size; ``2.0`` doubles both dimensions.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1137,7 +1137,7 @@ class RotAndScaleMixin:
         Args:
             value: Rotation angle in degrees, clockwise.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1170,7 +1170,7 @@ class RotAndScaleMixin:
                 Mutually exclusive with ``point``.
             y: Same as ``x``, for the vertical axis.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1255,7 +1255,7 @@ class CameraProxy:
             factor: Zoom factor. ``1.0`` is the original scale; ``2.0``
                 magnifies content 2x.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1278,7 +1278,7 @@ class CameraProxy:
                 a live `Position` to track — e.g. `g.camera.center(node.at("center"))`.
             y: The y coordinate. Required unless `x` is a `Position`.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1306,7 +1306,7 @@ class CameraProxy:
 
         Args:
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1505,7 +1505,7 @@ class Group(
             bottom: Bottom padding.
             left: Left padding.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1562,7 +1562,7 @@ class Group(
             w: Relative width of the clipping window, in ``[0.0, 1.0]``.
             h: Relative height of the clipping window, in ``[0.0, 1.0]``.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1607,7 +1607,7 @@ class Group(
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1646,7 +1646,7 @@ class Group(
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1737,7 +1737,7 @@ class Scene(
             value: Any color value accepted by `Color.parse` (e.g. a hex
                 string, an RGB tuple, or a `Color` instance).
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1808,7 +1808,7 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin, RotAndScaleM
         Args:
             value: Corner radius in pixels. `0` (the default) is square corners.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -1872,7 +1872,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
                 full path; ``0.0`` hides it entirely from the end. ``None``
                 (default) leaves the end untouched.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
         """
         with Par():
             if start is not None:
@@ -1891,7 +1891,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             dur: Duration of the animation in seconds. If unset, uses the
                 enclosing `anim()` block's default, or is instant if there
                 is none.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -2220,7 +2220,7 @@ class PathCubic(Node, PositionMixin):
             dx: Relative x offset of control point 1 in pixels.
             dy: Relative y offset of control point 1 in pixels.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.
@@ -2239,7 +2239,7 @@ class PathCubic(Node, PositionMixin):
             dx: Relative x offset of control point 2 in pixels.
             dy: Relative y offset of control point 2 in pixels.
             dur: Optional duration for animation.
-            ease: Optional easing curve (``"linear"`` default).
+            ease: Optional easing curve (``"in_out"`` default).
 
         Returns:
             self, for method chaining.

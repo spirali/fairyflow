@@ -65,27 +65,35 @@ an instant change has no rate to shape. `dur` and `ease` resolve independently, 
 `dur` comes from somewhere else, like the call site itself or a nested `anim(dur=...)` block —
 see below.
 
-Five presets are available, matching the standard CSS easing curves:
+Six presets are available — five matching the standard CSS easing curves, plus a sharp step:
 
 | `ease` | Description |
 |---|---|
-| `"linear"` (default) | Constant speed throughout |
+| `"linear"` | Constant speed throughout |
 | `"in"` | Starts slow, accelerates towards the end |
 | `"out"` | Starts fast, decelerates towards the end |
-| `"in_out"` | Slow start and end, faster in the middle |
+| `"in_out"` (default) | Slow start and end, faster in the middle |
 | `"out_back"` | Overshoots past the target, then settles back |
+| `"step"` | No interpolation — holds the old value for the whole duration, then jumps instantly at the end |
 
 ```python
-r.xy(220, 70, dur=0.8, ease="in_out")  # eased transition
-r.fill("gold", dur=0.8)               # dur alone ⇒ ease="linear"
+r.xy(220, 70, dur=0.8, ease="linear")  # constant-speed transition
+r.fill("gold", dur=0.8)               # dur alone ⇒ ease="in_out"
+r.rotate(90, dur=0.8, ease="step")     # holds at 0° for 0.8 s, then snaps to 90°
 ```
+
+`"step"` differs from simply leaving out `dur`: an instant change (no `dur`) happens
+immediately and doesn't advance the clock, while `ease="step"` still occupies the full
+`dur` on the timeline — it just doesn't animate visually until the very last frame. This is
+useful for cuts and hard state changes that need to land at a specific point in a longer,
+otherwise-animated sequence (e.g. inside a `Par()` alongside attributes that *do* ease).
 
 ```ffpy video="mp4"
 with Scene(width=320, height=260):
-    easings = ["linear", "in", "out", "in_out", "out_back"]
+    easings = ["linear", "in", "out", "in_out", "out_back", "step"]
     rects = []
     for i, name in enumerate(easings):
-        y = 20 + i * 48
+        y = 20 + i * 40
         Text().xy(4, y).span(name).font(size=14).fill("gray")
         r = Rect().size(18, 18).fill("steelblue").xy(70, y - 2)
         rects.append(r)
@@ -95,10 +103,11 @@ with Scene(width=320, height=260):
             r.x(280, dur=1.5, ease=name)
 ```
 
-All five boxes travel the same distance over the same 1.5 s duration, started together in
+All six boxes travel the same distance over the same 1.5 s duration, started together in
 a `Par()` block — the differing curves are what set them apart. Note how `"out_back"` briefly
-overshoots the target before settling, while `"in"` lags behind at the start and catches up
-at the end.
+overshoots the target before settling, `"in"` lags behind at the start and catches up at the
+end, and `"step"` doesn't move at all until the very last frame, when it jumps straight to
+the target.
 
 ---
 

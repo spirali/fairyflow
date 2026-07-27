@@ -1,20 +1,21 @@
 import json
+import os
 import queue
+import re as _re
 import shutil
 import socket
 import subprocess
 import threading
 import time
-import os
+from pathlib import Path
+
+import numpy as np
 import pymupdf
+import pytest
+from PIL import Image
+
 from fairyflow import Scene
 from fairyflow.serializer import create_export
-import numpy as np
-from PIL import Image
-import re as _re
-
-import pytest
-from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 SERVER_BINARY = ROOT / "target" / "debug" / "server"
@@ -24,8 +25,8 @@ CURRENT_PDF_DIR = ROOT / "tests" / "current_pdf"
 CHECK_DIR = ROOT / "tests" / "check"
 FONTS_DIR = ROOT / "tests" / "assets" / "fonts"
 
-FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", False))
-FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", False))
+FAIRYFLOW_TEST_CREATE = int(os.environ.get("FAIRYFLOW_TEST_CREATE", "0"))
+FAIRYFLOW_TEST_UPDATE = int(os.environ.get("FAIRYFLOW_TEST_UPDATE", "0"))
 
 DIFF_TOLERANCE = 3
 PDF_DIFF_TOLERANCE = 30
@@ -219,10 +220,7 @@ def test_scene(request):
     s.target_resolution = None
     s.tolerance = DIFF_TOLERANCE
     s.pdf_tolerance = PDF_DIFF_TOLERANCE
-    try:
-        yield s
-    except BaseException:
-        raise
+    yield s
     exported = {"version": 2, "scenes": [create_export(0, s)]}
 
     out_dir = CURRENT_DIR / request.node.name
@@ -283,7 +281,7 @@ def test_scene(request):
                 )
             return
         else:
-            raise Exception(
+            pytest.fail(
                 f"Check directory '{check_frames_dir}' not found; run with FAIRYFLOW_TEST_CREATE=1 to create the snapshot"
             )
 

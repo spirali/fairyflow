@@ -65,7 +65,7 @@ set_default_scene(width=1280, height=720, background="#111")
 
 ```python
 # any scene file
-with Scene():   # 1280×720, background "#111" — from the project default above
+with Scene():  # 1280×720, background "#111" — from the project default above
     ...
 ```
 

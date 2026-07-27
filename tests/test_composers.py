@@ -1,5 +1,6 @@
 import pytest
-from fairyflow import Group, Par, Rect, Scene, Seq, anim, get_frame, time_to_frames
+
+from fairyflow import Group, Par, Rect, Scene, anim, get_frame, time_to_frames
 
 
 @pytest.fixture
@@ -43,10 +44,9 @@ def test_explicit_call_dur_overrides_anim_block(sc):
 def test_innermost_anim_block_wins_when_nested(sc):
     r = Rect().size(10, 10)
     base = get_frame()
-    with anim(1.5):
-        with anim(0.3):
-            r.x(10)
-            r.y(10)
+    with anim(1.5), anim(0.3):
+        r.x(10)
+        r.y(10)
     # the inner anim(0.3) wins; the outer anim(1.5) never gets a chance to apply.
     assert get_frame() == base + 2 * time_to_frames(0.3)
 

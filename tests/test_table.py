@@ -1,4 +1,5 @@
 import pytest
+
 from fairyflow import Image, Scene, Table
 
 

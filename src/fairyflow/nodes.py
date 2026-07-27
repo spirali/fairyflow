@@ -1,12 +1,31 @@
-from typing import Union, Literal, Self, SupportsFloat
-from beartype import beartype
 import os
+from typing import ClassVar, Literal, Self, SupportsFloat, Union
 
-from .types import ColorLike, FillLike, FloatLike
+from beartype import beartype
+
+from .animtime import Duration, Easing
+from .aobject import AnimatedObject, get_frame
+from .avalue import AnimatedValue
+from .color import Color, Gradient
+from .config import DEFAULT_SCENE_CONFIG
+from .ctxvars import (
+    AnimProxy,
+    Par,
+    Seq,
+    add_root_object,
+    end_frame,
+    get_current_node,
+    reset_scene,
+    set_current_node,
+)
+from .exprs import (
+    Call,
+    Expr,
+    to_expr,
+)
+from .info import get_info
 from .layout import CENTERING_LAYOUT, ColumnLayout, GridLayout, RowLayout
 from .position import Position
-from .info import get_info
-from .animtime import Duration, Easing
 from .sentinels import (
     DEFAULT,
     INHERITED_VALUE,
@@ -17,25 +36,7 @@ from .sentinels import (
     rel,
     resolve_rel,
 )
-from .aobject import AnimatedObject, get_frame
-from .avalue import AnimatedValue
-from .color import Color, Gradient
-from .exprs import (
-    Call,
-    Expr,
-    to_expr,
-)
-from .ctxvars import (
-    AnimProxy,
-    Par,
-    Seq,
-    end_frame,
-    get_current_node,
-    ROOT_OBJECTS,
-    reset_scene,
-    set_current_node,
-)
-from .config import DEFAULT_SCENE_CONFIG
+from .types import ColorLike, FillLike, FloatLike
 
 
 @beartype
@@ -52,7 +53,7 @@ class Node(AnimatedObject):
         if put_in_context:
             parent = get_current_node()
             if parent is None:
-                raise Exception("Element created out of context of a parent node")
+                raise RuntimeError("Element created out of context of a parent node")
             parent._children.append(self)
             self._parent = parent
         else:
@@ -108,18 +109,14 @@ class Node(AnimatedObject):
             is the root `Scene`.
         """
         parent = self._parent
-        if (
-            isinstance(self._parent, Group)
-            or isinstance(self._parent, Scene)
-            or parent is None
-        ):
+        if isinstance(self._parent, (Group, Scene)) or parent is None:
             return parent
         return parent.parent_group()
 
     def _new_id(self):
         return self._parent._new_id()
 
-    _WIRE_KEY = {
+    _WIRE_KEY: ClassVar[dict] = {
         "width": "w",
         "height": "h",
         "fill_color": "fill",
@@ -145,7 +142,7 @@ class Node(AnimatedObject):
 
     def _get_parent(self):
         if self._parent is None:
-            raise Exception("Node does not have parent")
+            raise RuntimeError("Node does not have parent")
         return self._parent
 
     def match(self, *, name: str | None = None, kind: str | None = None) -> bool:
@@ -162,9 +159,7 @@ class Node(AnimatedObject):
         """
         if name is not None and self._name != name:
             return False
-        if kind is not None and self.kind != kind:
-            return False
-        return True
+        return not (kind is not None and self.kind != kind)
 
     def find_node(
         self, *, name: str | None = None, kind: str | None = None
@@ -237,7 +232,7 @@ class AlphaMixin:
     own bases, so its `_ATTR_DEFAULTS` entry is found first) overrides
     `alpha` to be inherited instead (text runs)."""
 
-    _ATTR_DEFAULTS = {"alpha": 1}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"alpha": 1}
 
     def alpha(
         self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
@@ -303,7 +298,7 @@ class ZLevelMixin:
     order). Always inherited-from-parent when unset — there is no "own"
     variant."""
 
-    _ATTR_DEFAULTS = {"z": INHERITED_VALUE}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"z": INHERITED_VALUE}
 
     def z(self, value: FloatLike, *, dur: Duration = None, ease: Easing = None) -> Self:
         """Set the z-level (rendering order) of the node.
@@ -330,7 +325,7 @@ class SizeMixin:
     resolves this to 0 either way (`layout.rs::auto_width/height`'s
     catch-all), so there's no need for those kinds to special-case it."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "width": Call.auto_width,
         "height": Call.auto_height,
     }
@@ -498,7 +493,7 @@ def _resolve_anchor(x, y) -> tuple[float, float]:
 class PositionQueryMixin:
     """Allows to read a position"""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "x": Call.auto_x,
         "y": Call.auto_y,
     }
@@ -949,7 +944,7 @@ class StyleMixin(AlphaMixin, StyleMethods):
     and the top-level `Text` block. See `InheritedStyleMixin` for the
     cascading variant used by text runs."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "fill_color": "",
         "stroke_color": "",
         "stroke_width": 1,
@@ -969,7 +964,7 @@ class InheritedStyleMixin(AlphaMixin, StyleMethods):
     cascades the same way as the rest of the style here, unlike everywhere
     else it's used."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "fill_color": INHERITED_VALUE,
         "stroke_color": INHERITED_VALUE,
         "stroke_width": INHERITED_VALUE,
@@ -1060,7 +1055,7 @@ class ContextManagerMixin:
 class RotAndScaleMixin:
     """Mixin that adds rotation, pivot point, and x/y scale attributes to a node."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "rotation": 0,
         # Wire-inert placeholders: AnimatedValue.is_default entries are never
         # serialized (Node.serialize() skips them), so these values never
@@ -1147,7 +1142,7 @@ class RotAndScaleMixin:
 
     def pivot(
         self,
-        point: AnchorName | Position | float | int | None = None,
+        point: AnchorName | Position | float | None = None,
         /,
         *,
         x: FloatLike | None = None,
@@ -1349,7 +1344,7 @@ class CameraMixin:
     # (`eval_or_else(ctx, |_ctx| Ok(w * 0.5))`, `eval.rs`), mirroring
     # `PositionQueryMixin`'s `Call.auto_x`/`Call.auto_y` factories rather than
     # RotAndScaleMixin's static pivot placeholder.
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "camera_zoom": 1,
         "camera_x": _default_camera_x,
         "camera_y": _default_camera_y,
@@ -1379,7 +1374,7 @@ class Group(
 
     kind = "group"
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "clip_x": 0,
         "clip_y": 0,
         "clip_w": 1,
@@ -1689,7 +1684,7 @@ class Scene(
     # Scene has no z-ordering of its own — this exists purely to terminate
     # every top-level node's inherited z-level walk (`ZLevelMixin`) at a real
     # value instead of the parent chain running out with nothing declared.
-    _ATTR_DEFAULTS = {"z": 0}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"z": 0}
 
     def __init__(
         self,
@@ -1720,7 +1715,7 @@ class Scene(
         self.cues = set()
         self._cue_ordinal = 0
         self.notes = []
-        ROOT_OBJECTS.get().append(self)
+        add_root_object(self)
 
     def __enter__(self):
         return super().__enter__()
@@ -1795,7 +1790,7 @@ class Rect(Node, PositionMixin, SizeMixin, StyleMixin, ZLevelMixin, RotAndScaleM
     for shape kinds, same as the old eager `width(0).height(0)` seed."""
 
     kind = "rect"
-    _ATTR_DEFAULTS = {"radius": 0.0}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"radius": 0.0}
 
     def radius(
         self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
@@ -1850,7 +1845,7 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
 
     kind = "path"
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "crop_start": 0.0,
         "crop_end": 1.0,
     }
@@ -2205,7 +2200,7 @@ class PathCubic(Node, PositionMixin):
 
     kind = "cubic"
 
-    _ATTR_DEFAULTS = {"c1_x": 0, "c1_y": 0, "c2_x": 0, "c2_y": 0}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"c1_x": 0, "c1_y": 0, "c2_x": 0, "c2_y": 0}
 
     def __init__(self, parent, x, y):
         super().__init__(put_in_context=False, parent=parent)
@@ -2311,11 +2306,11 @@ class Image(
             self, for method chaining.
 
         Raises:
-            Exception: If the resolved path does not point to an existing file.
+            FileNotFoundError: If the resolved path does not point to an existing file.
         """
         image_path = os.path.abspath(image_path)
         if not os.path.exists(image_path):
-            raise Exception(f"Path '{image_path}' does not exists.")
+            raise FileNotFoundError(f"Path '{image_path}' does not exist.")
         self._set_attr("path", str(image_path))
         return self
 

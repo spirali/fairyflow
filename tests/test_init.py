@@ -15,7 +15,7 @@ def test_init_project_structure(tmp_path):
     _ensure_binary()
     proj = tmp_path / "myproject"
     result = subprocess.run(
-        [str(SERVER_BINARY), "init", str(proj)], capture_output=True
+        [str(SERVER_BINARY), "init", str(proj)], capture_output=True, check=False
     )
     assert result.returncode == 0
     assert (proj / "fairyflow.toml").exists()
@@ -43,5 +43,6 @@ def test_init_scene1_evaluates_without_error(tmp_path):
             "24",
         ],
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 0, f"stderr:\n{result.stderr.decode()}"

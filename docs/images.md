@@ -89,6 +89,6 @@ with Scene():
     img = Image("assets/diagram.ora")
 
     overlay = img.layer("overlay")
-    overlay.alpha(0)         # hidden at frame 0
+    overlay.alpha(0)  # hidden at frame 0
     overlay.alpha(1, dur=1)  # fades in over 1 second
 ```

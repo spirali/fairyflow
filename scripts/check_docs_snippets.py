@@ -50,6 +50,7 @@ def check_snippet(source: str, label: str) -> bool:
             capture_output=True,
             text=True,
             cwd=str(ROOT),
+            check=False,
         )
         if result.returncode != 0:
             print(f"FAIL  {label}")
@@ -75,6 +76,7 @@ def check_snippet(source: str, label: str) -> bool:
             capture_output=True,
             text=True,
             cwd=str(ROOT),
+            check=False,
         )
         if render.returncode != 0:
             print(f"FAIL  {label}  (render-png)")

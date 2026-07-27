@@ -2,8 +2,8 @@
 
 import asyncio
 import json
-import urllib.request
 import urllib.error
+import urllib.request
 
 import pytest
 import websockets
@@ -359,7 +359,7 @@ async def test_put_file_save_does_not_echo_file_changed(
                         ):
                             received_echo = True
                             break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
     finally:
         suppress_file.unlink(missing_ok=True)

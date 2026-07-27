@@ -154,10 +154,10 @@ multi-scene video where the player transitions from one scene to the next automa
 
 ```python
 with Scene(1280, 720):
-    ...   # intro
+    ...  # intro
 
 with Scene(1280, 720) as s:
-    ...   # main sieve + outro
+    ...  # main sieve + outro
 ```
 
 The main scene is captured as `s` — `with Scene(...) as s:` returns the scene itself,

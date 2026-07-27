@@ -109,15 +109,9 @@ pub fn build_notes_scene(paragraphs: &[&str], width: u32, height: u32) -> Scene 
             wrap: Some(wrap_width),
             text_align: TextAlign::Left,
             text_style: notes_text_style(),
-            underline_color: None,
-            underline_width: None,
-            underline_offset: None,
-            strike_color: None,
-            strike_width: None,
-            strike_offset: None,
+            uncommon: None,
             sh_language: None,
             sh_theme: None,
-            reveal: 1.0,
             lines,
         },
     };
@@ -268,7 +262,13 @@ mod tests {
         // Sanity check this is actually a meaningfully smaller box than the
         // strip — otherwise the assertions above wouldn't distinguish the fix
         // from the old (buggy) behavior.
-        assert!(node_box.size.width < 200.0, "two short words shouldn't need 200px");
-        assert!(node_box.size.height < 100.0, "two short lines shouldn't need 100px");
+        assert!(
+            node_box.size.width < 200.0,
+            "two short words shouldn't need 200px"
+        );
+        assert!(
+            node_box.size.height < 100.0,
+            "two short lines shouldn't need 100px"
+        );
     }
 }

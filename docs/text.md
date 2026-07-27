@@ -157,9 +157,9 @@ with Scene():
 ```
 
 ```python
-w.underline(dur=0.4)   # sweeps left-to-right over 0.4s
-w.underline(0)         # sweeps back out
-Text("old value").strike(dur=0.3)   # cross out a superseded number
+w.underline(dur=0.4)  # sweeps left-to-right over 0.4s
+w.underline(0)  # sweeps back out
+Text("old value").strike(dur=0.3)  # cross out a superseded number
 ```
 
 ```python
@@ -484,8 +484,10 @@ A `<` that has no matching `>` is treated as literal text, so you can safely pas
 arbitrary content (terminal output, ASCII art, file paths) without escaping:
 
 ```python
-stext("a < b")           # → "a < b"
-stext("path/to/<file>")  # → tag named "file" — wrap in a real tag name only when intended
+stext("a < b")  # → "a < b"
+stext(
+    "path/to/<file>"
+)  # → tag named "file" — wrap in a real tag name only when intended
 ```
 
 By default `stext` uses `<tag>...</tag>` syntax. Pass `delimiters="[]"` to use `[tag]...[/tag]` instead.

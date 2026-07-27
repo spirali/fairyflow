@@ -1,7 +1,8 @@
 """Tests for the `Line`/`Arrow` connector sugar and the `Polygon` family."""
 
 import pytest
-from fairyflow import Arrow, Line, Polygon, RegularPolygon, Rect, Scene, Star
+
+from fairyflow import Arrow, Line, Polygon, Rect, RegularPolygon, Scene, Star
 from fairyflow.serializer import create_export
 
 
@@ -108,9 +109,8 @@ def test_arrow_gap_zero_touches_the_raw_point():
 
 def test_polygon_too_few_points_raises():
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(ValueError):
-            Polygon([(0, 0)])
+    with s, pytest.raises(ValueError):
+        Polygon([(0, 0)])
 
 
 def test_polygon_builds_move_line_close_sequence():
@@ -129,9 +129,8 @@ def test_polygon_builds_move_line_close_sequence():
 
 def test_regular_polygon_too_few_sides_raises():
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(ValueError):
-            RegularPolygon(2, radius=10)
+    with s, pytest.raises(ValueError):
+        RegularPolygon(2, radius=10)
 
 
 def test_regular_polygon_vertex_count():
@@ -153,9 +152,8 @@ def test_regular_polygon_first_vertex_points_up():
 
 def test_star_too_few_points_raises():
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(ValueError):
-            Star(points=1, outer=50, inner=20)
+    with s, pytest.raises(ValueError):
+        Star(points=1, outer=50, inner=20)
 
 
 def test_star_vertex_count():

@@ -4,7 +4,6 @@ from fairyflow import Ellipse, Path, Rect, Scene, gradient
 from fairyflow.serializer import create_export
 from fairyflow.text import Text
 
-
 # ── Rect.radius() ────────────────────────────────────────────────────────────
 
 
@@ -102,9 +101,8 @@ def test_stroke_dash_absent_when_never_set():
 @pytest.mark.parametrize("dash", [(0, 4), (6, 0), (-1, 4)])
 def test_stroke_dash_non_positive_raises(dash):
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(ValueError):
-            Rect().stroke(dash=dash)
+    with s, pytest.raises(ValueError):
+        Rect().stroke(dash=dash)
 
 
 def test_stroke_dash_offset_animatable():

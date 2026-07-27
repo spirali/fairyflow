@@ -1,12 +1,11 @@
+import json
 import math
 
-from .exprs import Call, Const, Expr
 from .avalue import AnimatedValue
 from .color import Color
+from .exprs import Call, Const, Expr
 from .nodes import Node
 from .position import SCENE_NODE_ID
-
-import json as json
 
 _active: "Serializer | None" = None
 

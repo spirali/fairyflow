@@ -154,8 +154,8 @@ Most specific wins: `all` is applied first, then `x`/`y`, then the individual
 within the same call. A later call only touches the sides it names:
 
 ```python
-card.padding(16)       # 16px inset on all four sides
-card.padding(top=32)   # widen just the top inset, leave the other three sides alone
+card.padding(16)  # 16px inset on all four sides
+card.padding(top=32)  # widen just the top inset, leave the other three sides alone
 ```
 
 Padding also participates in auto-sizing: a group with no explicit `size()`

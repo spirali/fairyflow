@@ -2,10 +2,10 @@ import pytest
 
 from fairyflow import Rect, Scene, Text, code, gradient
 from fairyflow.config import (
-    DEFAULT_FONT,
     DEFAULT_CODE,
-    set_default_font,
+    DEFAULT_FONT,
     set_default_code,
+    set_default_font,
 )
 from fairyflow.serializer import create_export
 

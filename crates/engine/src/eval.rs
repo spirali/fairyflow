@@ -6,7 +6,7 @@ use crate::nodes::{
 };
 use crate::paths::{path_length, point_in_path};
 use crate::values::{Color, Eval, Expr, FloatCall, FloatParamsPair, Paint, Value};
-use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize};
+use renderer_core::{Inheritable, Position as RcPosition, Size as RcSize, TextNodeUncommon};
 use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -787,21 +787,24 @@ impl Node {
             } => {
                 let underline = underline_style.eval(ctx)?;
                 let strike = strike_style.eval(ctx)?;
-                renderer_core::NodeKind::Text {
-                    node_box: self.eval_node_box(node_box, ctx)?,
-                    keep_aspect: keep_aspect.eval_or(ctx, true)?,
-                    wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
-                    text_align: text_align.unwrap_or_default(),
-                    text_style: text_style.eval_as_inheritable(ctx, self)?,
+                let uncommon = TextNodeUncommon {
                     underline_color: underline.color,
                     underline_width: underline.width,
                     underline_offset: underline.offset,
                     strike_color: strike.color,
                     strike_width: strike.width,
                     strike_offset: strike.offset,
+                    reveal: reveal.eval_or(ctx, 1.0)?,
+                };
+                renderer_core::NodeKind::Text {
+                    uncommon: uncommon.into_optional_box(),
+                    node_box: self.eval_node_box(node_box, ctx)?,
+                    keep_aspect: keep_aspect.eval_or(ctx, true)?,
+                    wrap: wrap.get_expr().map(|e| e.eval(ctx)).transpose()?,
+                    text_align: text_align.unwrap_or_default(),
+                    text_style: text_style.eval_as_inheritable(ctx, self)?,
                     sh_language: sh_language.clone(),
                     sh_theme: sh_theme.clone(),
-                    reveal: reveal.eval_or(ctx, 1.0)?,
                     lines: children
                         .iter()
                         .map(|&id| ctx.node(id)?.eval_as_text_child(ctx))

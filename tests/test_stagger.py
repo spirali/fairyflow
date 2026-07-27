@@ -1,4 +1,5 @@
 import pytest
+
 from fairyflow import Par, Rect, Scene, Seq, anim, get_frame, time_to_frames
 
 

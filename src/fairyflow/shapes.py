@@ -1,15 +1,15 @@
 import math
-from typing import Literal, SupportsFloat, Union
+from typing import Literal, SupportsFloat
 
 from beartype import beartype
 
-from .types import FloatLike
-from .position import Position
 from .exprs import Call, to_expr
 from .nodes import Node, Path
+from .position import Position
+from .types import FloatLike
 
 
-def _point_xy(node: Node, point: Union[tuple[FloatLike, FloatLike], Position]):
+def _point_xy(node: Node, point: tuple[FloatLike, FloatLike] | Position):
     """Resolve a point-like value (a live `Position`, tracked via the usual
     `map_x`/`map_y` machinery, or a plain (x, y) pair) into an (x, y)
     expression pair already in `node`'s parent frame. Always returns `Expr`s
@@ -34,8 +34,8 @@ class Line(Path):
 
     def __init__(
         self,
-        start: Union[tuple[FloatLike, FloatLike], Position],
-        end: Union[tuple[FloatLike, FloatLike], Position],
+        start: tuple[FloatLike, FloatLike] | Position,
+        end: tuple[FloatLike, FloatLike] | Position,
     ):
         super().__init__()
         sx, sy = _point_xy(self, start)
@@ -61,8 +61,8 @@ class Arrow(Path):
 
     def __init__(
         self,
-        start: Union[tuple[FloatLike, FloatLike], Position],
-        end: Union[tuple[FloatLike, FloatLike], Position],
+        start: tuple[FloatLike, FloatLike] | Position,
+        end: tuple[FloatLike, FloatLike] | Position,
         gap: SupportsFloat = 0,
         head: Literal["end", "start", "both"] = "end",
         style: Literal["triangle", "open", "stealth", "bar", "dot"] = "triangle",

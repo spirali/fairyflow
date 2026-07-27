@@ -4,10 +4,11 @@ import json
 from pathlib import Path as FsPath
 
 import pytest
-from fairyflow import Ellipse, Group, Image, Path as FFPath, Rect, Scene, rel
+
+from fairyflow import Ellipse, Group, Image, Rect, Scene, rel
+from fairyflow import Path as FFPath
 from fairyflow.nodes import PathMove
 from fairyflow.serializer import create_export
-from fairyflow.text import TextSpan
 
 ASSETS = FsPath(__file__).parent / "assets"
 

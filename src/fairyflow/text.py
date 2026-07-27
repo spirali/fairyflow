@@ -1,29 +1,28 @@
 import re
 import textwrap
 from dataclasses import dataclass, field
-from beartype import beartype
-from typing import Union, Literal, Self
+from typing import ClassVar, Literal, Self, Union
 
-from .types import StringLike, BoolLike, FloatLike, FillLike
+from beartype import beartype
+
 from .animtime import Duration, Easing
 from .avalue import AnimatedValue
-from .sentinels import INHERITED_VALUE, DEFAULT, DefaultMarker, RelValue, resolve_rel
-from .ctxvars import Par, Seq
-from .config import DEFAULT_FONT, DEFAULT_CODE, normalize_font_style
 from .color import Color, Gradient
-
+from .config import DEFAULT_CODE, DEFAULT_FONT, normalize_font_style
+from .ctxvars import Par, Seq
 from .nodes import (
+    InheritedStyleMixin,
+    KeepAspectMixin,
     Node,
     NodeWithChildren,
     PositionMixin,
-    SizeMixin,
-    KeepAspectMixin,
-    StyleMixin,
-    InheritedStyleMixin,
-    ZLevelMixin,
     RotAndScaleMixin,
+    SizeMixin,
+    StyleMixin,
+    ZLevelMixin,
 )
-
+from .sentinels import DEFAULT, INHERITED_VALUE, DefaultMarker, RelValue, resolve_rel
+from .types import BoolLike, FillLike, FloatLike, StringLike
 
 TextAlignMode = Literal["left", "center", "right", "justify"]
 
@@ -161,7 +160,7 @@ class TextStyleMethods:
 class TextStyleMixin(StyleMixin, TextStyleMethods):
     """Own (literal) font defaults — used by the top-level `Text` block."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "font": "sans-serif",
         "font_size": 16,
         "font_weight": 400,
@@ -186,7 +185,7 @@ class InheritedTextStyleMixin(InheritedStyleMixin, TextStyleMethods):
     `TextGroup.group()`/`.span()`), which has real literal font defaults via
     `TextStyleMixin` — never a bare `Group`/`Scene`."""
 
-    _ATTR_DEFAULTS = {
+    _ATTR_DEFAULTS: ClassVar[dict] = {
         "font": INHERITED_VALUE,
         "font_size": INHERITED_VALUE,
         "font_weight": INHERITED_VALUE,
@@ -271,7 +270,7 @@ class Text(
 ):
     kind = "text"
 
-    _ATTR_DEFAULTS = {"reveal": 1}
+    _ATTR_DEFAULTS: ClassVar[dict] = {"reveal": 1}
 
     def __init__(self, text: StringLike | None = None):
         super().__init__()
@@ -365,7 +364,7 @@ class Text(
         self._text_align = mode
         return self
 
-    def line(self, text: StringLike = "") -> Union[TextSpan, TextGroup]:
+    def line(self, text: StringLike = "") -> TextSpan | TextGroup:
         """Start a new line, closing off the current one.
 
         With `text`, the line is seeded with a single run and that run is

@@ -163,6 +163,7 @@ export default function App() {
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [maxPlayFramesInput, setMaxPlayFramesInput] = useState(""); // raw text; empty = no limit
   const maxPlayFrames = Number(maxPlayFramesInput) || 0;
+  const [returnToStart, setReturnToStart] = useState(false);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
   const treeCacheRef = useRef<Map<string, SceneData>>(new Map());
   const [, setCacheVersion] = useState(0); // incremented to trigger re-render after caching
@@ -857,15 +858,7 @@ export default function App() {
     const capturedCueFrames = cueFrames;
 
     const toFrame = computeToFrame(startFrame, totalFrames, capturedCueFrames);
-    await doPrefetchAndPlay(toFrame, startFrame, false);
-  }
-
-  async function handlePlayAndReturn() {
-    if (!canvasLayout || !hasScene) return;
-    cancelledRef.current = false;
-    const startFrame = frame;
-    const toFrame = computeToFrame(startFrame, frames, cueFrames);
-    await doPrefetchAndPlay(toFrame, startFrame, true);
+    await doPrefetchAndPlay(toFrame, startFrame, returnToStart);
   }
 
   function computeToFrame(startFrame: number, totalFrames: number, capturedCueFrames: number[]) {
@@ -1567,16 +1560,19 @@ export default function App() {
                                 >
                                   ›
                                 </button>
-                                <select
-                                  className="tl-play-mode"
-                                  value={viewMode}
-                                  onChange={(e) => setViewMode(e.target.value as "all" | "single")}
+                                <button
+                                  className={`tl-btn tl-viewmode-toggle-btn${viewMode === "single" ? " active" : ""}`}
+                                  onClick={() => setViewMode(viewMode === "all" ? "single" : "all")}
                                   disabled={isActive}
-                                  title="Scene view mode"
+                                  title={
+                                    viewMode === "single"
+                                      ? "Viewing: Single scene (click for all scenes)"
+                                      : "Viewing: All scenes (click for single scene)"
+                                  }
+                                  aria-pressed={viewMode === "single"}
                                 >
-                                  <option value="all">All scenes</option>
-                                  <option value="single">Single scene</option>
-                                </select>
+                                  {viewMode === "single" ? "1" : "*"}
+                                </button>
                                 <span className="tl-sep" />
                               </>
                             )}
@@ -1648,18 +1644,17 @@ export default function App() {
                                     })()}
                             </button>
                             <button
-                              className={`tl-btn tl-play-btn tl-return-btn${isActive ? " active" : ""}`}
-                              onClick={isActive ? handleStop : handlePlayAndReturn}
+                              className={`tl-btn tl-return-toggle-btn${returnToStart ? " active" : ""}`}
+                              onClick={() => setReturnToStart((v) => !v)}
                               disabled={!canvasLayout}
-                              title={isActive ? "Stop" : "Play and return to start"}
+                              title={
+                                returnToStart
+                                  ? "Return to start after playing: On"
+                                  : "Return to start after playing: Off"
+                              }
+                              aria-pressed={returnToStart}
                             >
-                              {isPrefetching
-                                ? prefetchProgress && prefetchProgress.total > 0
-                                  ? `${prefetchProgress.done}/${prefetchProgress.total}`
-                                  : "…"
-                                : isPlaying
-                                  ? "■"
-                                  : "↻"}
+                              ↻
                             </button>
 
                             <button

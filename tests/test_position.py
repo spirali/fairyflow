@@ -1,4 +1,6 @@
 import pytest
+from beartype.roar import BeartypeCallHintParamViolation
+
 from fairyflow import Group, Path, Rect, Scene, Text
 from fairyflow.exprs import Call
 
@@ -57,7 +59,7 @@ def test_at_named_anchor_with_y_raises(sc):
 
 def test_at_unknown_anchor_rejected(sc):
     r = Rect().size(40, 20)
-    with pytest.raises(Exception):
+    with pytest.raises(BeartypeCallHintParamViolation):
         r.at("bogus")
 
 
@@ -103,7 +105,7 @@ def test_at_bare_fraction_raises_on_span(sc):
 
 def test_at_unknown_anchor_rejected_on_span(sc):
     span = Text().span("hello")
-    with pytest.raises(Exception):
+    with pytest.raises(BeartypeCallHintParamViolation):
         span.at("bogus")
 
 
@@ -151,8 +153,9 @@ def test_scene_at_center_exports_without_circular_reference(sc):
     # Position (here, via .pos()) used to reach Serializer.add_node(scene),
     # which re-serializes the Scene mid-walk and produces a circular
     # reference that json.dump rejects.
-    from fairyflow.serializer import create_export
     import json
+
+    from fairyflow.serializer import create_export
 
     r = Rect().size(10, 10)
     r.pos(sc.at("center"))
@@ -164,8 +167,9 @@ def test_next_to_scene_exports_without_circular_reference(sc):
     # Regression test mirroring the at()-on-Scene case above: next_to()'s own
     # Position(node._parent, ...) construction needs the same self-or-parent
     # frame fix when `node` is the bare Scene (node._parent is None there).
-    from fairyflow.serializer import create_export
     import json
+
+    from fairyflow.serializer import create_export
 
     r = Rect().size(10, 10)
     r.next_to(sc, "above", gap=-20)
@@ -231,19 +235,17 @@ def test_get_w_arithmetic_composes_into_another_setter(sc):
 
 
 def test_next_to_right(test_scene):
-    with test_scene:
-        with Group().size(60, 40):
-            a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
-            b = Rect().size(10, 10).fill("tomato")
-            b.next_to(a, "right", gap=5)
+    with test_scene, Group().size(60, 40):
+        a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
+        b = Rect().size(10, 10).fill("tomato")
+        b.next_to(a, "right", gap=5)
 
 
 def test_next_to_below(test_scene):
-    with test_scene:
-        with Group().size(60, 40):
-            a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
-            b = Rect().size(10, 10).fill("tomato")
-            b.next_to(a, "below", gap=5, align=0)
+    with test_scene, Group().size(60, 40):
+        a = Rect().size(20, 20).fill("steelblue").xy(10, 10)
+        b = Rect().size(10, 10).fill("tomato")
+        b.next_to(a, "below", gap=5, align=0)
 
 
 def test_next_to_across_groups(test_scene):
@@ -279,24 +281,22 @@ def test_next_to_text(test_scene):
     # Text has no SizeMixin - next_to() must use the engine's measured extent
     # (auto_w/auto_h) instead of treating the label as zero-width, or the
     # rect would overlap the rendered text instead of clearing it.
-    with test_scene:
-        with Group().size(60, 40):
-            t = Text().xy(2, 12)
-            t.span("Hi").font(size=14)
-            r = Rect().size(8, 8).fill("tomato")
-            r.next_to(t, "right", gap=3)
+    with test_scene, Group().size(60, 40):
+        t = Text().xy(2, 12)
+        t.span("Hi").font(size=14)
+        r = Rect().size(8, 8).fill("tomato")
+        r.next_to(t, "right", gap=3)
 
 
 def test_next_to_span(test_scene):
     # next_to()'s node param now accepts PositionQueryMixin targets, not just
     # full PositionMixin ones - a TextSpan (query-only) must work directly,
     # not just its enclosing Text.
-    with test_scene:
-        with Group().size(60, 40):
-            t = Text().xy(2, 12)
-            span = t.span("Hi").font(size=14)
-            r = Rect().size(8, 8).fill("tomato")
-            r.next_to(span, "right", gap=3)
+    with test_scene, Group().size(60, 40):
+        t = Text().xy(2, 12)
+        span = t.span("Hi").font(size=14)
+        r = Rect().size(8, 8).fill("tomato")
+        r.next_to(span, "right", gap=3)
 
 
 def test_next_to_scene(test_scene):

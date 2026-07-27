@@ -165,7 +165,7 @@ impl PdfRenderer {
                 camera,
                 children,
             } => {
-                let transform = transform_node_box(&node_box, parent_transform);
+                let transform = transform_node_box(node_box, parent_transform);
                 let effective_alpha = parent_alpha * *alpha as f32;
                 let needs_clip = *clip_enabled
                     || *clip_x > 0.0
@@ -227,7 +227,7 @@ impl PdfRenderer {
                 style,
                 radius,
             } => {
-                let transform = transform_node_box(&node_box, parent_transform);
+                let transform = transform_node_box(node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
                 let w = node_box.size.width as f32;
                 let h = node_box.size.height as f32;
@@ -247,7 +247,7 @@ impl PdfRenderer {
             }
 
             NodeKind::Ellipse { node_box, style } => {
-                let transform = transform_node_box(&node_box, parent_transform);
+                let transform = transform_node_box(node_box, parent_transform);
                 surface.push_transform(&to_krilla_transform(transform));
                 let (w, h) = (node_box.size.width as f32, node_box.size.height as f32);
                 if let Some(path) = build_ellipse_path(w, h) {
@@ -277,16 +277,10 @@ impl PdfRenderer {
                 wrap,
                 text_align,
                 text_style: _,
-                underline_color: _,
-                underline_width: _,
-                underline_offset: _,
-                strike_color: _,
-                strike_width: _,
-                strike_offset: _,
                 sh_language,
                 sh_theme,
-                reveal,
                 lines,
+                uncommon,
             } => {
                 let laid_out =
                     renderer_core::layout_text(lines, wrap.map(|w| w as f32), *text_align);
@@ -321,7 +315,7 @@ impl PdfRenderer {
                     sh_language.as_ref().map(|s| s.as_str()),
                     sh_theme.as_ref().map(|s| s.as_str()),
                     (sx, sy),
-                    *reveal as f32,
+                    uncommon.as_ref().map(|u| u.reveal as f32).unwrap_or(1.0),
                 );
                 surface.pop();
             }
@@ -1097,7 +1091,7 @@ fn unpremultiply(data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextStyle};
+    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextNodeUncommon, TextStyle};
 
     fn text_style_for_test() -> TextStyle {
         TextStyle {
@@ -1115,6 +1109,16 @@ mod tests {
     }
 
     fn text_scene(reveal: f64) -> Scene {
+        let uncommon = TextNodeUncommon {
+            reveal,
+            underline_color: None,
+            underline_width: None,
+            underline_offset: None,
+            strike_color: None,
+            strike_width: None,
+            strike_offset: None,
+        }
+        .into_optional_box();
         let node_box = NodeBox {
             position: Position { x: 0.0, y: 0.0 },
             size: Size {
@@ -1145,15 +1149,9 @@ mod tests {
                     wrap: None,
                     text_align: TextAlign::Left,
                     text_style: text_style_for_test(),
-                    underline_color: None,
-                    underline_width: None,
-                    underline_offset: None,
-                    strike_color: None,
-                    strike_width: None,
-                    strike_offset: None,
+                    uncommon,
                     sh_language: None,
                     sh_theme: None,
-                    reveal,
                     lines: vec![TextChild::Span(TextSpan {
                         id: 1,
                         text: Arc::new("Hello fairyflow".to_string()),

@@ -1,9 +1,10 @@
 import contextvars
+
 from beartype import beartype
 
 from .animtime import Duration, Easing, duration_to_frames
 
-ROOT_OBJECTS = contextvars.ContextVar("root_context", default=[])
+ROOT_OBJECTS = contextvars.ContextVar("root_context", default=None)
 CURRENT_NODE = contextvars.ContextVar("node_context", default=None)
 COMPOSER = contextvars.ContextVar("composer", default=None)
 PENDING_CUE_ADVANCE = contextvars.ContextVar("pending_cue_advance", default=False)
@@ -77,6 +78,14 @@ def get_current_node():
     return CURRENT_NODE.get()
 
 
+def add_root_object(obj):
+    objs = ROOT_OBJECTS.get()
+    if objs is None:
+        objs = []
+        ROOT_OBJECTS.set(objs)
+    objs.append(obj)
+
+
 def reset_ctx():
     ROOT_OBJECTS.set([])
     CURRENT_NODE.set(None)
@@ -115,7 +124,6 @@ class Composer:
 
     def _begin_unit(self):
         """Hook for `Par(stagger=)`."""
-        pass
 
     def __enter__(self):
         assert self.parent is None

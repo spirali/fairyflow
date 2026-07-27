@@ -1,30 +1,28 @@
 import pytest
 
-from fairyflow import Path, Group, Ellipse, Scene
+from fairyflow import Ellipse, Group, Path, Scene
 
 
 def test_follow_path(test_scene):
-    with test_scene.size(100, 100):
-        with Group().size(80, 80):
-            p = Path()
-            p.stroke("black")
-            p.move_to(0, 0)
-            p.line_to(30, 10)
-            p.cubic_to(0, 50, c1=(10, 0), c2=(15, 45))
-            p.cubic_to(40, 20, c1=(-15, -45), c2=(40, 20))
-            Ellipse().size(5, 5).fill("green").follow_path(p, dur=0.5)
+    with test_scene.size(100, 100), Group().size(80, 80):
+        p = Path()
+        p.stroke("black")
+        p.move_to(0, 0)
+        p.line_to(30, 10)
+        p.cubic_to(0, 50, c1=(10, 0), c2=(15, 45))
+        p.cubic_to(40, 20, c1=(-15, -45), c2=(40, 20))
+        Ellipse().size(5, 5).fill("green").follow_path(p, dur=0.5)
 
 
 def test_follow_path_backwards(test_scene):
-    with test_scene.size(100, 100):
-        with Group().size(80, 80):
-            p = Path()
-            p.stroke("black")
-            p.move_to(0, 0)
-            p.line_to(30, 10)
-            p.cubic_to(0, 50, c1=(10, 0), c2=(15, 45))
-            p.cubic_to(40, 20, c1=(-15, -45), c2=(40, 20))
-            Ellipse().size(5, 5).fill("red").follow_path(p, dur=0.5, start=1, end=0)
+    with test_scene.size(100, 100), Group().size(80, 80):
+        p = Path()
+        p.stroke("black")
+        p.move_to(0, 0)
+        p.line_to(30, 10)
+        p.cubic_to(0, 50, c1=(10, 0), c2=(15, 45))
+        p.cubic_to(40, 20, c1=(-15, -45), c2=(40, 20))
+        Ellipse().size(5, 5).fill("red").follow_path(p, dur=0.5, start=1, end=0)
 
 
 def test_arrows(test_scene):
@@ -51,13 +49,12 @@ def test_line_to_accepts_position():
     """`line_to(a_position)` produces the same wire x/y as the equivalent
     explicit-coordinate call - both spellings must resolve identically."""
     s = Scene(100, 100)
-    with s:
-        with Group().size(100, 100):
-            anchor = Ellipse().size(20, 20).xy(30, 40)
-            p = Path().stroke("black")
-            p.move_to(0, 0)
-            expected = anchor.at("right").into_node(p)
-            handle = p.line_to(anchor.at("right"))
+    with s, Group().size(100, 100):
+        anchor = Ellipse().size(20, 20).xy(30, 40)
+        p = Path().stroke("black")
+        p.move_to(0, 0)
+        expected = anchor.at("right").into_node(p)
+        handle = p.line_to(anchor.at("right"))
     assert repr(handle._get_attr("x").get_first_value()) == repr(expected.x)
     assert repr(handle._get_attr("y").get_first_value()) == repr(expected.y)
 

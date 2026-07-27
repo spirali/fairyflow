@@ -1,12 +1,12 @@
-from typing import Literal, Union
+from typing import Literal
 
 from beartype import beartype
 
-from ..types import ColorLike, FloatLike
-from ..sentinels import rel
-from ..nodes import Group, Node, Rect, _effective_width, _effective_height
-from ..text import Text
 from ..exprs import Call
+from ..nodes import Group, Node, Rect, _effective_height, _effective_width
+from ..sentinels import rel
+from ..text import Text
+from ..types import ColorLike, FloatLike
 
 _ALIGN_FACTOR = {"left": 0.0, "center": 0.5, "right": 1.0}
 _HEADER_FILL = "#e0e0e0"
@@ -59,18 +59,16 @@ class Table(Group):
 
     def __init__(
         self,
-        rows: list[list[Union[str, Node]]],
+        rows: list[list[str | Node]],
         *,
         header: bool = False,
-        widths: Union[Literal["auto"], FloatLike, list[FloatLike]] = "auto",
-        row_height: Union[Literal["auto"], FloatLike, list[FloatLike]] = "auto",
+        widths: Literal["auto"] | FloatLike | list[FloatLike] = "auto",
+        row_height: Literal["auto"] | FloatLike | list[FloatLike] = "auto",
         padding: tuple[FloatLike, FloatLike] = (12, 6),
         stroke: ColorLike | None = "#888",
         fill: ColorLike | None = None,
-        align: Union[
-            Literal["left", "center", "right"],
-            list[Literal["left", "center", "right"]],
-        ] = "left",
+        align: Literal["left", "center", "right"]
+        | list[Literal["left", "center", "right"]] = "left",
     ):
         if not rows:
             raise ValueError("Table needs at least one row")

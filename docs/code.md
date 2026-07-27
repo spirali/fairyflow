@@ -58,8 +58,8 @@ set_default_code("python", theme="base16-ocean.dark")
 ```
 
 ```python
-code(source)                  # picks up "python"/"base16-ocean.dark" from above
-code(source, "rust")          # a per-call language still overrides it
+code(source)  # picks up "python"/"base16-ocean.dark" from above
+code(source, "rust")  # a per-call language still overrides it
 ```
 
 `family` defaults to `"monospace"` — pair it with `[font-aliases]` in
@@ -71,7 +71,7 @@ on a `Text`/`TextGroup`/`TextSpan` applies the configured style directly:
 
 ```python
 t = Text("Call ")
-t.span("map()").code()               # mono, code size — inline literal
+t.span("map()").code()  # mono, code size — inline literal
 t.span(" over the list.")
 ```
 

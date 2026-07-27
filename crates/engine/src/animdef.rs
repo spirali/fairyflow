@@ -1253,7 +1253,9 @@ mod tests {
     fn text_reveal(scene: &renderer_core::Scene, id: u64) -> f64 {
         let node = find_node(&scene.children, id).unwrap();
         match &node.kind {
-            renderer_core::NodeKind::Text { reveal, .. } => *reveal,
+            renderer_core::NodeKind::Text { uncommon, .. } => {
+                uncommon.as_ref().map(|u| u.reveal).unwrap_or(1.0)
+            }
             other => panic!("expected a text node, got {other:?}"),
         }
     }

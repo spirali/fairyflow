@@ -206,7 +206,7 @@ impl RasterRenderer {
                 lines,
                 sh_language,
                 sh_theme,
-                reveal,
+                uncommon,
                 ..
             } => {
                 let laid_out =
@@ -240,6 +240,7 @@ impl RasterRenderer {
                         .unwrap_or("InspiredGitHub");
                     (lang.as_str(), theme)
                 });
+                let reveal = uncommon.as_ref().map(|u| u.reveal as f32).unwrap_or(1.0);
                 self.render_text_lines(
                     lines,
                     &laid_out.lines,
@@ -248,7 +249,7 @@ impl RasterRenderer {
                     parent_alpha,
                     sh,
                     (sx, sy),
-                    *reveal as f32,
+                    reveal,
                 );
             }
             NodeKind::Image {
@@ -1053,7 +1054,7 @@ fn render_image(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextStyle};
+    use renderer_core::{Camera, Inheritable, NodeBox, TextAlign, TextNodeUncommon, TextStyle};
 
     fn count_non_background_pixels(pixmap: &Pixmap) -> usize {
         pixmap
@@ -1079,6 +1080,16 @@ mod tests {
     }
 
     fn text_scene(reveal: f64) -> Scene {
+        let uncommon = TextNodeUncommon {
+            reveal,
+            underline_color: None,
+            underline_width: None,
+            underline_offset: None,
+            strike_color: None,
+            strike_width: None,
+            strike_offset: None,
+        }
+        .into_optional_box();
         let node_box = NodeBox {
             position: Position { x: 0.0, y: 0.0 },
             size: Size {
@@ -1109,15 +1120,9 @@ mod tests {
                     wrap: None,
                     text_align: TextAlign::Left,
                     text_style: text_style_for_test(),
-                    underline_color: None,
-                    underline_width: None,
-                    underline_offset: None,
-                    strike_color: None,
-                    strike_width: None,
-                    strike_offset: None,
                     sh_language: None,
                     sh_theme: None,
-                    reveal,
+                    uncommon,
                     lines: vec![TextChild::Span(TextSpan {
                         id: 1,
                         text: Arc::new("Hello fairyflow".to_string()),

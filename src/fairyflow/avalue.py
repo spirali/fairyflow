@@ -1,5 +1,7 @@
-from typing import TypeVar, Generic
+from typing import TypeVar
+
 from beartype import beartype
+
 from .animtime import Duration, Easing
 from .ctxvars import get_frame, wait
 from .exprs import Call, Expr
@@ -16,7 +18,7 @@ T = TypeVar("T")
 
 
 @beartype
-class AnimatedValue(Generic[T], Expr):
+class AnimatedValue[T](Expr):
     def __init__(self, init_val: T, init_frame=None, is_default: bool = False):
         if init_frame is None:
             init_frame = get_frame()

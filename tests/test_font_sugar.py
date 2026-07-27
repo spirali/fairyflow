@@ -2,6 +2,7 @@
 `font_size()`/`font_weight()`/`bold()`/`italic()` methods into one call."""
 
 import pytest
+
 from fairyflow import Scene
 from fairyflow.serializer import create_export
 from fairyflow.text import Text, stext
@@ -88,16 +89,14 @@ def test_mono_false_sets_sans_serif_family():
 
 def test_bold_and_weight_conflict_raises():
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(TypeError):
-            Text("hi").font(weight=500, bold=True)
+    with s, pytest.raises(TypeError):
+        Text("hi").font(weight=500, bold=True)
 
 
 def test_mono_and_family_conflict_raises():
     s = Scene(100, 100)
-    with s:
-        with pytest.raises(TypeError):
-            Text("hi").font("Arial", mono=True)
+    with s, pytest.raises(TypeError):
+        Text("hi").font("Arial", mono=True)
 
 
 # ── dur=/ease= keyframe threading ────────────────────────────────────────────

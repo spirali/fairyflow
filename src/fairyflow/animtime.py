@@ -1,4 +1,5 @@
 from typing import Literal, SupportsFloat
+
 from . import config
 
 
@@ -6,7 +7,7 @@ def time_to_frames(time: SupportsFloat) -> int:
     """
     Convert time in seconds to a frame number.
     """
-    return int(round(config.FPS * time))
+    return round(config.FPS * time)
 
 
 def frames_to_time(frames: int) -> float:

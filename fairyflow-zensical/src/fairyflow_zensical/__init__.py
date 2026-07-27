@@ -154,6 +154,7 @@ def _run_fairyflow(source: str, tmp: Path) -> Path:
         capture_output=True,
         text=True,
         cwd=str(_project_root()),
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"fairyflow failed:\n{result.stderr.strip()}")
@@ -177,6 +178,7 @@ def _render_frame_png(json_file: Path, frames_dir: Path, frame: int) -> Path:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"render-png failed:\n{result.stderr.strip()}")
@@ -207,6 +209,7 @@ def _render_mp4(
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"render-video failed:\n{result.stderr.strip()}")
@@ -228,11 +231,13 @@ def ffpy_validator(language: str, inputs: dict, options: dict, attrs: dict, md) 
     unrecognised keys there.
     """
     for k, v in inputs.items():
-        if k in ("frame", "frames", "video", "title", "position"):
-            options[k] = v
-        elif k == "hl_lines" and RE_HL_LINES.match(str(v)):
-            options[k] = v
-        elif k == "linenums" and RE_LINENUMS.match(str(v)):
+        if (
+            k in ("frame", "frames", "video", "title", "position")
+            or k == "hl_lines"
+            and RE_HL_LINES.match(str(v))
+            or k == "linenums"
+            and RE_LINENUMS.match(str(v))
+        ):
             options[k] = v
         # Unknown options are silently dropped so attrs stays empty.
     return True
@@ -295,7 +300,7 @@ def _do_frame(
                 frames_dir.mkdir()
                 png = _render_frame_png(json_file, frames_dir, frame)
                 shutil.copy2(png, cached_png)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- doc-build boundary: one bad ffpy block must not abort the whole docs build
             return _error_html(highlighted, str(exc))
 
     b64 = base64.b64encode(cached_png.read_bytes()).decode("ascii")
@@ -346,6 +351,7 @@ def _do_frames(
                     ],
                     capture_output=True,
                     text=True,
+                    check=False,
                 )
                 if result.returncode != 0:
                     raise RuntimeError(f"render-png failed:\n{result.stderr.strip()}")
@@ -359,7 +365,7 @@ def _do_frames(
                     )
                     shutil.copy2(png, dest)
                     cached[f] = dest
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- doc-build boundary: one bad ffpy block must not abort the whole docs build
             return _error_html(highlighted, str(exc))
 
     items = []
@@ -387,7 +393,7 @@ def _do_video(source: str, highlighted: str, position: str = "bottom") -> str:
             with tempfile.TemporaryDirectory(prefix="ffpy-video-") as tmp:
                 json_file = _run_fairyflow(source, Path(tmp))
                 _render_mp4(json_file, cached_mp4)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- doc-build boundary: one bad ffpy block must not abort the whole docs build
             return _error_html(highlighted, str(exc))
 
     # Zensical copies docs/ → site/ before processing markdown, so MP4s

@@ -57,7 +57,7 @@ to the cell's own background rect); a `Table` is a node like any other, so
 
 ```python
 for c in t.row(0):
-    c.fill("#333")       # style the header row
+    c.fill("#333")  # style the header row
 t.align(0.5, 0.3)
 ```
 

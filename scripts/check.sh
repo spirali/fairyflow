@@ -6,7 +6,7 @@ cd `dirname $0`/..
 
 # Python
 uvx ruff format --check
-uvx ruff check src tests fairyflow-zensical
+uvx ruff check src tests fairyflow-zensical scripts
 
 # Rust
 cargo fmt --check

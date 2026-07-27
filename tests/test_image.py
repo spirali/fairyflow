@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from fairyflow import Image
 
 ASSETS = Path(__file__).parent / "assets"

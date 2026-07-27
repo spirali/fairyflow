@@ -22,7 +22,7 @@ with Scene():
     title = Text()
     title.span("Slide 1").font(size=32, bold=True).fill("steelblue")
     title.align(0.5, 0.5)
-    cue()                          # player stops here
+    cue()  # player stops here
 
     # advance to the next state
     title.fill("gray", dur=0.4)
@@ -34,7 +34,7 @@ with Scene():
     body.span("Content appears here").font(size=18).fill("darkslateblue")
     body.align(0.5, 0.5)
     body.fade_in(dur=0.4)
-    cue()                          # player stops here again
+    cue()  # player stops here again
 ```
 
 ---
@@ -73,7 +73,7 @@ the clock, and several `note()` calls in one segment stack as paragraphs:
 
 ```python
 with Scene() as s:
-    note("Introduce the problem first.")   # first segment — no cue needed
+    note("Introduce the problem first.")  # first segment — no cue needed
     ...
     cue()
     note("Now the punchline.")

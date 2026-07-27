@@ -34,10 +34,10 @@ Every attribute method accepts an optional `dur` keyword argument that specifies
 animates and the clock advances by the transition duration.
 
 ```python
-r.xy(20, 30, dur=0.5)      # moves to (20, 30) over 0.5 s; clock advances 0.5 s
-r.fill("green", dur=1)    # changes colour over 1 s; clock advances 1 s
+r.xy(20, 30, dur=0.5)  # moves to (20, 30) over 0.5 s; clock advances 0.5 s
+r.fill("green", dur=1)  # changes colour over 1 s; clock advances 1 s
 r.alpha(0, dur=Frames(6))  # fades out over 6 frames; clock advances 6 frames
-r.fill("red")             # instant colour change; clock does not advance
+r.fill("red")  # instant colour change; clock does not advance
 ```
 
 `dur` is always keyword-only.
@@ -78,8 +78,8 @@ Six presets are available — five matching the standard CSS easing curves, plus
 
 ```python
 r.xy(220, 70, dur=0.8, ease="linear")  # constant-speed transition
-r.fill("gold", dur=0.8)               # dur alone ⇒ ease="in_out"
-r.rotate(90, dur=0.8, ease="step")     # holds at 0° for 0.8 s, then snaps to 90°
+r.fill("gold", dur=0.8)  # dur alone ⇒ ease="in_out"
+r.rotate(90, dur=0.8, ease="step")  # holds at 0° for 0.8 s, then snaps to 90°
 ```
 
 `"step"` differs from simply leaving out `dur`: an instant change (no `dur`) happens
@@ -160,7 +160,9 @@ with Scene():
 with anim(ease="in_out"):
     box.xy(180, 55, dur=0.6)
     with anim(0.3):
-        title.alpha(0)  # dur from the nested block, ease still "in_out" from the outer one
+        title.alpha(
+            0
+        )  # dur from the nested block, ease still "in_out" from the outer one
 ```
 
 `anim()` says nothing about composition, so it combines freely with `Par`/`Seq` — pair it
@@ -422,10 +424,10 @@ viewpoint onto that node's **content**, distinct from `.scale()`/`.rotate()`
 which transform the node as a widget:
 
 ```python
-g.scale(2)          # the group grows as a widget — its box, layout, and
-                     # hit-testing all move with it
-g.camera.zoom(2)     # only the *content* magnifies — the group's own box
-                     # stays exactly where layout put it
+g.scale(2)  # the group grows as a widget — its box, layout, and
+# hit-testing all move with it
+g.camera.zoom(2)  # only the *content* magnifies — the group's own box
+# stays exactly where layout put it
 ```
 
 `.camera.zoom(factor)` magnifies content around the current camera center.

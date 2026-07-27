@@ -1,9 +1,9 @@
 """Tests for the `.camera` object on `Group` and `Scene`."""
 
-from fairyflow import Ellipse, Group, Par, Rect, Scene, anim
-from fairyflow.serializer import create_export
 import pytest
 
+from fairyflow import Ellipse, Group, Par, Rect, Scene, anim
+from fairyflow.serializer import create_export
 
 FRAMES = [0, 12, 24]
 

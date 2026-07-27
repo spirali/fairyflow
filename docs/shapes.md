@@ -259,7 +259,7 @@ handles, so a connector re-targets like any other path:
 
 ```python
 arrow = Arrow(a.at("right"), b.at("left"), gap=6).stroke("steelblue", 3)
-arrow.end.pos(c.at("left"), dur=0.5)   # retarget the arrowhead end
+arrow.end.pos(c.at("left"), dur=0.5)  # retarget the arrowhead end
 ```
 
 ### Path cropping

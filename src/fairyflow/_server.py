@@ -23,7 +23,11 @@ def main():
     env["FAIRYFLOW_WEB_DIST"] = str(package_dir / "_web")
 
     if is_windows:
-        sys.exit(subprocess.run([str(binary)] + sys.argv[1:], env=env).returncode)
+        sys.exit(
+            subprocess.run(
+                [str(binary)] + sys.argv[1:], env=env, check=False
+            ).returncode
+        )
     else:
         binary.chmod(0o755)
         os.execve(str(binary), [str(binary)] + sys.argv[1:], env)

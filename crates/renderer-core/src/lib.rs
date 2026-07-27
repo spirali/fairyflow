@@ -12,7 +12,7 @@ pub mod transform;
 pub use color::Color;
 pub use scene::{
     Camera, ImageLayer, Inheritable, Node, NodeBox, NodeKind, Paint, PathCommand, Position, Scene,
-    Size, Style, TextAlign, TextChild, TextGroup, TextSpan, TextStyle,
+    Size, Style, TextAlign, TextChild, TextGroup, TextNodeUncommon, TextSpan, TextStyle,
 };
 
 pub use glyph_cache::prune_text_cache;

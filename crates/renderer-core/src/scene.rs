@@ -291,6 +291,47 @@ fn is_fully_revealed(reveal: &f64) -> bool {
     *reveal >= 1.0
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct TextNodeUncommon {
+    /// Typewriter-reveal fraction: `1.0` shows every
+    /// glyph; renderers apply a per-glyph cutoff based on this value.
+    /// Sparse like `wrap`/`sh_language` above — omitted at the default so
+    /// existing golden-image snapshots of the `/tree/{frame}` debug JSON
+    /// (predating this field) still match byte-for-byte.
+    #[serde(skip_serializing_if = "is_fully_revealed")]
+    pub reveal: f64,
+    /// See `TextSpan`'s identically-named fields — the block-level
+    /// default when no run overrides it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline_offset: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_color: Option<Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike_offset: Option<f64>,
+}
+
+impl TextNodeUncommon {
+    pub fn into_optional_box(self) -> Option<Box<Self>> {
+        let TextNodeUncommon {
+            reveal,
+            underline_color,
+            strike_color,
+            ..
+        } = &self;
+        if *reveal < 0.999 || underline_color.is_some() || strike_color.is_some() {
+            Some(Box::new(self))
+        } else {
+            None
+        }
+    }
+}
+
 /// Kind-specific data for a scene node.
 /// Each variant carries exactly the mixins its Python counterpart inherits.
 #[derive(Debug, Clone, Serialize)]
@@ -369,27 +410,8 @@ pub enum NodeKind {
         sh_language: Option<Arc<String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         sh_theme: Option<Arc<String>>,
-        /// Typewriter-reveal fraction: `1.0` shows every
-        /// glyph; renderers apply a per-glyph cutoff based on this value.
-        /// Sparse like `wrap`/`sh_language` above — omitted at the default so
-        /// existing golden-image snapshots of the `/tree/{frame}` debug JSON
-        /// (predating this field) still match byte-for-byte.
-        #[serde(skip_serializing_if = "is_fully_revealed")]
-        reveal: f64,
-        /// See `TextSpan`'s identically-named fields — the block-level
-        /// default when no run overrides it.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        underline_color: Option<Paint>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        underline_width: Option<f64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        underline_offset: Option<f64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        strike_color: Option<Paint>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        strike_width: Option<f64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        strike_offset: Option<f64>,
+        #[serde(flatten)]
+        uncommon: Option<Box<TextNodeUncommon>>,
         #[serde(rename = "children")]
         lines: Vec<TextChild>,
     },

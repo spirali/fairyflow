@@ -38,13 +38,13 @@ with Scene(1280, 720) as s:
                 numbers.append(n)
         wait(0.2)
 
-        arrow = Arrow((-150, -10), (-150, -50), head="start").stroke("green", 4)
+        arrow = Arrow((-350, -10), (-350, -50), head="start").stroke("green", 4)
 
         for step in [2, 3]:
             idx = step - 1
             with Par(), anim(0.8):
                 s.camera.zoom(1.9)
-                s.camera.center(numbers[idx].at("center"))
+                s.camera.center(numbers[idx].at("center").move(120, 60))
             if step == 2:
                 numbers[0].fade_out(dur=0.5)
                 wait(0.5)
@@ -69,14 +69,14 @@ with Scene(1280, 720) as s:
                 p.move_to(b.at().move(0, -4))
                 p.line_to(b.at().move(0, 4))
                 t = Text(str(step)).fill("red")
-                t.pos(numbers[idx].get_child(kind="text").at())
+                t.pos(numbers[idx].get_child(kind="text").at(0, 0))
                 m.fade_in(dur=0.5)
 
             for i in range(3):
                 with Par(), anim(0.5):
                     a.pos(numbers[idx + i * step].at("top").move(0, -6))
                     b.pos(numbers[idx + (i + 1) * step].at("top").move(0, -6))
-                    t.pos(numbers[idx + i * step].at().move(70, -30))
+                    t.pos(numbers[idx + i * step].at("top_left").move(70, -30))
                 wait(0.2)
                 r = numbers[idx + (i + 1) * step].get_child(kind="rect")
                 r.fill("red", dur=0.5)
@@ -233,14 +233,14 @@ outer clock to the longest child's end time (≈ 0.99 + 0.3 = 1.3 s), followed b
 ### The arrow indicator
 
 ```python
-arrow = Arrow((-150, -10), (-150, -50), head="start").stroke("green", 4)
+arrow = Arrow((-350, -10), (-350, -50), head="start").stroke("green", 4)
 ```
 
 `Arrow(start, end, head=)` builds a two-point connector with an arrowhead in one call —
 `head="start"` puts the head at the first point. `.start`/`.end` expose the underlying
 `move_to`/`line_to` handles, so the endpoints animate independently later.
 
-The arrow begins at x = −150 — off the left edge of the canvas so it is invisible at first. It
+The arrow begins at x = −350 — off the left edge of the canvas so it is invisible at first. It
 will be repositioned later by animating `arrow.start` and `arrow.end` to the coordinates of the
 target cell.
 
@@ -252,13 +252,15 @@ for step in [2, 3]:
 
     with Par(), anim(0.8):
         s.camera.zoom(1.9)
-        s.camera.center(numbers[idx].at("center"))
+        s.camera.center(numbers[idx].at("center").move(120, 60))
 ```
 
 `s.camera` is the scene's own animatable viewpoint onto its content — distinct from
 `.scale()`, which would transform a node's own box as a widget. `.camera.zoom(1.9)` magnifies
 the content around the current camera center; `.camera.center(...)` re-points the camera at
-the target cell (`numbers[idx].at("center")`). Running both inside `Par(), anim(0.8)` animates
+the target cell, offset by `.move(120, 60)` from its exact center — this keeps the framing from
+being dead-centered on the single cell, leaving room in the zoomed view for the crossing-line
+bracket and the multiples it will step across. Running both inside `Par(), anim(0.8)` animates
 zoom and re-centering together over 0.8 seconds — the grid zooms in and shifts in one fluid
 move, and the scene's own layout is untouched (see [Camera](anim.md#camera) for the full
 zoom/center/reset story).
@@ -291,12 +293,12 @@ with Group() as m:
     p = Path().stroke("red", 2)
     a = p.move_to(0, 0)
     b = p.line_to(0, 0)
-    p.move_to(a.at()).move(0, -4)
-    p.line_to(a.at()).move(0, 4)
-    p.move_to(b.at()).move(0, -4)
-    p.line_to(b.at()).move(0, 4)
+    p.move_to(a.at().move(0, -4))
+    p.line_to(a.at().move(0, 4))
+    p.move_to(b.at().move(0, -4))
+    p.line_to(b.at().move(0, 4))
     t = Text(str(step)).fill("red")
-    t.pos(numbers[idx].get_child(kind="text").at())
+    t.pos(numbers[idx].get_child(kind="text").at(0, 0))
     m.fade_in(dur=0.5)
 ```
 
@@ -306,22 +308,23 @@ a case `Arrow`/`Line` covers directly — so it's still built command-by-command
 path has 6 commands in total:
 
 1. The main line: `move_to(0, 0)` → `a`, `line_to(0, 0)` → `b`
-2. Left tick: `move_to(a.at())` offset by (0, −4), `line_to(a.at())`
-   offset by (0, +4)
+2. Left tick: `move_to(a.at().move(0, -4))`, `line_to(a.at().move(0, 4))`
 3. Right tick: same pattern at `b.at()`
 
 The key insight is that the tick endpoints are defined *relative to `a` and `b`* using
-`move_to(a.at()).move(0, ±4)`. When `a` and `b` are animated to new positions the ticks move
+`move_to(a.at().move(0, ±4))`. When `a` and `b` are animated to new positions the ticks move
 with them automatically — you never have to update them separately.
 
-The text label `t` sits next to the starting cell and shows the prime value in red.
+The text label `t` sits next to the starting cell and shows the prime value in red. `.at(0, 0)`
+anchors on the target text node's top-left corner rather than its center (a bare `.at()` — used
+below — defaults to the center; `(0, 0)` is the same point as the named anchor `"top_left"`).
 
 ```python
 for i in range(3):
     with Par(), anim(0.5):
         a.pos(numbers[idx + i * step].at("top").move(0, -6))
         b.pos(numbers[idx + (i + 1) * step].at("top").move(0, -6))
-        t.pos(numbers[idx + i * step].at().move(70, -30))
+        t.pos(numbers[idx + i * step].at("top_left").move(70, -30))
     wait(0.2)
     r = numbers[idx + (i + 1) * step].get_child(kind="rect")
     r.fill("red", dur=0.5)
@@ -331,7 +334,9 @@ for i in range(3):
 Each iteration advances the bracket one step: `a` and `b` slide to the next multiple in
 parallel (`Par(), anim(0.5)` supplies the shared 0.5 s duration to all three calls), and then
 the target cell's rect transitions to red. The bracket hops across the first three multiples
-of the prime with colour changes in sync.
+of the prime with colour changes in sync. `t`'s offset is now taken from the cell's top-left
+corner (`.at("top_left")`) instead of its center, so `.move(70, -30)` lands the label in the
+same place relative to the cell's corner on every hop.
 
 ### Marking all remaining multiples
 

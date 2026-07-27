@@ -29,11 +29,13 @@ pub struct SceneInfo {
     pub cue_frames: Vec<u32>,
     /// If `true`, the player does not pause at the end of this scene.
     pub flow: bool,
-    /// Speaker notes: `(frame, text)` pairs, local frame numbers. A note
-    /// attaches to the segment starting at its frame (previous cue or scene
-    /// start, up to the next cue or scene end) — see `crates/player`'s
-    /// segment-lookup helper for how consumers group these.
-    pub notes: Vec<(u32, String)>,
+    /// Speaker notes: `(frame, segment_ordinal, text)` triples, local frame
+    /// numbers. `segment_ordinal` is the count of distinct cue frames placed
+    /// before the note (0 = before the first cue, 1 = between cue #1 and #2,
+    /// ...) — frame number alone can't identify a note's segment, since a
+    /// note recorded right after `cue()` lands on the cue's own frame. See
+    /// `crates/player`'s segment-lookup helper for how consumers group these.
+    pub notes: Vec<(u32, u32, String)>,
     pub frame_count: u32,
     /// Opaque per-node debug info (`--debug`), each tagged with its node's
     /// wire id (array index); empty outside debug runs. The engine never
@@ -98,7 +100,7 @@ struct RawScene {
     #[serde(default)]
     flow: bool,
     #[serde(default)]
-    notes: Vec<(u32, String)>,
+    notes: Vec<(u32, u32, String)>,
     #[serde(default)]
     children: Vec<NodeId>,
     #[serde(default)]
@@ -514,14 +516,33 @@ mod tests {
     fn scene_notes_round_trip() {
         let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
         let mut scene = doc["scenes"][0].clone();
-        scene["notes"] = serde_json::json!([[0, "first note"], [1, "second note"]]);
+        scene["notes"] = serde_json::json!([[0, 0, "first note"], [1, 1, "second note"]]);
         let json = serde_json::json!({"version": 2, "scenes": [scene]}).to_string();
         let anim = AnimationDef::from_json(&json).unwrap();
         assert_eq!(
             anim.scene_infos()[0].notes,
             vec![
-                (0, "first note".to_string()),
-                (1, "second note".to_string())
+                (0, 0, "first note".to_string()),
+                (1, 1, "second note".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn scene_notes_same_frame_distinct_segment_round_trip() {
+        // Two notes tied to the same frame but different segments (the
+        // exact shape produced when a note lands on a cue's own frame) must
+        // round-trip as distinct entries, not collapse.
+        let doc: serde_json::Value = serde_json::from_str(SCENE_JSON).unwrap();
+        let mut scene = doc["scenes"][0].clone();
+        scene["notes"] = serde_json::json!([[0, 0, "before cue"], [0, 1, "after cue"]]);
+        let json = serde_json::json!({"version": 2, "scenes": [scene]}).to_string();
+        let anim = AnimationDef::from_json(&json).unwrap();
+        assert_eq!(
+            anim.scene_infos()[0].notes,
+            vec![
+                (0, 0, "before cue".to_string()),
+                (0, 1, "after cue".to_string())
             ]
         );
     }

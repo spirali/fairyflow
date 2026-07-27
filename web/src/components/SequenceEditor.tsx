@@ -212,7 +212,7 @@ export default function SequenceEditor({
       let frameCount = 0;
       let cueFrames: number[] = [];
       let flow = false;
-      let notes: [number, string][] = [];
+      let notes: [number, number, string][] = [];
       let treeDone = false;
 
       const handler = (msg: ServerMsg) => {

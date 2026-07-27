@@ -211,7 +211,7 @@ def test_note_serializes_frame_and_text():
     s = Scene(60, 40)
     with s:
         note("Introduce the problem first.")
-    assert create_export(0, s)["notes"] == [[0, "Introduce the problem first."]]
+    assert create_export(0, s)["notes"] == [[0, 0, "Introduce the problem first."]]
 
 
 def test_note_does_not_move_the_clock():
@@ -235,7 +235,7 @@ def test_note_after_cue_lands_on_cue_frame():
         note("Now the punchline.")
     result = create_export(0, s)
     assert result["cues"] == [1]
-    assert result["notes"] == [[1, "Now the punchline."]]
+    assert result["notes"] == [[1, 1, "Now the punchline."]]
 
 
 def test_multiple_notes_in_one_segment_preserve_call_order():
@@ -245,8 +245,8 @@ def test_multiple_notes_in_one_segment_preserve_call_order():
         note("first paragraph")
         note("second paragraph")
     assert create_export(0, s)["notes"] == [
-        [0, "first paragraph"],
-        [0, "second paragraph"],
+        [0, 1, "first paragraph"],
+        [0, 1, "second paragraph"],
     ]
 
 
@@ -260,7 +260,40 @@ def test_notes_sorted_by_frame_with_stable_same_frame_order():
     result = create_export(0, s)["notes"]
     # sorted by frame (0 before 1); call order preserved within frame 1
     assert result == [
-        [0, "at frame 0"],
-        [1, "first at frame 1"],
-        [1, "second at frame 1"],
+        [0, 0, "at frame 0"],
+        [1, 0, "first at frame 1"],
+        [1, 0, "second at frame 1"],
     ]
+
+
+def test_notes_disambiguated_by_segment_ordinal_when_frames_alias():
+    # Regression test for the reported bug: a note before cue() and notes
+    # right after it can all land on the *same* frame (cue() only arms a
+    # lazy advance; note() and the Rect() before the cue don't flush it
+    # here), so frame number alone can't separate "before" from "after" —
+    # the segment ordinal must.
+    s = Scene(60, 40)
+    with s:
+        note("Hello")
+        Rect().size(10, 10)
+        cue()
+        note("Baf")
+        note("Baf2")
+    result = create_export(0, s)
+    assert result["cues"] == [0]
+    assert result["notes"] == [
+        [0, 0, "Hello"],
+        [0, 1, "Baf"],
+        [0, 1, "Baf2"],
+    ]
+
+
+def test_cue_ordinal_does_not_double_increment_on_same_frame():
+    s = Scene(60, 40)
+    with s:
+        cue()
+        cue()
+        note("after both cues")
+    result = create_export(0, s)
+    assert result["cues"] == [0]
+    assert result["notes"] == [[0, 1, "after both cues"]]

@@ -32,7 +32,15 @@ def cue():
     disarms the pending advance instead of stacking with it.
     """
     node = CURRENT_NODE.get()
-    node.get_scene().cues.add(get_frame())
+    scene = node.get_scene()
+    frame = get_frame()
+    # A note() right after cue() lands on the cue's own frame (it doesn't flush
+    # the pending advance), so segment membership can't be inferred from frame
+    # number alone — track a separate ordinal, one per *distinct* cue frame, so
+    # notes before/after a cue stay distinguishable even when their frames tie.
+    if frame not in scene.cues:
+        scene._cue_ordinal += 1
+    scene.cues.add(frame)
     PENDING_CUE_ADVANCE.set(True)
 
 
@@ -50,7 +58,8 @@ def note(text: str):
     `note()` calls in one segment stack as paragraphs in the presenter view.
     """
     node = CURRENT_NODE.get()
-    node.get_scene().notes.append((get_frame(), text))
+    scene = node.get_scene()
+    scene.notes.append((get_frame(), scene._cue_ordinal, text))
 
 
 def get_frame() -> int:

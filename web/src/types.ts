@@ -124,7 +124,7 @@ export interface SceneInfo {
   key_frames: number[];
   cue_frames: number[];
   flow: boolean;
-  notes: [number, string][];
+  notes: [number, number, string][];
   frame_count: number;
   info: InfoEntry[];
 }
@@ -138,7 +138,7 @@ export type ServerMsg =
       type: "tree";
       key_frames: number[];
       cue_frames: number[];
-      notes: [number, string][];
+      notes: [number, number, string][];
       frame_count: number;
       scenes: SceneInfo[];
     }
@@ -152,7 +152,7 @@ export interface SequenceSceneResult {
   frameCount: number;
   cueFrames: number[];
   flow: boolean; // if true, the player does not pause at the end of this scene
-  notes: [number, string][]; // (frame, text) speaker notes, local frame numbers
+  notes: [number, number, string][]; // (frame, segment_ordinal, text) speaker notes, local frame numbers
   frames: string[]; // blob URLs, index = local frame number within this scene
   width: number;
   height: number;

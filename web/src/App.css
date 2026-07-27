@@ -2037,6 +2037,8 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-primary);
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .seqp-notes-para {

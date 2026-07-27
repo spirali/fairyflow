@@ -38,7 +38,7 @@ pub struct SceneInfoMsg {
     pub key_frames: Vec<u32>,
     pub cue_frames: Vec<u32>,
     pub flow: bool,
-    pub notes: Vec<(u32, String)>,
+    pub notes: Vec<(u32, u32, String)>,
     pub frame_count: u32,
     pub info: Vec<serde_json::Value>,
 }
@@ -67,7 +67,7 @@ pub enum BuildProcessMsg {
         /// Combined cue frames for "All scenes" mode (absolute frame numbers).
         cue_frames: Vec<u32>,
         /// Combined speaker notes for "All scenes" mode (absolute frame numbers).
-        notes: Vec<(u32, String)>,
+        notes: Vec<(u32, u32, String)>,
         frame_count: u32,
         /// Per-scene metadata.
         scenes: Vec<SceneInfoMsg>,
@@ -174,21 +174,27 @@ pub async fn run_python(
                     // Compute combined cue frames and notes across all scenes
                     // (with offsets) — same accumulation, one pass.
                     let mut cue_frames: Vec<u32> = Vec::new();
-                    let mut notes: Vec<(u32, String)> = Vec::new();
+                    let mut notes: Vec<(u32, u32, String)> = Vec::new();
                     {
                         let mut offset = 0u32;
+                        // Cumulative distinct-cue count from preceding scenes —
+                        // segment_ordinal is scene-local, so it needs the same
+                        // kind of offset as frame numbers do when concatenating
+                        // scenes for "All scenes" mode.
+                        let mut cue_offset = 0u32;
                         for si in &scene_infos {
                             for &cf in &si.cue_frames {
                                 cue_frames.push(cf + offset);
                             }
-                            for (nf, text) in &si.notes {
-                                notes.push((nf + offset, text.clone()));
+                            for (nf, seg, text) in &si.notes {
+                                notes.push((nf + offset, seg + cue_offset, text.clone()));
                             }
                             offset += si.frame_count;
+                            cue_offset += si.cue_frames.len() as u32;
                         }
                         cue_frames.sort_unstable();
                         cue_frames.dedup();
-                        notes.sort_by_key(|(f, _)| *f);
+                        notes.sort_by_key(|(f, _, _)| *f);
                     }
                     let scenes: Vec<SceneInfoMsg> = scene_infos
                         .into_iter()

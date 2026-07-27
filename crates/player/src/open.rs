@@ -247,7 +247,7 @@ struct SceneSegmentInfo {
     global_start: u32,
     frame_count: u32,
     cues: Vec<u32>,
-    notes: Vec<(u32, String)>,
+    notes: Vec<(u32, u32, String)>,
 }
 
 struct PlayerApp {
@@ -350,7 +350,7 @@ impl PlayerApp {
             return Vec::new();
         };
         let local_frame = self.current_frame - seg.global_start;
-        notes_for_segment(&seg.cues, &seg.notes, local_frame, seg.frame_count)
+        notes_for_segment(&seg.cues, &seg.notes, local_frame)
     }
 
     fn render(&mut self, id: WindowId) {

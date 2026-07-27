@@ -54,12 +54,7 @@ export default function SequencePlayer({
   const nextCue = cueFrames.find((c) => c > frame) ?? null;
 
   const currentNotes = currentScene
-    ? notesForSegment(
-        currentScene.cueFrames,
-        currentScene.notes,
-        localFrame,
-        currentScene.frameCount,
-      )
+    ? notesForSegment(currentScene.cueFrames, currentScene.notes, localFrame)
     : [];
 
   // Scene boundary markers for the slider
@@ -263,6 +258,21 @@ export default function SequencePlayer({
         )}
       </div>
 
+      {/* Speaker notes for the current segment */}
+      {showNotes && result && (
+        <div className="seqp-notes-panel">
+          {currentNotes.length > 0 ? (
+            currentNotes.map((text, i) => (
+              <p key={i} className="seqp-notes-para">
+                {text}
+              </p>
+            ))
+          ) : (
+            <p className="seqp-notes-empty">No notes for this segment.</p>
+          )}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="seqp-controls">
         {/* Slider with cue/scene markers */}
@@ -326,21 +336,6 @@ export default function SequencePlayer({
           <span className="seqp-frame-label">{result ? `${frame} / ${maxFrame}` : "—"}</span>
         </div>
       </div>
-
-      {/* Speaker notes for the current segment */}
-      {showNotes && result && (
-        <div className="seqp-notes-panel">
-          {currentNotes.length > 0 ? (
-            currentNotes.map((text, i) => (
-              <p key={i} className="seqp-notes-para">
-                {text}
-              </p>
-            ))
-          ) : (
-            <p className="seqp-notes-empty">No notes for this segment.</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

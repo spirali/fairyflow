@@ -355,7 +355,7 @@ pub(crate) struct SceneDef {
     pub frames: u32,
     pub cues: Vec<u32>,
     pub flow: bool,
-    pub notes: Vec<(u32, String)>,
+    pub notes: Vec<(u32, u32, String)>,
     pub children: Vec<NodeId>,
 }
 

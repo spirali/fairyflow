@@ -60,7 +60,10 @@ The first change snaps instantly at t = 1 s; the second transitions smoothly ove
 Alongside `dur`, every attribute method also accepts an optional `ease` keyword argument
 that controls the **rate curve** of the transition — how the value's speed changes between
 its start and end, rather than how long it takes. `ease` has no effect without `dur`, since
-an instant change has no rate to shape.
+an instant change has no rate to shape. `dur` and `ease` resolve independently, though: an
+`anim()` block or `.anim()` proxy can set just `ease` and still take effect on any call whose
+`dur` comes from somewhere else, like the call site itself or a nested `anim(dur=...)` block —
+see below.
 
 Five presets are available, matching the standard CSS easing curves:
 
@@ -101,9 +104,10 @@ at the end.
 
 ## The `.anim()` proxy
 
-`node.anim(dur, ease=None)` returns a proxy that pre-fills `dur`/`ease` on every chained
+`node.anim(dur=None, ease=None)` returns a proxy that pre-fills `dur`/`ease` on every chained
 setter call and runs them in parallel — a shorthand for animating several attributes of
-one node at once without writing out a `Par()` block:
+one node at once without writing out a `Par()` block. `dur` can be omitted if every chained
+call supplies its own:
 
 ```python
 # these two are equivalent:
@@ -127,7 +131,7 @@ A `dur=`/`ease=` passed to one call in the chain still overrides the proxy's.
 
 ## The `anim()` block
 
-`with anim(dur, ease=None):` sets the *default* `dur`/`ease` for any setter call inside
+`with anim(dur=None, ease=None):` sets the *default* `dur`/`ease` for any setter call inside
 the block that doesn't specify its own. Plain top-level code is already sequential, so a
 bare `anim()` block needs no extra `Seq()` wrapper:
 
@@ -138,6 +142,16 @@ with Scene():
     with anim(0.6):
         box.xy(180, 55)    # each step takes 0.6 s, one after another
         title.alpha(0)
+```
+
+`dur` can be left out to set just a default `ease`, leaving each call (or a nested
+`anim(dur=...)` block) to supply its own `dur`:
+
+```python
+with anim(ease="in_out"):
+    box.xy(180, 55, dur=0.6)
+    with anim(0.3):
+        title.alpha(0)  # dur from the nested block, ease still "in_out" from the outer one
 ```
 
 `anim()` says nothing about composition, so it combines freely with `Par`/`Seq` — pair it

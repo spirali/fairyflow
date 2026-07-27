@@ -9,6 +9,10 @@ def sc():
         yield s
 
 
+def _transitions(node, attr):
+    return node._attrs[attr].transitions
+
+
 def test_anim_block_default_is_sequential_at_top_level(sc):
     r = Rect().size(10, 10)
     base = get_frame()
@@ -119,3 +123,59 @@ def test_anim_proxy_per_call_override(sc):
     # y() still uses the proxy's 0.8; x()'s override doesn't shrink the
     # overall (parallel) duration below the longest branch.
     assert get_frame() == base + time_to_frames(0.8)
+
+
+def test_anim_block_ease_only_with_call_site_dur(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    with anim(ease="in_out"):
+        r.x(10, dur=0.5)
+    end = base + time_to_frames(0.5)
+    assert get_frame() == end
+    assert _transitions(r, "x")[end] == "in_out"
+
+
+def test_anim_block_ease_reaches_through_nested_dur_only_block(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    with anim(ease="in_out"), anim(0.3):
+        r.x(10)
+    end = base + time_to_frames(0.3)
+    assert get_frame() == end
+    assert _transitions(r, "x")[end] == "in_out"
+
+
+def test_call_site_ease_overrides_anim_block_ease(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    with anim(ease="in_out"):
+        r.x(10, dur=0.5, ease="out_back")
+    end = base + time_to_frames(0.5)
+    assert _transitions(r, "x")[end] == "out_back"
+
+
+def test_anim_block_ease_without_any_dur_is_instant(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    with anim(ease="in_out"):
+        r.x(10)
+    assert get_frame() == base
+    assert _transitions(r, "x")[base] == "S"
+
+
+def test_anim_proxy_ease_only_with_call_site_dur(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    r.anim(ease="in_out").x(10, dur=0.5).y(10, dur=0.5)
+    end = base + time_to_frames(0.5)
+    assert get_frame() == end
+    assert _transitions(r, "x")[end] == "in_out"
+    assert _transitions(r, "y")[end] == "in_out"
+
+
+def test_anim_proxy_call_site_ease_overrides(sc):
+    r = Rect().size(10, 10)
+    base = get_frame()
+    r.anim(ease="in_out").x(10, dur=0.5, ease="out_back")
+    end = base + time_to_frames(0.5)
+    assert _transitions(r, "x")[end] == "out_back"

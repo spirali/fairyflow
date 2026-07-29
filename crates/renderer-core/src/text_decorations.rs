@@ -207,7 +207,7 @@ pub fn decoration_rects(
 mod tests {
     use super::*;
     use crate::text_layout::TextLayoutEngine;
-    use crate::text_layout::tests::span;
+    use crate::text_layout::tests::{init_test_resources, span};
     use crate::{Inheritable, Resources, TextAlign, TextChild};
 
     fn span_with_progress(id: u64, text: &str, underline: f64, strike: f64) -> TextSpan {
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn no_decoration_when_progress_is_zero() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let sp = span_with_progress(1, "plain text", 0.0, 0.0);
         let lines = [TextChild::Span(sp.clone())];
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn full_progress_covers_the_whole_run() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let sp = span_with_progress(1, "Hello underline", 1.0, 0.0);
         let lines = [TextChild::Span(sp.clone())];
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn strike_sits_above_the_baseline() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let sp = span_with_progress(1, "crossed out", 0.0, 1.0);
         let lines = [TextChild::Span(sp.clone())];
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn partial_progress_covers_strictly_less_than_full_progress() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let full = span_with_progress(1, "sweeping in", 1.0, 0.0);
         let half = span_with_progress(1, "sweeping in", 0.5, 0.0);
@@ -325,7 +325,7 @@ mod tests {
         // A single long span forced to wrap across two visual rows within
         // one CachedLine -- the exact case the proposal calls out ("a run
         // wrapped over three lines draws in continuously").
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let sp = span_with_progress(1, "one two three four five six seven", 1.0, 0.0);
         let lines = [TextChild::Span(sp.clone())];

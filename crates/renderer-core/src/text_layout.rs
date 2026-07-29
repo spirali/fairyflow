@@ -577,6 +577,20 @@ pub(crate) mod tests {
     use super::*;
     use crate::{Color, Inheritable, Paint, TextStyle};
 
+    pub(crate) fn init_test_resources() {
+        Resources::init();
+        let resources = Resources::get();
+        let fonts_dir = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/assets/fonts"
+        ));
+        resources.load_font_directories(&[fonts_dir]);
+        let mut aliases = HashMap::new();
+        aliases.insert("sans-serif".to_string(), "DejaVu Sans".to_string());
+        aliases.insert("monospace".to_string(), "DejaVu Sans Mono".to_string());
+        resources.set_font_aliases(&aliases);
+    }
+
     pub(crate) fn test_style() -> TextStyle {
         TextStyle {
             fill_color: Inheritable::Own(Paint::Solid(Color::from_rgba8(0, 0, 0, 255))),
@@ -629,7 +643,7 @@ pub(crate) mod tests {
 
     #[test]
     fn left_alignment_all_lines_start_at_zero_offset() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let lines = [
             TextChild::Span(span(1, "a")),
@@ -649,7 +663,7 @@ pub(crate) mod tests {
 
     #[test]
     fn center_and_right_alignment_use_the_cross_line_block_width() {
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let short_span = span(1, "a");
         let long_span = span(2, "aaaaaaaaaa");
@@ -684,7 +698,7 @@ pub(crate) mod tests {
         // Parley: "Justify each line by spacing out content, except for the
         // last line." A block with only one (therefore always-last) visual
         // row has nothing to justify against, wrap or no wrap.
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let lines = [TextChild::Span(span(1, "short line"))];
 
@@ -701,7 +715,7 @@ pub(crate) mod tests {
         // second (or later) visual row of a `wrap()`-forced line must get
         // that row's offset added, not just the top of the logical line
         // (which pre-fix was always what `find_text_node_pos` returned).
-        Resources::init();
+        init_test_resources();
         let mut engine = TextLayoutEngine::new(Resources::get());
         let word1 = span(1, "wwwwwwwwww ");
         let target_id = 2;

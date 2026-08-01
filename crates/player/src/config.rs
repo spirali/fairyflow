@@ -6,4 +6,6 @@ pub(crate) struct PackageConfig {
     pub scenes: Vec<String>,
     pub fps: u32,
     pub image_map: HashMap<String, String>,
+    #[serde(default)]
+    pub font_files: Vec<String>,
 }

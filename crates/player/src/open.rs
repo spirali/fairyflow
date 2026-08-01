@@ -170,11 +170,11 @@ fn load_package(path: &Path) -> anyhow::Result<LoadedPackage> {
     std::fs::create_dir_all(&temp_dir)?;
     let temp_guard = TempDirGuard(temp_dir.clone());
 
-    // Extract all images from the archive into the temp dir
+    // Extract all images and fonts from the archive into the temp dir
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry.name().to_string();
-        if name.starts_with("images/") && !name.ends_with('/') {
+        if (name.starts_with("images/") || name.starts_with("fonts/")) && !name.ends_with('/') {
             let dest = temp_dir.join(&name);
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -182,6 +182,11 @@ fn load_package(path: &Path) -> anyhow::Result<LoadedPackage> {
             let mut out = std::fs::File::create(&dest)?;
             std::io::copy(&mut entry, &mut out)?;
         }
+    }
+
+    // Register any embedded fonts before parsing/laying out scenes below.
+    if !config.font_files.is_empty() {
+        renderer_skia::Resources::get().load_font_directories(&[temp_dir.join("fonts")]);
     }
 
     // Build JSON path replacements: replace quoted original path with quoted temp path.

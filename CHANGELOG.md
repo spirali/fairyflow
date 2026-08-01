@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+  * Invalid/Missing font throws an error instead of silent error
+
 ## 0.5.0
 
 A major redesign of the Python scene API. Not backwards compatible with 0.4.

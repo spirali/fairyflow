@@ -18,6 +18,7 @@ pub struct CreateConfig {
 pub fn create_package(
     project_path: &Path,
     scenes: &[&Path],
+    font_directories: &[PathBuf],
     create_config: CreateConfig,
     output: &Path,
 ) -> anyhow::Result<()> {
@@ -70,15 +71,66 @@ pub fn create_package(
         archive.write_all(&bytes)?;
     }
 
+    // Collect and write fonts: every font file found (recursively) under the
+    // project's configured font directories, regardless of whether it's
+    // referenced by name in a scene — mirrors how the dev server loads them.
+    const FONT_EXTENSIONS: &[&str] = &["ttf", "otf", "ttc", "otc", "woff", "woff2"];
+    let mut font_paths: HashSet<PathBuf> = HashSet::new();
+    for dir in font_directories {
+        for path in walk_dir(dir) {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase());
+            if ext.as_deref().is_some_and(|e| FONT_EXTENSIONS.contains(&e)) {
+                font_paths.insert(path);
+            }
+        }
+    }
+    let mut font_files: Vec<String> = Vec::with_capacity(font_paths.len());
+    for (i, font_path) in font_paths.into_iter().enumerate() {
+        let archive_path = if let Some(ext) = font_path.extension().and_then(|e| e.to_str()) {
+            format!("fonts/{i}.{ext}")
+        } else {
+            format!("fonts/{i}")
+        };
+        archive.start_file(&archive_path, options)?;
+        let bytes = std::fs::read(&font_path)
+            .map_err(|e| anyhow::anyhow!("reading font {}: {}", font_path.display(), e))?;
+        archive.write_all(&bytes)?;
+        font_files.push(archive_path);
+    }
+
     // Write ffpackage.json.
     let config = PackageConfig {
         scenes: scene_archive_paths,
         fps: create_config.fps,
         image_map,
+        font_files,
     };
     archive.start_file("ffpackage.json", options)?;
     let config_bytes = serde_json::to_vec(&config)?;
     archive.write_all(&config_bytes)?;
     archive.finish()?;
     Ok(())
+}
+
+/// Yields all file paths under `root` recursively (best-effort; skips unreadable dirs).
+fn walk_dir(root: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                result.push(path);
+            }
+        }
+    }
+    result
 }

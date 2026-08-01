@@ -113,7 +113,7 @@ async def test_run_valid_scene_sends_tree(server_uri):
     assert isinstance(tree["scenes"], list) and len(tree["scenes"]) >= 1
 
 
-async def test_run_error_scene_exits_nonzero(server_uri):
+async def test_run_error_scene_exits_nonzero(server_uri, error_scene):
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
         msgs = await _run_scene(ws, "scenes/error.ffpy")
@@ -122,18 +122,29 @@ async def test_run_error_scene_exits_nonzero(server_uri):
     assert done[0]["exit_code"] != 0
 
 
-async def test_run_error_scene_sends_error_messages(server_uri):
+async def test_run_error_scene_sends_error_messages(server_uri, error_scene):
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
         msgs = await _run_scene(ws, "scenes/error.ffpy")
     assert by_type(msgs, "error"), "expected at least one error message"
 
 
-async def test_done_always_sent_on_error(server_uri):
+async def test_done_always_sent_on_error(server_uri, error_scene):
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
         msgs = await _run_scene(ws, "scenes/error.ffpy")
     assert by_type(msgs, "done"), "done message must always be sent"
+
+
+async def test_run_invalid_font_scene_sends_font_error(server_uri, invalid_font_scene):
+    async with websockets.connect(server_uri) as ws:
+        await _recv_json(ws)  # consume config
+        msgs = await _run_scene(ws, "scenes/invalid_font.ffpy")
+    errors = by_type(msgs, "error")
+    assert any(
+        "font" in e["text"].lower() and "not found" in e["text"].lower() for e in errors
+    ), f"expected a font-not-found error, got: {msgs}"
+    assert not by_type(msgs, "tree"), "invalid font scene must not send a tree message"
 
 
 async def test_nonexistent_file_exits_nonzero(server_uri):
@@ -156,7 +167,7 @@ async def test_two_sequential_runs(server_uri):
     assert by_type(msgs2, "done")[0]["exit_code"] == 0
 
 
-async def test_error_run_followed_by_successful_run(server_uri):
+async def test_error_run_followed_by_successful_run(server_uri, error_scene):
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
         err_msgs = await _run_scene(ws, "scenes/error.ffpy")
@@ -176,7 +187,7 @@ async def test_many_sequential_runs(server_uri):
 # ── run cancellation ──────────────────────────────────────────────────────────
 
 
-async def test_new_run_supersedes_previous(server_uri):
+async def test_new_run_supersedes_previous(server_uri, slow_scene):
     """Sending a second run while the first is still running cancels the first."""
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
@@ -198,7 +209,7 @@ async def test_new_run_supersedes_previous(server_uri):
     assert done_msgs[-1]["exit_code"] == 0
 
 
-async def test_terminate_stops_current_run(server_uri):
+async def test_terminate_stops_current_run(server_uri, slow_scene):
     async with websockets.connect(server_uri) as ws:
         await _recv_json(ws)  # consume config
         await ws.send(json.dumps({"type": "run", "path": "scenes/slow.ffpy"}))

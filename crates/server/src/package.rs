@@ -86,11 +86,19 @@ pub async fn export_player_handler(
     }
 
     let fps = params.fps.max(1);
-    let prologue = {
+    let (prologue, font_directories) = {
         let cfg = state.config.lock().unwrap();
-        cfg.prologue
+        let cwd = std::env::current_dir().ok();
+        let prologue = cfg
+            .prologue
             .as_deref()
-            .and_then(|p| std::env::current_dir().ok().map(|d| d.join(p)))
+            .and_then(|p| cwd.as_ref().map(|d| d.join(p)));
+        let font_directories = cfg
+            .font_directories
+            .iter()
+            .filter_map(|d| cwd.as_ref().map(|cwd| cwd.join(d)))
+            .collect::<Vec<_>>();
+        (prologue, font_directories)
     };
 
     // Create a temp dir for intermediate scene JSON files
@@ -133,8 +141,14 @@ pub async fn export_player_handler(
     let output_path = PathBuf::from("exports").join(&filename);
     let result = tokio::task::spawn_blocking(move || {
         let refs: Vec<&Path> = json_paths.iter().map(|p| p.as_path()).collect();
-        create_package(Path::new("."), &refs, CreateConfig { fps }, &output_path)
-            .map(|()| output_path.to_string_lossy().into_owned())
+        create_package(
+            Path::new("."),
+            &refs,
+            &font_directories,
+            CreateConfig { fps },
+            &output_path,
+        )
+        .map(|()| output_path.to_string_lossy().into_owned())
     })
     .await;
 

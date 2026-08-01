@@ -344,6 +344,18 @@ impl Node {
             expr.collect_strings(image_paths);
         }
     }
+
+    pub fn collect_fonts(&self, font_names: &mut HashSet<Arc<String>>) {
+        let text_style = match &self.kind {
+            NodeKind::Text { text_style, .. }
+            | NodeKind::TextGroup { text_style, .. }
+            | NodeKind::TextSpan { text_style, .. } => text_style,
+            _ => return,
+        };
+        if let Some(expr) = text_style.font.get_expr() {
+            expr.collect_strings(font_names);
+        }
+    }
 }
 
 /// Root of the scene definition. Mirrors `Scene(SizeMixin)` in Python.

@@ -164,66 +164,82 @@ pub async fn run_python(
         match tokio::fs::read_to_string(&tree_path).await {
             Ok(json_str) => match AnimationDef::from_json(&json_str) {
                 Ok(anim) => {
-                    let key_frames: Vec<_> = anim
-                        .key_frames(SceneSelection::All)
+                    let mut font_names = std::collections::HashSet::new();
+                    anim.collect_fonts(&mut font_names);
+                    let missing: Vec<&str> = font_names
                         .iter()
-                        .map(|f| f.as_u32())
+                        .map(|s| s.as_str())
+                        .filter(|name| !renderer_core::Resources::get().has_family(name))
                         .collect();
-                    let frame_count = anim.frame_count(SceneSelection::All);
-                    let scene_infos = anim.scene_infos();
-                    // Compute combined cue frames and notes across all scenes
-                    // (with offsets) — same accumulation, one pass.
-                    let mut cue_frames: Vec<u32> = Vec::new();
-                    let mut notes: Vec<(u32, u32, String)> = Vec::new();
-                    {
-                        let mut offset = 0u32;
-                        // Cumulative distinct-cue count from preceding scenes —
-                        // segment_ordinal is scene-local, so it needs the same
-                        // kind of offset as frame numbers do when concatenating
-                        // scenes for "All scenes" mode.
-                        let mut cue_offset = 0u32;
-                        for si in &scene_infos {
-                            for &cf in &si.cue_frames {
-                                cue_frames.push(cf + offset);
-                            }
-                            for (nf, seg, text) in &si.notes {
-                                notes.push((nf + offset, seg + cue_offset, text.clone()));
-                            }
-                            offset += si.frame_count;
-                            cue_offset += si.cue_frames.len() as u32;
-                        }
-                        cue_frames.sort_unstable();
-                        cue_frames.dedup();
-                        notes.sort_by_key(|(f, _, _)| *f);
-                    }
-                    let scenes: Vec<SceneInfoMsg> = scene_infos
-                        .into_iter()
-                        .map(|si| SceneInfoMsg {
-                            name: si.name,
-                            key_frames: si.key_frames,
-                            cue_frames: si.cue_frames,
-                            flow: si.flow,
-                            notes: si.notes,
-                            frame_count: si.frame_count,
-                            info: si.info,
+                    if !missing.is_empty() {
+                        warn!(run_id = id, ?missing, "font(s) not found");
+                        tx.send(BuildProcessMsg::Error {
+                            text: format!("font(s) not found: {}", missing.join(", ")),
                         })
-                        .collect();
-                    info!(
-                        run_id = id,
-                        frame_count,
-                        scenes = scenes.len(),
-                        "animation cached"
-                    );
-                    *animation_cache.lock().unwrap() = Some(Arc::new(anim));
-                    tx.send(BuildProcessMsg::Tree {
-                        key_frames,
-                        cue_frames,
-                        notes,
-                        frame_count,
-                        scenes,
-                    })
-                    .await
-                    .ok();
+                        .await
+                        .ok();
+                    } else {
+                        let key_frames: Vec<_> = anim
+                            .key_frames(SceneSelection::All)
+                            .iter()
+                            .map(|f| f.as_u32())
+                            .collect();
+                        let frame_count = anim.frame_count(SceneSelection::All);
+                        let scene_infos = anim.scene_infos();
+                        // Compute combined cue frames and notes across all scenes
+                        // (with offsets) — same accumulation, one pass.
+                        let mut cue_frames: Vec<u32> = Vec::new();
+                        let mut notes: Vec<(u32, u32, String)> = Vec::new();
+                        {
+                            let mut offset = 0u32;
+                            // Cumulative distinct-cue count from preceding scenes —
+                            // segment_ordinal is scene-local, so it needs the same
+                            // kind of offset as frame numbers do when concatenating
+                            // scenes for "All scenes" mode.
+                            let mut cue_offset = 0u32;
+                            for si in &scene_infos {
+                                for &cf in &si.cue_frames {
+                                    cue_frames.push(cf + offset);
+                                }
+                                for (nf, seg, text) in &si.notes {
+                                    notes.push((nf + offset, seg + cue_offset, text.clone()));
+                                }
+                                offset += si.frame_count;
+                                cue_offset += si.cue_frames.len() as u32;
+                            }
+                            cue_frames.sort_unstable();
+                            cue_frames.dedup();
+                            notes.sort_by_key(|(f, _, _)| *f);
+                        }
+                        let scenes: Vec<SceneInfoMsg> = scene_infos
+                            .into_iter()
+                            .map(|si| SceneInfoMsg {
+                                name: si.name,
+                                key_frames: si.key_frames,
+                                cue_frames: si.cue_frames,
+                                flow: si.flow,
+                                notes: si.notes,
+                                frame_count: si.frame_count,
+                                info: si.info,
+                            })
+                            .collect();
+                        info!(
+                            run_id = id,
+                            frame_count,
+                            scenes = scenes.len(),
+                            "animation cached"
+                        );
+                        *animation_cache.lock().unwrap() = Some(Arc::new(anim));
+                        tx.send(BuildProcessMsg::Tree {
+                            key_frames,
+                            cue_frames,
+                            notes,
+                            frame_count,
+                            scenes,
+                        })
+                        .await
+                        .ok();
+                    }
                 }
                 Err(e) => {
                     warn!(run_id = id, error = %e, "failed to parse animation");

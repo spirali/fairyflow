@@ -119,12 +119,6 @@ def _server(tmp_path_factory):
         f.write('"sans-serif" = "DejaVu Sans"\n')
         f.write('"monospace" = "DejaVu Sans Mono"\n')
 
-    # Extra scene files used by test_server.py
-    (proj / "scenes" / "slow.ffpy").write_text("import time; time.sleep(30)\n")
-    (proj / "scenes" / "error.ffpy").write_text(
-        "raise ValueError('intentional error')\n"
-    )
-
     token = "test-token-abc123"
 
     proc = subprocess.Popen(
@@ -211,6 +205,35 @@ def server_base_url(_server):
     """Base HTTP URL (no trailing slash) for the running test server."""
     port, _, _ = _server
     return f"http://localhost:{port}"
+
+
+# Extra scene files used only by specific test_server.py tests — written
+# lazily (once per session, on first use) so tests that don't need them don't
+# pay for or depend on their presence.
+
+
+@pytest.fixture(scope="session")
+def slow_scene(server_project_dir):
+    (server_project_dir / "scenes" / "slow.ffpy").write_text(
+        "import time; time.sleep(30)\n"
+    )
+    return "scenes/slow.ffpy"
+
+
+@pytest.fixture(scope="session")
+def error_scene(server_project_dir):
+    (server_project_dir / "scenes" / "error.ffpy").write_text(
+        "raise ValueError('intentional error')\n"
+    )
+    return "scenes/error.ffpy"
+
+
+@pytest.fixture(scope="session")
+def invalid_font_scene(server_project_dir):
+    (server_project_dir / "scenes" / "invalid_font.ffpy").write_text(
+        "with Scene():\n    Text('hi').font(family='Definitely Not A Real Font XYZ')\n"
+    )
+    return "scenes/invalid_font.ffpy"
 
 
 @pytest.fixture(scope="function")

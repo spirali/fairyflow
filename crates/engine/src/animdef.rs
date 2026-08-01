@@ -68,6 +68,14 @@ impl AnimationDef {
             }
         }
     }
+
+    pub fn collect_fonts(&self, font_names: &mut HashSet<Arc<String>>) {
+        for scene in &self.scenes {
+            for node in scene.nodes.values() {
+                node.collect_fonts(font_names);
+            }
+        }
+    }
 }
 
 // ────────────────────────── Deserialization: wire format v2 ──────────────────

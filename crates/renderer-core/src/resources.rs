@@ -75,6 +75,22 @@ impl Resources {
         Arc::clone(&self.fontdb.lock().unwrap().db)
     }
 
+    /// Whether `name` resolves to a usable font family: either a CSS generic
+    /// (always resolvable via fontique's system defaults/aliases) or a family
+    /// actually registered in the collection (system font or loaded via
+    /// `load_font_directories`).
+    pub fn has_family(&self, name: &str) -> bool {
+        if GenericFamily::parse(name).is_some() {
+            return true;
+        }
+        self.font_cx
+            .lock()
+            .unwrap()
+            .collection
+            .family_by_name(name)
+            .is_some()
+    }
+
     /// Map CSS generic family names to specific fonts via fontique's shared collection.
     /// Only entries present in `aliases` are overridden; unmentioned generic families
     /// continue to use fontique's system defaults.

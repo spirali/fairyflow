@@ -46,7 +46,7 @@ fairyflow open my_project
 
 ```python
 with Scene():
-    stext("Hello world!").fade_out()
+    Text("Hello world!").fade_out(dur=1.0)
 ```
 
 ## Project layout

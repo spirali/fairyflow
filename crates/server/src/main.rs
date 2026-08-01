@@ -449,7 +449,7 @@ async fn run_init(directory: PathBuf) {
         ),
         (
             "scenes/scene1.ffpy",
-            "with Scene():\n    stext(\"Hello world!\").fade_out()\n",
+            "with Scene():\n    Text(\"Hello world!\").fade_out(dur=1.0)\n",
         ),
         (
             "sequences/sequence1.ffsq",

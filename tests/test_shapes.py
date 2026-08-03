@@ -87,6 +87,21 @@ def test_arrow_alpha_propagates_to_arrowheads():
         assert _attr_value(head, "alpha") is arrow._attrs["alpha"]
 
 
+def test_arrow_remove_also_removes_arrowheads():
+    """`.remove()` only sets `_end` on the node it's called on (see
+    `AnimatedObject.remove()`); since the arrowhead is a separate sibling
+    node (see `test_arrow_shaft_has_only_move_and_line_children`), `Arrow`
+    must forward `.remove()` to `self.arrowheads` explicitly, or the head
+    would keep rendering after the shaft disappears."""
+    s = Scene(100, 100)
+    with s:
+        arrow = Arrow((0, 0), (50, 50), head="both")
+        arrow.remove()
+    assert arrow._end is not None
+    for head in arrow.arrowheads:
+        assert head._end == arrow._end
+
+
 def test_arrow_gap_shifts_end_toward_start():
     """Both endpoints are plain literals (no live `Position`), so the whole
     gap/direction expression is constant-foldable — the exported wire
@@ -152,6 +167,20 @@ def test_circular_arrow_head_both_has_two_arrowheads():
             (50, 50), radius=10, angle_start=0, angle_end=90, head="both"
         )
     assert len(arc.arrowheads) == 2
+
+
+def test_circular_arrow_remove_also_removes_arrowheads():
+    """Same forwarding requirement as `test_arrow_remove_also_removes_arrowheads`,
+    for `CircularArrow`'s arc."""
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow(
+            (50, 50), radius=10, angle_start=0, angle_end=90, head="both"
+        )
+        arc.remove()
+    assert arc._end is not None
+    for head in arc.arrowheads:
+        assert head._end == arc._end
 
 
 def test_circular_arrow_start_point_matches_angle_start():

@@ -2,7 +2,16 @@
 
 import pytest
 
-from fairyflow import Arrow, Line, Polygon, Rect, RegularPolygon, Scene, Star
+from fairyflow import (
+    Arrow,
+    CircularArrow,
+    Line,
+    Polygon,
+    Rect,
+    RegularPolygon,
+    Scene,
+    Star,
+)
 from fairyflow.serializer import create_export
 
 
@@ -102,6 +111,58 @@ def test_arrow_gap_zero_touches_the_raw_point():
         arrow = Arrow((0, 0), (30, 40))
     assert _attr_value(arrow.end, "x").value == 30
     assert _attr_value(arrow.end, "y").value == 40
+
+
+# ── CircularArrow wire-presence tests ───────────────────────────────────────
+
+
+def test_circular_arrow_needs_distinct_angles():
+    s = Scene(100, 100)
+    with s, pytest.raises(ValueError):
+        CircularArrow((50, 50), radius=10, angle_start=0, angle_end=0)
+
+
+def test_circular_arrow_quarter_turn_has_move_and_one_cubic():
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow((50, 50), radius=10, angle_start=0, angle_end=90)
+    kinds = [c.kind for c in arc._children]
+    assert kinds == ["move", "cubic"]
+
+
+def test_circular_arrow_270_degrees_splits_into_three_cubics():
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow((50, 50), radius=10, angle_start=0, angle_end=270)
+    kinds = [c.kind for c in arc._children]
+    assert kinds == ["move", "cubic", "cubic", "cubic"]
+
+
+def test_circular_arrow_default_head_end_has_one_arrowhead():
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow((50, 50), radius=10, angle_start=0, angle_end=90)
+    assert len(arc.arrowheads) == 1
+
+
+def test_circular_arrow_head_both_has_two_arrowheads():
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow(
+            (50, 50), radius=10, angle_start=0, angle_end=90, head="both"
+        )
+    assert len(arc.arrowheads) == 2
+
+
+def test_circular_arrow_start_point_matches_angle_start():
+    """angle_start=0 points straight up, same convention as
+    `RegularPolygon`/`Star` (see `test_regular_polygon_first_vertex_points_up`)."""
+    s = Scene(100, 100)
+    with s:
+        arc = CircularArrow((50, 50), radius=10, angle_start=0, angle_end=90)
+    first = arc._children[0]
+    assert _attr_value(first, "x") == pytest.approx(50, abs=1e-9)
+    assert _attr_value(first, "y") == pytest.approx(40)  # 50 - 10
 
 
 # ── Polygon family wire-presence tests ──────────────────────────────────────
@@ -228,3 +289,19 @@ def test_regular_polygon_hexagon(test_scene):
 def test_star_five_point(test_scene):
     with test_scene.size(160, 160):
         Star(points=5, outer=70, inner=28, center=(80, 80)).fill("gold")
+
+
+def test_circular_arrow_sweeps(test_scene):
+    """A clockwise 3/4 sweep, a counterclockwise sweep, and a `head="both"`
+    arc, to visually check the arc geometry and arrowhead placement."""
+    test_scene.pdf_tolerance = 100  # three stroked arcs with arrowheads
+    with test_scene.size(420, 160):
+        CircularArrow((80, 80), radius=60, angle_start=0, angle_end=270).stroke(
+            "steelblue", 4
+        )
+        CircularArrow((210, 80), radius=60, angle_start=270, angle_end=0).stroke(
+            "darkorange", 4
+        )
+        CircularArrow(
+            (340, 80), radius=60, angle_start=30, angle_end=210, head="both"
+        ).stroke("mediumseagreen", 4)

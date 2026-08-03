@@ -90,6 +90,66 @@ class Arrow(Path):
 
 
 @beartype
+class CircularArrow(Path):
+    """A circular arc with an arrowhead at one or both ends.
+
+    `angle_start`/`angle_end` are in degrees, with 0° pointing up and
+    increasing clockwise, matching `rotate()`/`RegularPolygon`. Sweeping
+    from a smaller to a larger angle draws clockwise; swap them to sweep
+    counterclockwise. The arc is built as a sequence of `cubic_to` segments
+    (at most 90° each) approximating the circle.
+    """
+
+    def __init__(
+        self,
+        center: tuple[SupportsFloat, SupportsFloat],
+        radius: SupportsFloat,
+        angle_start: SupportsFloat,
+        angle_end: SupportsFloat,
+        head: Literal["end", "start", "both"] = "end",
+        style: Literal["triangle", "open", "stealth", "bar", "dot"] = "triangle",
+        arrow_length: FloatLike | None = None,
+        arrow_width: FloatLike | None = None,
+    ):
+        super().__init__()
+        if float(angle_start) == float(angle_end):
+            raise ValueError("CircularArrow needs angle_start != angle_end")
+
+        cx, cy = float(center[0]), float(center[1])
+        radius = float(radius)
+        a0 = math.radians(float(angle_start) - 90)
+        a1 = math.radians(float(angle_end) - 90)
+
+        sweep = a1 - a0
+        segments = max(1, math.ceil(abs(sweep) / (math.pi / 2)))
+        step = sweep / segments
+
+        self.move_to(cx + radius * math.cos(a0), cy + radius * math.sin(a0))
+        for i in range(segments):
+            seg_start = a0 + step * i
+            seg_end = seg_start + step
+            k = (4 / 3) * math.tan(step / 4)
+            c1 = (-k * radius * math.sin(seg_start), k * radius * math.cos(seg_start))
+            c2 = (k * radius * math.sin(seg_end), -k * radius * math.cos(seg_end))
+            self.cubic_to(
+                cx + radius * math.cos(seg_end),
+                cy + radius * math.sin(seg_end),
+                c1=c1,
+                c2=c2,
+            )
+
+        self.arrowheads = []
+        if head in ("start", "both"):
+            self.arrowheads.append(
+                self.arrow("start", style=style, length=arrow_length, width=arrow_width)
+            )
+        if head in ("end", "both"):
+            self.arrowheads.append(
+                self.arrow("end", style=style, length=arrow_length, width=arrow_width)
+            )
+
+
+@beartype
 class Polygon(Path):
     """A closed vector shape from a list of (x, y) vertices."""
 

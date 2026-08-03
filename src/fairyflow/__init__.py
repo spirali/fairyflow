@@ -3,15 +3,17 @@ from .color import Color, Gradient, gradient
 from .config import set_default_code, set_default_font, set_default_scene
 from .ctxvars import Par, Seq, anim, cue, get_frame, next_frame, note, wait
 from .helpers import Table
-from .nodes import Ellipse, Group, Image, Path, Rect, Scene
+from .nodes import Column, Ellipse, Group, Image, Path, Rect, Row, Scene
 from .sentinels import DEFAULT, rel
-from .shapes import Arrow, Line, Polygon, RegularPolygon, Star
+from .shapes import Arrow, CircularArrow, Line, Polygon, RegularPolygon, Star
 from .text import Text, code, stext
 
 __all__ = [
     "DEFAULT",
     "Arrow",
+    "CircularArrow",
     "Color",
+    "Column",
     "Ellipse",
     "Frames",
     "Gradient",
@@ -23,6 +25,7 @@ __all__ = [
     "Polygon",
     "Rect",
     "RegularPolygon",
+    "Row",
     "Scene",
     "Seq",
     "Star",

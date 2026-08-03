@@ -1663,6 +1663,42 @@ class Group(
 
 
 @beartype
+def Column(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> Group:
+    """Shortcut for `Group().column(...)`.
+
+    Args:
+        gap: Vertical gap between children in pixels.
+        align: Horizontal alignment of children within the column.
+            ``0.0`` = left, ``0.5`` = center, ``1.0`` = right.
+        reserve: If ``True`` (default), inactive children still occupy their
+            full height in the layout. If ``False``, only currently active
+            children contribute to the layout.
+
+    Returns:
+        A `Group` in column layout, ready to use as a context manager.
+    """
+    return Group().column(gap, align, reserve)
+
+
+@beartype
+def Row(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> Group:
+    """Shortcut for `Group().row(...)`.
+
+    Args:
+        gap: Horizontal gap between children in pixels.
+        align: Vertical alignment of children within the row.
+            ``0.0`` = top, ``0.5`` = center, ``1.0`` = bottom.
+        reserve: If ``True`` (default), inactive children still occupy their
+            full width in the layout. If ``False``, only currently active
+            children contribute to the layout.
+
+    Returns:
+        A `Group` in row layout, ready to use as a context manager.
+    """
+    return Group().row(gap, align, reserve)
+
+
+@beartype
 class Scene(
     NodeWithChildren, ContextManagerMixin, SizeMixin, PositionQueryMixin, CameraMixin
 ):

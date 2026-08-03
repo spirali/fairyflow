@@ -262,6 +262,35 @@ arrow = Arrow(a.at("right"), b.at("left"), gap=6).stroke("steelblue", 3)
 arrow.end.pos(c.at("left"), dur=0.5)  # retarget the arrowhead end
 ```
 
+### Circular arrows
+
+`CircularArrow(center, radius, angle_start, angle_end, head="end", style="triangle", arrow_length=None, arrow_width=None)`
+draws an arc — built internally as one or more `cubic_to` segments — with an
+arrowhead attached, for showing rotation or a curved connection. Like
+`Polygon`/`RegularPolygon`/`Star` below, it's computed geometry (no live
+`Position` tracking), but it's still a plain `Path` subclass underneath, so
+`.stroke()`/`.fill()`/`.alpha()` and the rest of `Path`'s API apply.
+
+Angles are in degrees, with `0°` pointing straight up and increasing
+clockwise — the same convention as `RegularPolygon`'s `rotation` and
+`.rotate()`. Sweep from a smaller angle to a larger one to go clockwise;
+swap them to go counterclockwise.
+
+```ffpy frame="0"
+with Scene(width=200, height=200):
+    CircularArrow((100, 100), radius=70, angle_start=20, angle_end=290).stroke("steelblue", 4)
+```
+
+`head`, `style`, and `arrow_length`/`arrow_width` mirror `Arrow`'s `head`/`style`
+and `Path.arrow()`'s `length`/`width` respectively:
+
+```ffpy frame="0"
+with Scene(width=200, height=200):
+    CircularArrow(
+        (100, 100), radius=70, angle_start=30, angle_end=210, head="both", style="stealth"
+    ).stroke("darkorange", 4)
+```
+
 ### Path cropping
 
 `.crop(start=, end=)` trims the path from either end. Values are in `[0.0, 1.0]` where

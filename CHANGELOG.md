@@ -5,6 +5,12 @@
 ### New
 
   * Invalid/Missing font throws an error instead of silent error
+  * Circular arrow
+
+### Fixes
+
+  * Fixed path resolution for font loading
+  * Fixed removing heads when arrow is removed
 
 ## 0.5.0
 

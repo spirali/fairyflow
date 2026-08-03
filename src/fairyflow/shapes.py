@@ -88,6 +88,14 @@ class Arrow(Path):
         if head in ("end", "both"):
             self.arrowheads.append(self.arrow("end", style=style))
 
+    def remove(self):
+        # Arrowheads are separate sibling nodes (see Path.arrow()), so
+        # removing the shaft alone would leave them behind.
+        super().remove()
+        for arrowhead in self.arrowheads:
+            if arrowhead is not None:
+                arrowhead.remove()
+
 
 @beartype
 class CircularArrow(Path):
@@ -147,6 +155,14 @@ class CircularArrow(Path):
             self.arrowheads.append(
                 self.arrow("end", style=style, length=arrow_length, width=arrow_width)
             )
+
+    def remove(self):
+        # Arrowheads are separate sibling nodes (see Path.arrow()), so
+        # removing the arc alone would leave them behind.
+        super().remove()
+        for arrowhead in self.arrowheads:
+            if arrowhead is not None:
+                arrowhead.remove()
 
 
 @beartype

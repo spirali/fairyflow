@@ -9,7 +9,7 @@ from .position import SCENE_NODE_ID
 
 _active: "Serializer | None" = None
 
-_FOLDABLE_OPS = {"+", "-", "*", "/", "norm", "max"}
+_FOLDABLE_OPS = {"+", "-", "*", "/", "norm", "max", "neg"}
 
 
 def _try_fold(obj):
@@ -40,6 +40,9 @@ def _try_fold(obj):
     if isinstance(obj, Call):
         if obj.op not in _FOLDABLE_OPS:
             return None
+        if obj.op == "neg":
+            a = _try_fold(obj.args[0])
+            return None if a is None else -a
         a = _try_fold(obj.args[0])
         b = _try_fold(obj.args[1])
         if a is None or b is None:

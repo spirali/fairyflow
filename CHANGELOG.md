@@ -6,6 +6,7 @@
 
   * Invalid/Missing font throws an error instead of silent error
   * Circular arrow
+  * Unary minus on Expr and roperators for Expr
 
 ### Fixes
 

@@ -21,6 +21,43 @@ def test_norm_folds():
     assert _try_fold(Call.norm(3, 4)) == 0.6
 
 
+def test_neg_folds():
+    assert _try_fold(Call.neg(5)) == -5
+
+
+def test_neg_operator_folds():
+    """The `__neg__` overload (`-expr`) must produce the same result as the
+    `Call.neg` static factory, not just work when called directly."""
+    assert _try_fold(-Call.add(2, 3)) == -5
+
+
+def test_rsub_operator_folds():
+    assert _try_fold(260 - Call.add(2, 3)) == 255
+
+
+def test_radd_operator_folds():
+    assert _try_fold(5 + Call.add(2, 3)) == 10
+
+
+def test_rmul_operator_folds():
+    assert _try_fold(2 * Call.add(2, 3)) == 10
+
+
+def test_rtruediv_operator_folds():
+    assert _try_fold(10 / Call.add(3, 2)) == 2
+
+
+def test_neg_of_unfoldable_stays_structural():
+    s = Scene(100, 100)
+    with s:
+        r = Rect().size(50, 50)
+        r._add_attr("test_neg", Call.neg(Call.auto_x(r)))
+    exported = create_export(0, s)
+    node = next(n for n in exported["nodes"] if "test_neg" in n)
+    assert node["test_neg"][0] == "neg"
+    assert node["test_neg"][1][0] == "auto_x"
+
+
 def test_norm_zero_vector_uses_zero_guard():
     """Matches Rust's `d < 0.0001 -> 0.0` guard (`eval.rs::FloatCall::Norm`)
     exactly - not an approximation."""

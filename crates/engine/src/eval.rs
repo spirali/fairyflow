@@ -469,6 +469,7 @@ impl Eval<f64> for FloatCall {
                 let (va, vb) = pair.eval(ctx)?;
                 Ok(va.max(vb))
             }
+            FloatCall::Neg(e) => Ok(-e.eval(ctx)?),
             FloatCall::MapX(params) => {
                 let xv = params.x.eval(ctx)?;
                 let yv = params.y.eval(ctx)?;

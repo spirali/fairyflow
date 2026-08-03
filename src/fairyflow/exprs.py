@@ -11,6 +11,21 @@ class Expr:
     def __truediv__(self, other):
         return Call.div(self, other)
 
+    def __neg__(self):
+        return Call.neg(self)
+
+    def __radd__(self, other):
+        return Call.add(other, self)
+
+    def __rsub__(self, other):
+        return Call.sub(other, self)
+
+    def __rmul__(self, other):
+        return Call.mul(other, self)
+
+    def __rtruediv__(self, other):
+        return Call.div(other, self)
+
 
 class Call(Expr):
     def __init__(self, op, *args):
@@ -39,6 +54,10 @@ class Call(Expr):
     @staticmethod
     def div(a, b):
         return Call("/", a, b)
+
+    @staticmethod
+    def neg(a):
+        return Call("neg", a)
 
     @staticmethod
     def auto_x(node):

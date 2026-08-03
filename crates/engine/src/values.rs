@@ -235,6 +235,7 @@ pub enum FloatCall {
     Div(Box<FloatParamsPair>),
     Norm(Box<FloatParamsPair>),
     Max(Box<FloatParamsPair>),
+    Neg(Box<Expr<f64>>),
     AutoWidth { node: NodeId },
     AutoHeight { node: NodeId },
     AutoX { node: NodeId },
@@ -278,6 +279,7 @@ impl CallParse for FloatCall {
                 a: next!(),
                 b: next!(),
             })),
+            "neg" => FloatCall::Neg(Box::new(next!())),
             "map_x" => FloatCall::MapX(Box::new(CallParamsMap {
                 source: next!(),
                 target: next!(),
@@ -538,5 +540,20 @@ mod tests {
             gradient.interpolate(&g2, 0.9),
             Paint::LinearGradient { ref stops, .. } if stops.len() == 2
         ));
+    }
+
+    #[test]
+    fn neg_parses_as_a_single_boxed_operand() {
+        let expr: Expr<f64> = serde_json::from_str(r#"["neg", 5]"#).unwrap();
+        let Expr::Call(FloatCall::Neg(inner)) = expr else {
+            panic!("expected Expr::Call(FloatCall::Neg(_))");
+        };
+        assert!(matches!(*inner, Expr::Const(v) if v == 5.0));
+    }
+
+    #[test]
+    fn neg_rejects_extra_arguments() {
+        let result: Result<Expr<f64>, _> = serde_json::from_str(r#"["neg", 5, 6]"#);
+        assert!(result.is_err());
     }
 }

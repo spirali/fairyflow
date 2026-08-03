@@ -159,8 +159,12 @@ fn walkdir(root: &std::path::Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else {
-            continue;
+        let rd = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd,
+            Err(e) => {
+                tracing::warn!("could not read font directory {}: {e}", dir.display());
+                continue;
+            }
         };
         for entry in rd.flatten() {
             let path = entry.path();

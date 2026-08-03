@@ -216,8 +216,9 @@ class TextSpan(Node, InheritedTextStyleMixin, PositionMixin, RotAndScaleMixin):
         super().__init__(put_in_context=False, parent=parent)
         self._add_attr("text", text)
 
-    def text(self, value: str):
+    def text(self, value: str) -> Self:
         self._set_attr("text", value)
+        return self
 
 
 @beartype

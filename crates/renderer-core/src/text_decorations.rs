@@ -78,7 +78,7 @@ fn glyph_run_segments(glyphs: &[CachedGlyph]) -> Vec<RunSegment> {
         if is_last_on_row {
             let seg = segments.last_mut().unwrap();
             let ink_width = crate::path_utils::verbs_bounds(&glyph.path.verbs)
-                .map(|(min_x, _, max_x, _)| (max_x - min_x).max(0.0))
+                .map(|(_, _, width, _)| width.max(0.0))
                 .unwrap_or(0.0);
             seg.x_end = glyph.x + ink_width;
         }
@@ -263,6 +263,37 @@ mod tests {
         // underline sits *below* the baseline (larger y = further down).
         let first_glyph_baseline = cached.glyphs[0].baseline_y;
         assert!(rect.y > first_glyph_baseline);
+    }
+
+    #[test]
+    fn short_word_strike_reaches_the_last_letter() {
+        // Regression test: a tuple-shape bug in the last-glyph ink-bounds
+        // fallback (verbs_bounds returns (x, y, width, height), but the call
+        // site treated the width field as max_x and re-subtracted min_x)
+        // made the last glyph's contribution collapse to ~0 for any glyph
+        // not near the line's left edge -- invisible on long runs (a small
+        // slice of the total) but very visible on a short word, where the
+        // strike stopped at the *start* of the last letter instead of its
+        // end. "počítač" (with a multi-byte diacritic on the last letter)
+        // is the reported case.
+        init_test_resources();
+        let mut engine = TextLayoutEngine::new(Resources::get());
+        let sp = span_with_progress(1, "počítač", 0.0, 1.0);
+        let lines = [TextChild::Span(sp.clone())];
+        let laid_out = engine.layout_text(&lines, None, TextAlign::Left);
+        let cached = &laid_out.lines[0];
+        let spans = vec![&sp];
+        let rects = decoration_rects(cached, &spans, DecorationKind::Strike);
+        assert_eq!(rects.len(), 1, "one contiguous run -> one rect");
+        let rect = &rects[0];
+        assert!(
+            rect.width > cached.width * 0.93,
+            "rect width {} should reach almost all the way across the short word (line width {}) -- \
+             a tight tolerance since the bug this guards against zeroed out an entire glyph's width \
+             (dropping the ratio to ~0.85 for this case)",
+            rect.width,
+            cached.width
+        );
     }
 
     #[test]

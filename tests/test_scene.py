@@ -137,6 +137,18 @@ def test_cue_advances_before_remove():
         assert get_frame() == 2
 
 
+def test_cue_advances_before_par_wrapped_setter():
+    s = Scene(60, 40)
+    with s:
+        r = Rect().size(10, 10)
+        cue()
+        assert get_frame() == 0
+        r.xy(5, 5)
+        assert get_frame() == 1
+        assert r._attrs["x"].values[1] == 5
+        assert r._attrs["x"].values[0] != 5
+
+
 def test_cue_disarmed_by_explicit_wait():
     s = Scene(60, 40)
     with s:

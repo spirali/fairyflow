@@ -127,6 +127,7 @@ class Composer:
 
     def __enter__(self):
         assert self.parent is None
+        _flush_pending_cue_advance()
         current = COMPOSER.get()
         current._begin_unit()
         self.frame = current.frame

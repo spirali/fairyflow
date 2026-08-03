@@ -12,6 +12,7 @@
 
   * Fixed path resolution for font loading
   * Fixed removing heads when arrow is removed
+  * Fixed bug in rendering text underline/strike
 
 ## 0.5.0
 

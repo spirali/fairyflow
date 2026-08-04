@@ -435,7 +435,9 @@ export default function App() {
   const maxFrame = frames - 1;
   const keyFrameSet = new Set(keyFrames);
   const cueFrameSet = new Set(cueFrames);
-  const navCueFrames = cueFrames[0] === 0 ? cueFrames : [0, ...cueFrames];
+  const navCueFrames = [...new Set([0, ...cueFrames, ...(frames > 0 ? [maxFrame] : [])])].sort(
+    (a, b) => a - b,
+  );
   const prevCueFrame: number | null = navCueFrames.filter((cf) => cf < frame).at(-1) ?? null;
   const nextCueFrame: number | null = navCueFrames.find((cf) => cf > frame) ?? null;
   const hasScene = sceneData != null;

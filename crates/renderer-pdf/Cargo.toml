@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 renderer-core = { path = "../renderer-core" }
-krilla = "0.7"
-krilla-svg = "0.7"
-# usvg 0.45 is required by krilla-svg 0.7; re-parse raw SVG bytes here
-usvg = "0.45"
+krilla = "0.8"
+krilla-svg = "0.8"
+# usvg 0.47 is required by krilla-svg 0.8; re-parse raw SVG bytes here
+usvg = "0.47"
 anyhow = { workspace = true }
 tracing = { workspace = true }

@@ -276,9 +276,9 @@ async fn run_serve(port: u16, token: Option<String>, directory: PathBuf) {
     info!(directory = %directory.display(), "serving project");
 
     let token = token.unwrap_or_else(|| {
-        use rand::Rng;
-        rand::thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
+        use rand::RngExt;
+        rand::rng()
+            .sample_iter(&rand::distr::Alphanumeric)
             .take(32)
             .map(char::from)
             .collect()

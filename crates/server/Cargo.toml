@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 player = { path = "../player" }
-base64 = "0.22"
-toml = "0.8"
+base64 = "0.23"
+toml = "1.1"
 rayon = "1"
 engine = { path = "../engine" }
 renderer-skia = { path = "../renderer-skia" }
@@ -19,8 +19,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.6", features = ["fs"] }
+tower-http = { version = "0.7", features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-rand = "0.8"
-notify = "6"
+rand = "0.10"
+notify = "8"

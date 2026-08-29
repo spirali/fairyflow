@@ -1,5 +1,11 @@
 # Changelog
 
+## Unrelased
+
+### Fixes
+
+  * Fixed infinite recursion in layout system
+
 ## 0.6.0
 
 ### New

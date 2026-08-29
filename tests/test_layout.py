@@ -1,4 +1,4 @@
-from fairyflow import DEFAULT, Ellipse, Group, Rect, Scene, next_frame, rel
+from fairyflow import DEFAULT, Ellipse, Group, Rect, Scene, Text, next_frame, rel
 from fairyflow.serializer import create_export
 
 
@@ -147,3 +147,84 @@ def test_rel_directly_under_scene(test_scene):
     Group() parent — parent_group() returns the Scene in that case."""
     with test_scene.size(120, 80):
         Rect().size(rel(0.5), rel(0.5)).xy(x=rel(0.5)).fill("mediumpurple")
+
+
+# ── rel()/expand() against a parent that is itself content-sized ────────────
+# A child sized with rel() against a parent whose own size comes from its
+# children is a genuine size cycle: the parent's auto-size asks the child for
+# its size, and the child's rel() asks the parent for its size. The evaluator
+# breaks the cycle (the recursing side resolves to 0, so the rel() child
+# contributes nothing to the parent's auto-size and then fills the result);
+# before that guard covered `get_width`/`get_height`/`get_x`/`get_y` this
+# recursed forever and aborted the renderer with a stack overflow.
+
+
+def test_expand_in_autosized_group(test_scene):
+    """expand() under a Group() with no explicit size of its own: the group
+    sizes to its other children, and the expanding rect fills that."""
+    with test_scene.size(60, 40), Group():
+        Rect().expand().fill("green")
+        Rect().size(30, 16).fill("steelblue")
+
+
+def test_expand_behind_text_in_autosized_group(test_scene):
+    """The reported case: a Rect().expand() background behind a Text() in an
+    unsized Group() — the group sizes to the text, the rect fills it."""
+    with test_scene.size(60, 40), Group():
+        Rect().expand().fill("green")
+        Text("hi").font(size=14).fill("white")
+
+
+def test_rel_width_only_in_autosized_group(test_scene):
+    """The cycle is per axis: a rel() width with an explicit height must be
+    broken on the width axis alone."""
+    with test_scene.size(60, 40), Group():
+        Rect().size(rel(1), 10).fill("green")
+        Rect().size(30, 16).fill("steelblue")
+
+
+def test_expand_in_autosized_partially_sized_group(test_scene):
+    """A group with only one axis given explicitly still auto-sizes the other,
+    so expand() keeps the cycle on that remaining axis."""
+    with test_scene.size(60, 40), Group().width(50):
+        Rect().expand().fill("green")
+        Rect().size(30, 16).fill("steelblue")
+
+
+def test_expand_in_autosized_row(test_scene):
+    """Same cycle through a Row's auto-size. A broken cycle has no single right
+    answer, so the exact sizes here are arbitrary-but-stable; the point is
+    that they are finite and reproducible.
+    """
+    with test_scene.size(60, 40), Group().row(gap=4):
+        Rect().expand().fill("green")
+        Rect().size(20, 16).fill("steelblue")
+
+
+def test_expand_in_autosized_column(test_scene):
+    """Same cycle through a Column's auto-size. A broken cycle has no single right
+    answer, so the exact sizes here are arbitrary-but-stable; the point is
+    that they are finite and reproducible.
+    """
+    with test_scene.size(60, 40), Group().column(gap=4):
+        Rect().expand().fill("green")
+        Rect().size(20, 12).fill("steelblue")
+
+
+def test_expand_in_autosized_grid(test_scene):
+    """Same cycle through a Grid's column/row measurement. As with the row
+    and column cases the resolved sizes are arbitrary-but-stable — here the
+    grid ends up wide enough to push the sized children off-canvas.
+    """
+    with test_scene.size(60, 40), Group().grid(cols=2, gap=4):
+        Rect().expand().fill("green")
+        Rect().size(20, 12).fill("steelblue")
+        Rect().size(12, 12).fill("orange")
+
+
+def test_expand_in_nested_autosized_groups(test_scene):
+    """The cycle also has to break when it runs through an intermediate
+    auto-sized group rather than the rel() child's direct parent."""
+    with test_scene.size(60, 40), Group(), Group():
+        Rect().expand().fill("green")
+        Rect().size(24, 14).fill("steelblue")

@@ -1073,7 +1073,7 @@ fn fill_and_stroke(
 /// `Image::from_rgba8` expects straight alpha.
 fn unpremultiply(data: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(data.len());
-    for chunk in data.chunks_exact(4) {
+    for chunk in data.as_chunks::<4>().0 {
         let [r, g, b, a] = [chunk[0], chunk[1], chunk[2], chunk[3]];
         if a == 0 {
             out.extend_from_slice(&[0, 0, 0, 0]);

@@ -5,6 +5,7 @@
 ### Fixes
 
   * Fixed infinite recursion in layout system
+  * Fixed missing slides in PDF export
 
 ## 0.6.0
 

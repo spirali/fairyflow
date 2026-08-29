@@ -57,40 +57,28 @@ impl Node {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        match p.x.get_expr() {
-            Some(e) => e.eval(ctx),
-            None => self.auto_x(ctx),
-        }
+        p.x.eval_or_else(ctx, |ctx| self.auto_x(ctx))
     }
 
     pub fn get_y(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(p) = self.get_position() else {
             return Ok(0.0);
         };
-        match p.y.get_expr() {
-            Some(e) => e.eval(ctx),
-            None => self.auto_y(ctx),
-        }
+        p.y.eval_or_else(ctx, |ctx| self.auto_y(ctx))
     }
 
     pub fn get_width(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.auto_width(ctx);
         };
-        match s.width.get_expr() {
-            Some(e) => e.eval(ctx),
-            None => self.auto_width(ctx),
-        }
+        s.width.eval_or_else(ctx, |ctx| self.auto_width(ctx))
     }
 
     pub fn get_height(&self, ctx: &EvalCtx) -> anyhow::Result<f64> {
         let Some(s) = self.get_size() else {
             return self.auto_height(ctx);
         };
-        match s.height.get_expr() {
-            Some(e) => e.eval(ctx),
-            None => self.auto_height(ctx),
-        }
+        s.height.eval_or_else(ctx, |ctx| self.auto_height(ctx))
     }
 
     /// Returns the position of the AABB's top-left corner relative to the node's

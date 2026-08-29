@@ -901,7 +901,7 @@ export default function SequenceEditor({
                         checked={pdfFrameSelection === "cue_frames"}
                         onChange={() => setPdfFrameSelection("cue_frames")}
                       />
-                      Cue frames
+                      Pause frames (cues + scene ends)
                     </label>
                     <label className="seq-dialog-radio-label">
                       <input

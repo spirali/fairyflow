@@ -1,4 +1,5 @@
 mod color;
+pub mod flatten;
 pub mod glyph_cache;
 pub mod highlight;
 pub mod image_cache;
@@ -10,6 +11,7 @@ pub mod text_layout;
 pub mod transform;
 
 pub use color::Color;
+pub use flatten::{ClipFrame, FlatItem, FlatScene, flatten_scene};
 pub use scene::{
     Camera, ImageLayer, Inheritable, Node, NodeBox, NodeKind, Paint, PathCommand, Position, Scene,
     Size, Style, TextAlign, TextChild, TextGroup, TextNodeUncommon, TextSpan, TextStyle,

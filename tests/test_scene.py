@@ -50,6 +50,42 @@ def test_zlevel_mixed_own_and_inherited(test_scene):
         Rect().xy(5, 5).size(20, 20).fill("red").z(2)
 
 
+def test_zlevel_global_across_groups(test_scene):
+    """z is global: a z=-1 rect inside the second group paints below content of
+    the first group, even though the first group's subtree is created earlier."""
+    with test_scene:
+        with Group().xy(0, 0).size(60, 20):
+            # overhangs downward into the second group's band
+            Rect().xy(20, 10).size(20, 20).fill("red")
+        with Group().xy(0, 20).size(60, 20):
+            Rect().xy(0, 0).size(60, 10).fill("blue").z(-1)
+
+
+def test_zlevel_global_lifts_nested_child(test_scene):
+    """A child's own z outranks nodes in later groups, not just its siblings."""
+    with test_scene:
+        with Group().xy(0, 0).size(60, 40):
+            Rect().xy(5, 5).size(30, 30).fill("red").z(1)
+        with Group().xy(0, 0).size(60, 40):
+            Rect().xy(20, 15).size(30, 20).fill("blue")
+
+
+def test_zlevel_global_keeps_ancestor_clip(test_scene):
+    """A node lifted by z still carries its ancestors' clip window."""
+    with test_scene:
+        with Group().xy(0, 0).size(30, 40).clip():
+            Rect().xy(0, 0).size(60, 40).fill("red").z(1)
+        Rect().xy(0, 0).size(60, 40).fill("blue")
+
+
+def test_zlevel_global_keeps_group_alpha(test_scene):
+    """Group alpha travels with a child that z lifts out of its group's band."""
+    with test_scene:
+        with Group().xy(0, 0).size(60, 20).alpha(0.5):
+            Rect().xy(0, 0).size(60, 20).fill("red").z(1)
+        Rect().xy(0, 10).size(60, 20).fill("blue")
+
+
 def test_simple_boxes(test_scene):
     with test_scene:
         Rect().xy(5, 5).size(10, 20).fill("orange")

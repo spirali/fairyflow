@@ -7,6 +7,7 @@ icon: lucide/crosshair
 Every node has an `x` / `y` position relative to its parent container. Three methods cover
 most placement needs: `.xy()` for absolute coordinates, `.align()` for proportional placement
 within the parent, and `.move()` for small relative offsets on top of any of the above.
+`.z()` covers the third axis — which node paints in front of which.
 
 ---
 
@@ -81,11 +82,68 @@ with Scene():
 
 ---
 
+## Depth — `.z(level)`
+
+`.z(level, dur=, ease=)` places a node on the depth axis: higher `z` paints on top,
+regardless of creation order or of which group a node sits in. Ordering is **global to
+the scene**, not per-group. It is available on every drawable node except text runs
+(`TextGroup`/`TextSpan`), where paragraph order is always the draw order. Nodes with
+equal `z` paint in creation order.
+
+```ffpy frame="0"
+with Scene():
+    Rect().size(100, 100).fill("steelblue").xy(20, 20)
+    Rect().size(100, 100).fill("tomato").xy(60, 50).z(-1)
+```
+
+Here the tomato rect is created *after* the blue one (so it would normally paint on
+top), but `z(-1)` sends it behind instead. `.z()` takes `dur=`/`ease=` like any other
+setter, so a node can be brought to the front or sent to the back partway through a
+scene.
+
+### Groups and inherited z
+
+A node that never calls `.z()` **inherits** its parent's level (the `Scene`'s own `0` at
+the top). A group's contents therefore stay together by default, and `.z()` on a group
+lifts or sinks everything inside it:
+
+```ffpy frame="0"
+with Scene():
+    with Group().size(120, 80).xy(20, 20):
+        Rect().size(120, 80).fill("steelblue")
+    with Group().size(120, 80).xy(80, 60).z(-1):
+        Rect().size(120, 80).fill("tomato")   # inherits z = -1, so the
+                                              # whole group goes behind
+```
+
+Because ordering is global rather than per-group, an explicit `.z()` deep in the tree
+outranks nodes in *other* groups too — which is exactly what you want for a connector
+that overhangs into the next row, and is worth knowing about when a group holds its own
+backdrop:
+
+```ffpy frame="0"
+with Scene():
+    with Group().size(120, 80).xy(20, 20):
+        Text("one")
+        Rect().size(120, 80).fill("gainsboro").z(-1)   # sinks below the *scene*,
+    with Group().size(120, 80).xy(80, 60):             # not just below "one"
+        Text("two")
+        Rect().size(120, 80).fill("lightsteelblue").z(-1)
+```
+
+Both backdrops paint first, then both labels — so the second card's backdrop no longer
+covers the first card's text. To make cards stack as whole units, give each group its own
+band and place its backdrop just under *that* band rather than at a global `-1`: the first
+group at `z(0)` with its backdrop at `z(-1)`, the second at `z(10)` with its backdrop at
+`z(9)`.
+
+---
+
 ## Cross-group positioning — `at()` and `pos()`
 
-The methods above always work within the coordinate space of a single parent. When you need
-to position a node **relative to another node that lives in a different group**, use
-`.at()` and `.pos()`.
+The placement methods above always work within the coordinate space of a single parent.
+When you need to position a node **relative to another node that lives in a different
+group**, use `.at()` and `.pos()`.
 
 `.at(x, y)` returns a `Position` object — a live coordinate reference attached to the
 source node's coordinate space. Fractions must be given in pairs; a bare `at(0.5)` raises

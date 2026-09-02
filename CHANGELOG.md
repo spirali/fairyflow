@@ -2,6 +2,10 @@
 
 ## Unrelased
 
+### Changed
+
+  * `z()` now orders nodes globally across the whole scene not just among siblings.
+
 ### Fixes
 
   * Fixed infinite recursion in layout system

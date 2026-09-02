@@ -5,6 +5,7 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, FillRule, Stroke};
 use krilla_svg::{SurfaceExt, SvgSettings};
+use renderer_core::flatten::flatten_scene;
 use renderer_core::glyph_cache::PathVerb;
 use renderer_core::highlight;
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
@@ -15,7 +16,7 @@ use renderer_core::resources::Resources;
 use renderer_core::text_decorations::{DecorationKind, DecorationRect, decoration_rects};
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
-    AffineTransform, camera_transform, gradient_line_endpoints, node_z_level, positional_transform,
+    AffineTransform, camera_transform, gradient_line_endpoints, positional_transform,
     transform_node_box,
 };
 use renderer_core::{
@@ -123,20 +124,53 @@ impl PdfRenderer {
             box_center,
         )));
 
-        // Z-sorted children.
-        let mut order: Vec<usize> = (0..scene.children.len()).collect();
-        order.sort_by(|&a, &b| {
-            node_z_level(&scene.children[a])
-                .partial_cmp(&node_z_level(&scene.children[b]))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        for i in order {
-            self.render_node(
-                &mut surface,
-                &scene.children[i],
-                AffineTransform::identity(),
-                1.0,
-            );
+        // `z` is global: the whole tree collapses into one ordered draw list,
+        // with each item carrying its ancestors' transform, alpha and clip.
+        // The scene camera is already on the surface stack, so the flatten
+        // root is identity and every item's `rel_transform` sits on top of it.
+        let flat = flatten_scene(scene, AffineTransform::identity());
+        for item in &flat.items {
+            let chain = flat.clip_chain(item.clip);
+            let mut pushed = 0u32;
+            let mut clipped_out = false;
+            for &i in &chain {
+                let frame = &flat.clips[i];
+                surface.push_transform(&to_krilla_transform(frame.rel_transform));
+                pushed += 1;
+                let (x, y, w, h) = frame.rect;
+                // A window that collapsed to nothing hides its subtree — the
+                // raster backend draws nothing here, so neither may we.
+                let clip_path = KRect::from_xywh(x, y, w, h).and_then(|rect| {
+                    let mut pb = PathBuilder::new();
+                    pb.push_rect(rect);
+                    pb.finish()
+                });
+                match clip_path {
+                    Some(path) => {
+                        surface.push_clip_path(&path, &FillRule::NonZero);
+                        pushed += 1;
+                    }
+                    None => {
+                        clipped_out = true;
+                        break;
+                    }
+                }
+            }
+            if !clipped_out {
+                surface.push_transform(&to_krilla_transform(item.rel_transform));
+                // Leaves keep seeing an identity parent transform: theirs is
+                // on the surface stack, as it was when groups pushed it.
+                self.render_leaf(
+                    &mut surface,
+                    item.node,
+                    AffineTransform::identity(),
+                    item.alpha,
+                );
+                pushed += 1;
+            }
+            for _ in 0..pushed {
+                surface.pop();
+            }
         }
 
         surface.pop(); // scene camera
@@ -146,7 +180,7 @@ impl PdfRenderer {
         Ok(())
     }
 
-    fn render_node(
+    fn render_leaf(
         &mut self,
         surface: &mut krilla::surface::Surface,
         node: &Node,
@@ -154,73 +188,9 @@ impl PdfRenderer {
         parent_alpha: f32,
     ) {
         match &node.kind {
-            NodeKind::Group {
-                node_box,
-                alpha,
-                clip_x,
-                clip_y,
-                clip_w,
-                clip_h,
-                clip_enabled,
-                camera,
-                children,
-            } => {
-                let transform = transform_node_box(node_box, parent_transform);
-                let effective_alpha = parent_alpha * *alpha as f32;
-                let needs_clip = *clip_enabled
-                    || *clip_x > 0.0
-                    || *clip_y > 0.0
-                    || *clip_w < 1.0
-                    || *clip_h < 1.0;
-                surface.push_transform(&to_krilla_transform(transform));
-                let mut extra_pops = 0u32;
-
-                if needs_clip {
-                    let lw = node_box.size.width as f32;
-                    let lh = node_box.size.height as f32;
-                    if let Some(clip_rect) = KRect::from_xywh(
-                        *clip_x as f32 * lw,
-                        *clip_y as f32 * lh,
-                        *clip_w as f32 * lw,
-                        *clip_h as f32 * lh,
-                    ) {
-                        let mut pb = PathBuilder::new();
-                        pb.push_rect(clip_rect);
-                        if let Some(clip_path) = pb.finish() {
-                            surface.push_clip_path(&clip_path, &FillRule::NonZero);
-                            extra_pops += 1;
-                        }
-                    }
-                }
-
-                // Camera (innermost layer): affects only the children drawn
-                // below, never the clip path above.
-                let box_center =
-                    Position::new(node_box.size.width * 0.5, node_box.size.height * 0.5);
-                surface.push_transform(&to_krilla_transform(camera_transform(camera, box_center)));
-
-                // Z-sort children.
-                let mut order: Vec<usize> = (0..children.len()).collect();
-                order.sort_by(|&a, &b| {
-                    node_z_level(&children[a])
-                        .partial_cmp(&node_z_level(&children[b]))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                for i in order {
-                    self.render_node(
-                        surface,
-                        &children[i],
-                        AffineTransform::identity(),
-                        effective_alpha,
-                    );
-                }
-
-                surface.pop(); // camera
-                for _ in 0..extra_pops {
-                    surface.pop();
-                }
-                surface.pop(); // transform
-            }
+            // Groups never paint: `flatten_scene` dissolves them into the
+            // global draw list before we get here.
+            NodeKind::Group { .. } => {}
 
             NodeKind::Rect {
                 node_box,

@@ -279,6 +279,9 @@ with Scene():
         r.size(80, 80, dur=1.5)
 ```
 
+Depth animates the same way — see [Depth](positioning.md#depth-zlevel) for what `.z()`
+means and how it interacts with groups.
+
 Use `wait()` to insert a pause before starting a transition:
 
 ```ffpy video="mp4"
@@ -329,25 +332,6 @@ A single `Rect` rotates the same way, with no enclosing `Group` needed:
 with Scene():
     Rect().size(100, 60).fill("mediumseagreen").align(0.5, 0.5).rotate(30, dur=1)
 ```
-
----
-
-## Z-ordering
-
-`.z(level, dur=, ease=)` controls paint order among siblings — higher `z` paints on
-top, regardless of creation order. It is available on every drawable node except
-text runs (`TextGroup`/`TextSpan`), where paragraph order is always the draw order.
-The default `z` is `0`, and nodes with equal `z` paint in creation order.
-
-```ffpy frame="0"
-with Scene():
-    Rect().size(100, 100).fill("steelblue").xy(20, 20)
-    Rect().size(100, 100).fill("tomato").xy(60, 50).z(-1)
-```
-
-Here the tomato rect is created *after* the blue one (so it would normally paint on
-top), but `z(-1)` sends it behind instead. `.z()` is animatable, so a node can be
-brought to the front or sent to the back partway through a scene.
 
 ---
 

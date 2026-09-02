@@ -1,3 +1,4 @@
+use renderer_core::flatten::{FlatScene, flatten_scene};
 use renderer_core::glyph_cache::{PathVerb, VectorPath};
 use renderer_core::image_cache::{self, CachedImageKind, RawPixmap};
 use renderer_core::path_utils::{build_cropped_path_verbs, build_rounded_rect_verbs, offset_verbs};
@@ -5,8 +6,7 @@ use renderer_core::resources::Resources;
 use renderer_core::text_decorations::{DecorationKind, DecorationRect, decoration_rects};
 use renderer_core::text_layout::{build_span_text, collect_spans};
 use renderer_core::transform::{
-    AffineTransform, gradient_line_endpoints, node_z_level,
-    positional_transform as core_positional_transform,
+    AffineTransform, gradient_line_endpoints, positional_transform as core_positional_transform,
 };
 use renderer_core::{
     Color, ImageLayer, Node, NodeKind, Paint as RcPaint, PathCommand, Position, Scene, Size, Style,
@@ -50,109 +50,42 @@ impl RasterRenderer {
             renderer_core::camera_transform(&scene.camera, box_center)
                 .concat(affine_from_skia(Transform::from_scale(scale, scale))),
         );
-        self.render_children(&scene.children, &mut pixmap, content_transform, 1.0);
+        // `z` is global: the whole tree collapses into one ordered draw list,
+        // with each item carrying its ancestors' transform, alpha and clip.
+        let flat = flatten_scene(scene, affine_from_skia(content_transform));
+        let masks = build_clip_masks(&flat, width.max(1), height.max(1));
+        for item in &flat.items {
+            let mask = match item.clip {
+                // A clip window that collapsed to nothing hides its subtree.
+                Some(i) => match &masks[i] {
+                    Some(m) => Some(m),
+                    None => continue,
+                },
+                None => None,
+            };
+            self.render_leaf(
+                item.node,
+                &mut pixmap,
+                skia_from_affine(item.transform),
+                item.alpha,
+                mask,
+            );
+        }
         pixmap
     }
 
-    fn render_children(
-        &self,
-        nodes: &[Node],
-        pixmap: &mut Pixmap,
-        parent_transform: Transform,
-        parent_alpha: f32,
-    ) {
-        let mut order: Vec<usize> = (0..nodes.len()).collect();
-        order.sort_by(|&a, &b| {
-            node_z_level(&nodes[a])
-                .partial_cmp(&node_z_level(&nodes[b]))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        for i in order {
-            self.render_node(&nodes[i], pixmap, parent_transform, parent_alpha);
-        }
-    }
-
-    fn render_node(
+    fn render_leaf(
         &self,
         node: &Node,
         pixmap: &mut Pixmap,
         parent_transform: Transform,
         parent_alpha: f32,
+        mask: Option<&Mask>,
     ) {
         match &node.kind {
-            NodeKind::Group {
-                node_box,
-                alpha,
-                clip_x,
-                clip_y,
-                clip_w,
-                clip_h,
-                clip_enabled,
-                camera,
-                children,
-            } => {
-                let transform = transform_nodebox(node_box, parent_transform);
-                let box_center =
-                    Position::new(node_box.size.width * 0.5, node_box.size.height * 0.5);
-                let content_transform = skia_from_affine(
-                    renderer_core::camera_transform(camera, box_center)
-                        .concat(affine_from_skia(transform)),
-                );
-                let alpha = parent_alpha * *alpha as f32;
-                let children = children.clone();
-
-                let needs_clip = *clip_enabled
-                    || *clip_x > 0.0
-                    || *clip_y > 0.0
-                    || *clip_w < 1.0
-                    || *clip_h < 1.0;
-                if !needs_clip {
-                    self.render_children(&children, pixmap, content_transform, alpha);
-                } else {
-                    let w = pixmap.width();
-                    let h = pixmap.height();
-                    let mut offscreen = Pixmap::new(w, h).expect("offscreen pixmap");
-                    self.render_children(&children, &mut offscreen, content_transform, alpha);
-
-                    let lw = node_box.size.width as f32;
-                    let lh = node_box.size.height as f32;
-                    if let Some(clip_rect) = Rect::from_xywh(
-                        *clip_x as f32 * lw,
-                        *clip_y as f32 * lh,
-                        *clip_w as f32 * lw,
-                        *clip_h as f32 * lh,
-                    ) {
-                        // Pre-transform to screen space so mask.fill_path is called
-                        // with identity — avoids tiny-skia's degenerate-path warning
-                        // when the transform squashes one axis to nearly zero.
-                        if let Some(screen_clip) =
-                            PathBuilder::from_rect(clip_rect).transform(transform)
-                        {
-                            let b = screen_clip.bounds();
-                            // SCALAR_NEARLY_ZERO = 1/4096; mirror tiny-skia's own check
-                            if b.width() > (1.0 / 4096.0)
-                                && b.height() > (1.0 / 4096.0)
-                                && let Some(mut mask) = Mask::new(w, h)
-                            {
-                                mask.fill_path(
-                                    &screen_clip,
-                                    FillRule::Winding,
-                                    true,
-                                    Transform::identity(),
-                                );
-                                pixmap.draw_pixmap(
-                                    0,
-                                    0,
-                                    offscreen.as_ref(),
-                                    &PixmapPaint::default(),
-                                    Transform::identity(),
-                                    Some(&mask),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
+            // Groups never paint: `flatten_scene` dissolves them into the
+            // global draw list before we get here.
+            NodeKind::Group { .. } => {}
             NodeKind::Rect {
                 node_box,
                 style,
@@ -169,7 +102,7 @@ impl RasterRenderer {
                 let Some(path) = path else {
                     return;
                 };
-                fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
+                fill_and_stroke(&path, style, pixmap, transform, parent_alpha, mask);
             }
             NodeKind::Ellipse { node_box, style } => {
                 let transform = transform_nodebox(node_box, parent_transform);
@@ -184,7 +117,7 @@ impl RasterRenderer {
                 let Some(path) = PathBuilder::from_oval(oval) else {
                     return;
                 };
-                fill_and_stroke(&path, style, pixmap, transform, parent_alpha);
+                fill_and_stroke(&path, style, pixmap, transform, parent_alpha, mask);
             }
             NodeKind::Path {
                 style,
@@ -195,7 +128,7 @@ impl RasterRenderer {
                 ..
             } => {
                 if let Some(path) = build_cropped_path(children, *crop_start, *crop_end) {
-                    fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha);
+                    fill_and_stroke(&path, style, pixmap, parent_transform, parent_alpha, mask);
                 }
             }
             NodeKind::Text {
@@ -250,6 +183,7 @@ impl RasterRenderer {
                     sh,
                     (sx, sy),
                     reveal,
+                    mask,
                 );
             }
             NodeKind::Image {
@@ -276,6 +210,7 @@ impl RasterRenderer {
                     parent_transform,
                     node_box,
                     effective_alpha,
+                    mask,
                 );
             }
         }
@@ -292,6 +227,7 @@ impl RasterRenderer {
         sh: Option<(&str, &str)>,
         fit_scale: (f32, f32),
         reveal: f32,
+        mask: Option<&Mask>,
     ) {
         // Typewriter reveal: a hard per-glyph cutoff over the
         // already-laid-out glyphs, in reading order across all lines — never
@@ -456,7 +392,7 @@ impl RasterRenderer {
                         let mut paint = Paint::default();
                         paint.set_color(color);
                         paint.anti_alias = true;
-                        pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
+                        pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, mask);
                     }
                 }
                 if !span.text_style.stroke_color.value().is_transparent() {
@@ -470,7 +406,7 @@ impl RasterRenderer {
                         width: *span.text_style.stroke_width.value() as f32,
                         ..Default::default()
                     };
-                    pixmap.stroke_path(&path, &paint, &stroke, parent_transform, None);
+                    pixmap.stroke_path(&path, &paint, &stroke, parent_transform, mask);
                 }
             }
 
@@ -481,7 +417,14 @@ impl RasterRenderer {
                 for rect in decoration_rects(cached, &spans, kind) {
                     let span = spans[rect.span_idx];
                     let alpha = parent_alpha * *span.text_style.alpha.value() as f32;
-                    draw_decoration_rect(&rect, &local(span), alpha, pixmap, parent_transform);
+                    draw_decoration_rect(
+                        &rect,
+                        &local(span),
+                        alpha,
+                        pixmap,
+                        parent_transform,
+                        mask,
+                    );
                 }
             }
 
@@ -502,6 +445,7 @@ fn draw_decoration_rect(
     alpha: f32,
     pixmap: &mut Pixmap,
     parent_transform: Transform,
+    mask: Option<&Mask>,
 ) {
     let verbs = offset_verbs(
         &build_rounded_rect_verbs(rect.width, rect.thickness, 0.0),
@@ -517,7 +461,58 @@ fn draw_decoration_rect(
     let mut paint = Paint::default();
     paint.set_color(color);
     paint.anti_alias = true;
-    pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, None);
+    pixmap.fill_path(&path, &paint, FillRule::Winding, parent_transform, mask);
+}
+
+/// Rasterize every clip frame into a full-canvas `Mask`, each intersected with
+/// its parent's. `None` means the window collapsed to nothing and every item
+/// under that frame must be skipped — the same result the old
+/// render-to-offscreen-then-discard path produced. Frames are ordered
+/// parents-first, so a parent's mask is always already built.
+fn build_clip_masks(flat: &FlatScene<'_>, width: u32, height: u32) -> Vec<Option<Mask>> {
+    let mut masks: Vec<Option<Mask>> = Vec::with_capacity(flat.clips.len());
+    for frame in &flat.clips {
+        let parent_mask = match frame.parent {
+            Some(i) => match &masks[i] {
+                Some(m) => Some(m.clone()),
+                // Nothing survives an already-empty parent window.
+                None => {
+                    masks.push(None);
+                    continue;
+                }
+            },
+            None => None,
+        };
+
+        let (x, y, w, h) = frame.rect;
+        // Pre-transform to screen space so `fill_path` runs with identity —
+        // avoids tiny-skia's degenerate-path warning when the transform
+        // squashes one axis to nearly zero.
+        let screen_clip = Rect::from_xywh(x, y, w, h)
+            .and_then(|r| PathBuilder::from_rect(r).transform(skia_from_affine(frame.transform)));
+        let empty = screen_clip.as_ref().is_none_or(|p| {
+            let b = p.bounds();
+            // SCALAR_NEARLY_ZERO = 1/4096; mirror tiny-skia's own check.
+            b.width() <= (1.0 / 4096.0) || b.height() <= (1.0 / 4096.0)
+        });
+        if empty {
+            masks.push(None);
+            continue;
+        }
+        let screen_clip = screen_clip.expect("checked above");
+
+        masks.push(match parent_mask {
+            Some(mut m) => {
+                m.intersect_path(&screen_clip, FillRule::Winding, true, Transform::identity());
+                Some(m)
+            }
+            None => Mask::new(width, height).map(|mut m| {
+                m.fill_path(&screen_clip, FillRule::Winding, true, Transform::identity());
+                m
+            }),
+        });
+    }
+    masks
 }
 
 // ── Public free functions ─────────────────────────────────────────────────────
@@ -673,6 +668,7 @@ fn fill_and_stroke(
     pixmap: &mut Pixmap,
     transform: Transform,
     parent_alpha: f32,
+    mask: Option<&Mask>,
 ) {
     let alpha = parent_alpha * style.alpha as f32;
     if !style.fill_color.is_transparent() {
@@ -710,7 +706,7 @@ fn fill_and_stroke(
                 anti_alias: true,
                 ..Default::default()
             };
-            pixmap.fill_path(path, &paint, FillRule::Winding, transform, None);
+            pixmap.fill_path(path, &paint, FillRule::Winding, transform, mask);
         }
     }
     if !style.stroke_color.is_transparent() {
@@ -726,7 +722,7 @@ fn fill_and_stroke(
             }),
             ..Default::default()
         };
-        pixmap.stroke_path(path, &paint, &stroke, transform, None);
+        pixmap.stroke_path(path, &paint, &stroke, transform, mask);
     }
 }
 
@@ -842,6 +838,7 @@ fn render_raster_pixmap(
     node_transform: Transform,
     pixmap: &mut Pixmap,
     effective_alpha: f32,
+    mask: Option<&Mask>,
 ) {
     let Some(src_pixmap) = raw_to_pixmap(src) else {
         return;
@@ -854,7 +851,7 @@ fn render_raster_pixmap(
         let transform = Transform::from_scale(placement.sx, placement.sy)
             .post_translate(placement.offset_x, placement.offset_y)
             .post_concat(node_transform);
-        pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, transform, None);
+        pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, transform, mask);
     } else {
         let w_u32 = placement.dest_w.ceil() as u32;
         let h_u32 = placement.dest_h.ceil() as u32;
@@ -874,7 +871,7 @@ fn render_raster_pixmap(
             img_pixmap.as_ref(),
             &composite_paint,
             node_transform,
-            None,
+            mask,
         );
     }
 }
@@ -885,8 +882,11 @@ fn render_svg_tree(
     node_transform: Transform,
     pixmap: &mut Pixmap,
     effective_alpha: f32,
+    mask: Option<&Mask>,
 ) {
-    if (effective_alpha - 1.0).abs() < 1e-6 {
+    // `resvg::render` takes no mask, so a clipped SVG has to go through the
+    // offscreen-then-composite path even at full opacity.
+    if (effective_alpha - 1.0).abs() < 1e-6 && mask.is_none() {
         let svg_transform = Transform::from_scale(placement.sx, placement.sy)
             .post_translate(placement.offset_x, placement.offset_y)
             .post_concat(node_transform);
@@ -904,7 +904,7 @@ fn render_svg_tree(
             opacity: effective_alpha.clamp(0.0, 1.0),
             ..Default::default()
         };
-        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, node_transform, None);
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, node_transform, mask);
     }
 }
 
@@ -915,6 +915,7 @@ fn render_image(
     parent_transform: Transform,
     node_box: &NodeBox,
     effective_alpha: f32,
+    mask: Option<&Mask>,
 ) {
     let Some(cached) = image_cache::load_image(spec.path) else {
         return;
@@ -953,11 +954,25 @@ fn render_image(
     match &cached.kind {
         CachedImageKind::Svg { tree, .. } => {
             if spec.layers.is_empty() && spec.hidden_layers.is_empty() {
-                render_svg_tree(tree, &placement, node_transform, pixmap, effective_alpha);
+                render_svg_tree(
+                    tree,
+                    &placement,
+                    node_transform,
+                    pixmap,
+                    effective_alpha,
+                    mask,
+                );
             } else {
                 let all_labels = cached.image_layers.as_ref();
                 if all_labels.is_none_or(|labels| labels.is_empty()) {
-                    render_svg_tree(tree, &placement, node_transform, pixmap, effective_alpha);
+                    render_svg_tree(
+                        tree,
+                        &placement,
+                        node_transform,
+                        pixmap,
+                        effective_alpha,
+                        mask,
+                    );
                 } else {
                     for label in all_labels.unwrap().iter() {
                         if spec.hidden_layers.iter().any(|h| **h == *label) {
@@ -988,13 +1003,21 @@ fn render_image(
                             layer_transform,
                             pixmap,
                             layer_alpha,
+                            mask,
                         );
                     }
                 }
             }
         }
         CachedImageKind::Raster { pixmap: src } => {
-            render_raster_pixmap(src, &placement, node_transform, pixmap, effective_alpha);
+            render_raster_pixmap(
+                src,
+                &placement,
+                node_transform,
+                pixmap,
+                effective_alpha,
+                mask,
+            );
         }
         CachedImageKind::Ora { layers: ora_layers } => {
             let all_labels = &cached.image_layers;
@@ -1011,6 +1034,7 @@ fn render_image(
                         node_transform,
                         pixmap,
                         effective_alpha,
+                        mask,
                     );
                 }
             } else if let Some(all_labels) = all_labels {
@@ -1044,6 +1068,7 @@ fn render_image(
                         layer_transform,
                         pixmap,
                         layer_alpha,
+                        mask,
                     );
                 }
             }

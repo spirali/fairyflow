@@ -108,6 +108,12 @@ pub struct DecorationStyle {
     pub offset: AttrExpr<f64>,
 }
 
+/// `serde` default for `Layout`'s `justify` fields, which older scene JSON
+/// (and the engine's own inline test fixtures) omit entirely.
+fn zero_expr() -> Expr<f64> {
+    Expr::Const(0.0)
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Layout {
@@ -115,11 +121,23 @@ pub enum Layout {
     Column {
         gap: Expr<f64>,
         align: Expr<f64>,
+        /// Main-axis (vertical) placement of the stack as a whole inside the
+        /// container's padded box: `0.0` = top (the default, and the only
+        /// behaviour before this was introduced), `0.5` = centered, `1.0` =
+        /// bottom. Only meaningful when the container is taller than its
+        /// content — an auto-sized column has no free space to distribute.
+        #[serde(default = "zero_expr")]
+        justify: Expr<f64>,
         reserve: bool,
     },
     Row {
         gap: Expr<f64>,
         align: Expr<f64>,
+        /// Main-axis (horizontal) placement of the run as a whole inside the
+        /// container's padded box: `0.0` = left (default), `0.5` = centered,
+        /// `1.0` = right. See `Column::justify`.
+        #[serde(default = "zero_expr")]
+        justify: Expr<f64>,
         reserve: bool,
     },
     Grid {

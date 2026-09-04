@@ -1403,7 +1403,11 @@ class Group(
         self._layout = CENTERING_LAYOUT
 
     def column(
-        self, gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True
+        self,
+        gap: FloatLike = 0,
+        align: FloatLike = 0.5,
+        reserve: bool = True,
+        justify: FloatLike = 0.0,
     ) -> Self:
         """Switch the group to column (vertical) layout.
 
@@ -1412,23 +1416,33 @@ class Group(
 
         Args:
             gap: Vertical gap between children in pixels.
-            align: Horizontal alignment of children within the column.
-                ``0.0`` = left, ``0.5`` = center, ``1.0`` = right.
+            align: Horizontal alignment of children within the column
+                (the cross axis). ``0.0`` = left, ``0.5`` = center,
+                ``1.0`` = right.
             reserve: If ``True`` (default), inactive children (not yet visible
                 or already removed) still occupy their full height in the
                 layout so that siblings never shift when items appear or
                 disappear.  If ``False``, only currently active children
                 contribute to the layout; siblings reposition as items come
                 and go.
+            justify: Vertical placement of the stack as a whole (the main
+                axis) within the group's padded box. ``0.0`` (default) = top,
+                ``0.5`` = centered, ``1.0`` = bottom. Only has an effect when
+                the group is taller than its content — an auto-sized group
+                hugs its children, leaving no free space to distribute.
 
         Returns:
             self, for method chaining.
         """
-        self._layout = ColumnLayout(get_frame(), gap, align, reserve)
+        self._layout = ColumnLayout(get_frame(), gap, align, reserve, justify)
         return self
 
     def row(
-        self, gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True
+        self,
+        gap: FloatLike = 0,
+        align: FloatLike = 0.5,
+        reserve: bool = True,
+        justify: FloatLike = 0.0,
     ) -> Self:
         """Switch the group to row (horizontal) layout.
 
@@ -1437,19 +1451,24 @@ class Group(
 
         Args:
             gap: Horizontal gap between children in pixels.
-            align: Vertical alignment of children within the row.
-                ``0.0`` = top, ``0.5`` = center, ``1.0`` = bottom.
+            align: Vertical alignment of children within the row (the cross
+                axis). ``0.0`` = top, ``0.5`` = center, ``1.0`` = bottom.
             reserve: If ``True`` (default), inactive children (not yet visible
                 or already removed) still occupy their full width in the
                 layout so that siblings never shift when items appear or
                 disappear.  If ``False``, only currently active children
                 contribute to the layout; siblings reposition as items come
                 and go.
+            justify: Horizontal placement of the run as a whole (the main
+                axis) within the group's padded box. ``0.0`` (default) = left,
+                ``0.5`` = centered, ``1.0`` = right. Only has an effect when
+                the group is wider than its content — an auto-sized group hugs
+                its children, leaving no free space to distribute.
 
         Returns:
             self, for method chaining.
         """
-        self._layout = RowLayout(get_frame(), gap, align, reserve)
+        self._layout = RowLayout(get_frame(), gap, align, reserve, justify)
         return self
 
     def grid(
@@ -1675,7 +1694,12 @@ class Group(
 
 
 @beartype
-def Column(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> Group:
+def Column(
+    gap: FloatLike = 0,
+    align: FloatLike = 0.5,
+    reserve: bool = True,
+    justify: FloatLike = 0.0,
+) -> Group:
     """Shortcut for `Group().column(...)`.
 
     Args:
@@ -1685,15 +1709,22 @@ def Column(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> 
         reserve: If ``True`` (default), inactive children still occupy their
             full height in the layout. If ``False``, only currently active
             children contribute to the layout.
+        justify: Vertical placement of the whole stack within the group.
+            ``0.0`` (default) = top, ``0.5`` = centered, ``1.0`` = bottom.
 
     Returns:
         A `Group` in column layout, ready to use as a context manager.
     """
-    return Group().column(gap, align, reserve)
+    return Group().column(gap, align, reserve, justify)
 
 
 @beartype
-def Row(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> Group:
+def Row(
+    gap: FloatLike = 0,
+    align: FloatLike = 0.5,
+    reserve: bool = True,
+    justify: FloatLike = 0.0,
+) -> Group:
     """Shortcut for `Group().row(...)`.
 
     Args:
@@ -1703,11 +1734,13 @@ def Row(gap: FloatLike = 0, align: FloatLike = 0.5, reserve: bool = True) -> Gro
         reserve: If ``True`` (default), inactive children still occupy their
             full width in the layout. If ``False``, only currently active
             children contribute to the layout.
+        justify: Horizontal placement of the whole run within the group.
+            ``0.0`` (default) = left, ``0.5`` = centered, ``1.0`` = right.
 
     Returns:
         A `Group` in row layout, ready to use as a context manager.
     """
-    return Group().row(gap, align, reserve)
+    return Group().row(gap, align, reserve, justify)
 
 
 @beartype

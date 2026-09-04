@@ -4,6 +4,7 @@
 
 ### New
  
+  * Column & Row `justify` attribute
   * Ctrl+Enter evaluation now evaluates last .ffpy when pressed in non .ffpy file
 
 ### Changed

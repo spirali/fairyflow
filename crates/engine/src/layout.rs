@@ -213,21 +213,41 @@ impl Node {
                         let self_w = self.get_outer_width(ctx)?;
                         pl + (parent_w - pl - pr - self_w) * align.eval(ctx)? - off.x
                     }
-                    Layout::Row { gap, reserve, .. } => {
+                    Layout::Row {
+                        gap,
+                        justify,
+                        reserve,
+                        ..
+                    } => {
                         let parent_id = self.parent.unwrap();
                         let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
                         let gap = gap.eval(ctx)?;
+                        let justify = justify.eval(ctx)?;
                         let offsets = ctx.flow_offsets_cached(parent_id, || {
                             let mut offsets = Vec::with_capacity(children.len());
                             let mut x = 0.0f64;
+                            let mut count: u32 = 0;
                             for &child_id in children {
                                 offsets.push(x);
                                 let node = ctx.node(child_id)?;
                                 if *reserve || node.is_active(ctx.frame()) {
                                     x += gap + node.get_outer_width(ctx)?;
+                                    count += 1;
+                                }
+                            }
+                            // Guarded on `justify != 0` so the default start-packed
+                            // case never pulls the container's own width into the
+                            // child's x (an auto-sized container measures its
+                            // children, so that would be a fresh cycle).
+                            if justify != 0.0 && count > 0 {
+                                let content_w = x - gap;
+                                let free = parent.get_width(ctx)? - pl - pr - content_w;
+                                let start = free * justify;
+                                for off in &mut offsets {
+                                    *off += start;
                                 }
                             }
                             Ok(offsets)
@@ -297,21 +317,39 @@ impl Node {
                         let self_h = self.get_outer_height(ctx)?;
                         pt + (parent_h - pt - pb - self_h) / 2.0 - off.y
                     }
-                    Layout::Column { gap, reserve, .. } => {
+                    Layout::Column {
+                        gap,
+                        justify,
+                        reserve,
+                        ..
+                    } => {
                         let parent_id = self.parent.unwrap();
                         let parent = ctx.node(parent_id)?;
                         let NodeKind::Group { children, .. } = &parent.kind else {
                             unreachable!()
                         };
                         let gap = gap.eval(ctx)?;
+                        let justify = justify.eval(ctx)?;
                         let offsets = ctx.flow_offsets_cached(parent_id, || {
                             let mut offsets = Vec::with_capacity(children.len());
                             let mut y = 0.0f64;
+                            let mut count: u32 = 0;
                             for &child_id in children {
                                 offsets.push(y);
                                 let node = ctx.node(child_id)?;
                                 if *reserve || node.is_active(ctx.frame()) {
                                     y += gap + node.get_outer_height(ctx)?;
+                                    count += 1;
+                                }
+                            }
+                            // See the `Layout::Row` arm in `auto_x` for why this
+                            // is guarded on a non-zero `justify`.
+                            if justify != 0.0 && count > 0 {
+                                let content_h = y - gap;
+                                let free = parent.get_height(ctx)? - pt - pb - content_h;
+                                let start = free * justify;
+                                for off in &mut offsets {
+                                    *off += start;
                                 }
                             }
                             Ok(offsets)

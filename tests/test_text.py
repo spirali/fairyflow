@@ -297,6 +297,20 @@ def test_tgroup_nested(test_scene):
         )
 
 
+def test_span_boundary_keeps_the_digit_before_it(test_scene):
+    """A span boundary must not change the glyph in front of it.
+
+    `88<s></s>8` splits the line into two spans, "88" and "8". The ZWNJ that
+    used to join them for shaping is absent from DejaVu Sans Mono, so the
+    cluster it formed with the digit before it fell back to another face —
+    a different outline and advance, i.e. a middle digit slightly bigger
+    than its neighbours. Both rows here must render identically.
+    """
+    with test_scene.size(120, 80):
+        stext("88<s></s>8").font("monospace", 24).xy(6, 6)
+        Text("888").font("monospace", 24).xy(6, 42)
+
+
 # ── Text ctor / .line() tests ────────────────────────────────────────────────
 
 

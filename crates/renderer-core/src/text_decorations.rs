@@ -48,13 +48,12 @@ struct RunSegment {
 /// Group `glyphs` (already in visual/reading order — see `text_layout.rs`)
 /// into contiguous same-`(span_idx, row)` runs. A run's end x is the next
 /// glyph's start x, which is exact for every boundary except the very last
-/// glyph on a row (no next glyph to bound it): that one falls back to its
-/// own ink bounds via the glyph's path. Two consequences of that fallback,
-/// both acceptable for a decoration line rather than a text-selection
-/// highlight: a run ending mid-row on a normal glyph may undershoot the true
-/// advance-based edge by a small amount (ink bounds vs. advance width), and
-/// a run whose last character is invisible (e.g. trailing whitespace at the
-/// very end of a wrapped line) contributes no extra width there.
+/// glyph on a row (no next glyph to bound it): that one advances its own pen
+/// position by its advance width, which is the same edge the next glyph
+/// would have started at. Ink bounds would be wrong here — they stop at the
+/// last painted contour, so a narrow final glyph with a wide right side
+/// bearing (an "l", say) would leave the decoration visibly short of the
+/// word it underlines.
 fn glyph_run_segments(glyphs: &[CachedGlyph]) -> Vec<RunSegment> {
     let mut segments: Vec<RunSegment> = Vec::new();
     for (i, glyph) in glyphs.iter().enumerate() {
@@ -65,6 +64,17 @@ fn glyph_run_segments(glyphs: &[CachedGlyph]) -> Vec<RunSegment> {
             let seg = segments.last_mut().unwrap();
             seg.x_end = glyph.x;
         } else {
+            // Close the previous segment on this row: a span change ends the
+            // run at the *next* glyph's pen position, exactly as a same-run
+            // step does below. Without this, a span's decoration stopped at
+            // its own last glyph's origin and so came up one advance short —
+            // an underline visibly missing its final letter. A previous
+            // segment on an earlier row is already closed by `is_last_on_row`.
+            if let Some(prev) = segments.last_mut()
+                && prev.baseline_y == glyph.baseline_y
+            {
+                prev.x_end = glyph.x;
+            }
             segments.push(RunSegment {
                 span_idx: glyph.span_idx,
                 baseline_y: glyph.baseline_y,
@@ -76,11 +86,25 @@ fn glyph_run_segments(glyphs: &[CachedGlyph]) -> Vec<RunSegment> {
             .get(i + 1)
             .is_none_or(|next| next.baseline_y != glyph.baseline_y);
         if is_last_on_row {
+            // No next glyph to bound the run, so end it at this row's last
+            // *inked* glyph's advance edge. Skipping trailing zero-ink glyphs
+            // keeps the whitespace a soft wrap breaks on (and any trailing
+            // space at the end of the line) out of the decoration, the way a
+            // browser trims it; ending on the advance rather than the ink
+            // bounds keeps a narrow final letter with a wide right side
+            // bearing (an "l", say) fully covered.
             let seg = segments.last_mut().unwrap();
-            let ink_width = crate::path_utils::verbs_bounds(&glyph.path.verbs)
-                .map(|(_, _, width, _)| width.max(0.0))
-                .unwrap_or(0.0);
-            seg.x_end = glyph.x + ink_width;
+            let mut x_end = seg.x_start;
+            for prev in glyphs[..=i].iter().rev() {
+                if prev.span_idx != seg.span_idx || prev.baseline_y != seg.baseline_y {
+                    break;
+                }
+                if !prev.path.verbs.is_empty() {
+                    x_end = prev.x + prev.advance.max(0.0);
+                    break;
+                }
+            }
+            seg.x_end = x_end.max(seg.x_start);
         }
     }
     segments

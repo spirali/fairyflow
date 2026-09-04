@@ -4,6 +4,7 @@ use crate::{TextAlign, TextChild, TextGroup, TextSpan};
 use parley::{
     Alignment, AlignmentOptions, FontContext, FontStack, FontWeight, LayoutContext,
     PositionedLayoutItem, StyleProperty,
+    style::{FontFeature, FontSettings},
 };
 use skrifa::{
     GlyphId, MetadataProvider,
@@ -17,6 +18,19 @@ use std::ops::Range;
 use std::sync::Arc;
 
 const DEFAULT_FONT_SIZE: f32 = 16.0;
+
+/// An unregistered OpenType feature tag, pushed on every other span so that
+/// parley's shaper ends its item at each span boundary (it breaks a run when
+/// `font_features` differs between adjacent styles — see parley's
+/// `shape::shape_text`). No font implements `zzzy`, so the shaper drops it:
+/// the split is the only effect. This is what keeps a ligature from forming
+/// across two spans (an "fi" spanning two differently-coloured runs would
+/// otherwise be one glyph with one brush); spans are shaped independently,
+/// so kerning/ligatures *within* a span are untouched.
+const RUN_SPLIT_FEATURE: [FontFeature; 1] = [FontFeature {
+    tag: u32::from_be_bytes(*b"zzzy"),
+    value: 1,
+}];
 
 fn to_parley_alignment(align: TextAlign) -> Alignment {
     match align {
@@ -192,6 +206,14 @@ impl TextLayoutEngine {
         for (range, span_idx) in ranges {
             let span = spans[*span_idx];
             builder.push(StyleProperty::Brush(*span_idx), range.clone());
+            if span_idx % 2 == 1 {
+                builder.push(
+                    StyleProperty::FontFeatures(FontSettings::List(std::borrow::Cow::Borrowed(
+                        &RUN_SPLIT_FEATURE,
+                    ))),
+                    range.clone(),
+                );
+            }
             builder.push(
                 StyleProperty::FontSize(*span.text_style.font_size.value() as f32),
                 range.clone(),
@@ -338,6 +360,7 @@ impl TextLayoutEngine {
 
                     let gx = run_x + glyph.x;
                     let gy = baseline - glyph.y;
+                    let advance = glyph.advance;
                     run_x += glyph.advance;
 
                     let glyph_id = GlyphId::from(glyph.id as u16);
@@ -357,6 +380,7 @@ impl TextLayoutEngine {
                         y: row_top,
                         baseline_y: baseline,
                         path: VectorPath { verbs: pen.verbs },
+                        advance,
                         cluster: cluster_byte,
                     });
                 }
@@ -450,20 +474,15 @@ pub fn measure_text_node_pos(
 
 /// Concatenates span texts into a single string, returning byte ranges per span.
 ///
-/// A ZWNJ (U+200C) is inserted between adjacent spans to prevent the OpenType
-/// shaper from forming ligatures across span boundaries (e.g. an "fi" ligature
-/// spanning two differently-coloured spans).  The ZWNJ bytes are included in
-/// the preceding span's byte range so that syntax-highlight offset arithmetic
-/// in the renderer stays consistent.
+/// Nothing is inserted between spans: cross-span ligatures are prevented by
+/// `RUN_SPLIT_FEATURE` instead, which breaks the shaper's run at each boundary
+/// without adding a character to the shaped text.
 pub fn build_span_text(spans: &[&TextSpan]) -> (String, Vec<(std::ops::Range<usize>, usize)>) {
     let mut full_text = String::new();
     let mut ranges = Vec::new();
     for (i, span) in spans.iter().enumerate() {
         let start = full_text.len();
         full_text.push_str(&span.text);
-        if i + 1 < spans.len() {
-            full_text.push('\u{200C}');
-        }
         ranges.push((start..full_text.len(), i));
     }
     (full_text, ranges)
@@ -746,6 +765,71 @@ pub(crate) mod tests {
         assert!(
             y < block_height,
             "row offset must stay within the block's total height"
+        );
+    }
+
+    fn mono_span(id: u64, text: &str) -> TextSpan {
+        let mut span = span(id, text);
+        span.text_style.font_family = Inheritable::Own(Arc::new("monospace".to_string()));
+        span
+    }
+
+    #[test]
+    fn a_span_boundary_leaves_the_glyphs_untouched() {
+        init_test_resources();
+        let mut engine = TextLayoutEngine::new(Resources::get());
+        let joined = [TextChild::Span(mono_span(1, "888"))];
+        let split = [TextChild::Group(group(
+            2,
+            vec![
+                TextChild::Span(mono_span(3, "88")),
+                TextChild::Span(mono_span(4, "8")),
+            ],
+            None,
+        ))];
+
+        let one = engine.layout_text(&joined, None, TextAlign::Left);
+        let two = engine.layout_text(&split, None, TextAlign::Left);
+
+        // DejaVu Sans Mono has no U+200C, so a separator character between the
+        // spans costs a glyph of its own *and* drags the digit in front of it
+        // into a fallback face along with it (the two form one cluster) — the
+        // middle digit of `stext("88<s></s>8")` came out slightly bigger than
+        // its neighbours.
+        assert_eq!(one.width, two.width, "a span boundary changed the width");
+        let (a, b) = (&one.lines[0].glyphs, &two.lines[0].glyphs);
+        assert_eq!(a.len(), b.len(), "a span boundary added a glyph");
+        for (i, (ga, gb)) in a.iter().zip(b).enumerate() {
+            assert_eq!(ga.x, gb.x, "glyph {i} moved");
+            assert_eq!(ga.advance, gb.advance, "glyph {i} changed advance");
+            assert_eq!(ga.path.verbs, gb.path.verbs, "glyph {i} changed outline");
+        }
+    }
+
+    #[test]
+    fn a_ligature_never_forms_across_a_span_boundary() {
+        init_test_resources();
+        let mut engine = TextLayoutEngine::new(Resources::get());
+        // DejaVu Sans shapes "fi" into a single ligature glyph. Split over two
+        // spans it has to stay two glyphs — one ligature carrying two spans'
+        // brushes could only ever be painted in one of their colours. This is
+        // what `RUN_SPLIT_FEATURE` buys, and the reason the spans can't simply
+        // be concatenated.
+        let joined = [TextChild::Span(span(1, "fi"))];
+        let split = [TextChild::Group(group(
+            2,
+            vec![TextChild::Span(span(3, "f")), TextChild::Span(span(4, "i"))],
+            None,
+        ))];
+
+        let one = engine.layout_text(&joined, None, TextAlign::Left);
+        let two = engine.layout_text(&split, None, TextAlign::Left);
+        assert_eq!(one.lines[0].glyphs.len(), 1, "expected an fi ligature");
+        assert_eq!(
+            two.lines[0].glyphs.len(),
+            2,
+            "expected one glyph per span: a ligature crossing the boundary would \
+             give 1, a separator character inserted between them 3"
         );
     }
 }

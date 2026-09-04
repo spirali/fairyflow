@@ -14,6 +14,7 @@
 
   * Fixed infinite recursion in layout system
   * Fixed missing slides in PDF export
+  * Fixed font rendering on span boundaries
   * Fixed unnecessary fetch in UI
 
 ## 0.6.0

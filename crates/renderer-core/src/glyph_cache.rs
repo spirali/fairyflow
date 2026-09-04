@@ -41,6 +41,11 @@ pub struct CachedGlyph {
     pub baseline_y: f32,
     /// Outline at y_cursor = 0 with (run_x + glyph.x, baseline - glyph.y) applied.
     pub path: VectorPath,
+    /// This glyph's advance width. `x + advance` is the pen position of the
+    /// next glyph on the row, so it — not the glyph's ink bounds — is what
+    /// bounds a decoration (underline/strikeout) drawn under the last glyph
+    /// of a run.
+    pub advance: f32,
     /// Byte offset of this glyph's cluster in the concatenated span text string
     /// that was passed to parley.  Used to map glyphs to SH token colors.
     pub cluster: u32,

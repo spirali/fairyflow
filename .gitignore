@@ -6,3 +6,4 @@ tsbuildinfo
 docs/assets
 src/fairyflow/_bin/
 src/fairyflow/_web/
+tests/current

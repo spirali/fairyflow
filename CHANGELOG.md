@@ -2,6 +2,10 @@
 
 ## Unrelased
 
+### New
+ 
+  * Ctrl+Enter evaluation now evaluates last .ffpy when pressed in non .ffpy file
+
 ### Changed
 
   * `z()` now orders nodes globally across the whole scene not just among siblings.

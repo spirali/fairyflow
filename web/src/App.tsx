@@ -119,6 +119,11 @@ export default function App() {
   const frameRef = useRef(0);
   const pendingFrameRef = useRef<number | null>(null);
   const lastRunPathRef = useRef<string | null>(null);
+  const [lastRunPath, setLastRunPathState] = useState<string | null>(null);
+  const setLastRunPath = (path: string) => {
+    lastRunPathRef.current = path;
+    setLastRunPathState(path);
+  };
   const resetFrameOnNextTreeRef = useRef(false);
   const setFrame = (f: number | ((prev: number) => number)) => {
     const next = typeof f === "function" ? f(frameRef.current) : f;
@@ -375,11 +380,24 @@ export default function App() {
     }
   };
 
-  const markActiveTabClean = () => {
-    const idx = activeTabRef.current;
-    if (idx < 0) return;
-    setTabs(tabsRef.current.map((t, i) => (i === idx ? { ...t, isDirty: false } : t)));
+  const markTabsClean = (paths: string[]) => {
+    if (paths.length === 0) return;
+    const set = new Set(paths);
+    setTabs(tabsRef.current.map((t) => (set.has(t.path) ? { ...t, isDirty: false } : t)));
+    setExternallyChangedPaths((prev) => {
+      const next = new Set(prev);
+      for (const path of set) next.delete(path);
+      return next;
+    });
   };
+
+  // Writes an editor buffer back to the project; resolves with the server response.
+  const saveFile = (path: string, content: string) =>
+    fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      body: content,
+    });
 
   const handleReloadFile = useCallback((path: string) => {
     fetch(withToken(`/file?path=${encodeURIComponent(path)}`))
@@ -546,6 +564,10 @@ export default function App() {
             wsRef.current &&
             !openTab?.isDirty
           ) {
+            if (path !== lastRunPathRef.current) {
+              resetFrameOnNextTreeRef.current = true;
+            }
+            setLastRunPath(path);
             setLines([]);
             setRunning(true);
             wsRef.current.send(JSON.stringify({ type: "run", path, debug: false }));
@@ -778,21 +800,10 @@ export default function App() {
       const path = currentFileRef.current;
       if (!path) return;
       const content = editorRef.current?.getValue() ?? "";
-      fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
-        method: "PUT",
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-        body: content,
-      })
+      saveFile(path, content)
         .then(async (r) => {
           if (r.ok) {
-            markActiveTabClean();
-            if (path) {
-              setExternallyChangedPaths((prev) => {
-                const next = new Set(prev);
-                next.delete(path);
-                return next;
-              });
-            }
+            markTabsClean([path]);
           } else {
             const msg = await r.text();
             setLines((prev) => [...prev, { kind: "err", text: `Config error: ${msg}` }]);
@@ -1094,29 +1105,54 @@ export default function App() {
     }
   }
 
+  // ── run target ─────────────────────────────────────────────────────────────
+  // Scene evaluated by Run/Ctrl+Enter: the active file when it is a scene, otherwise the last
+  // evaluated one, so editing prologue.py or fairyflow.toml can still trigger a re-run.
+  const runTarget = currentFile?.endsWith(".ffpy") ? currentFile : lastRunPath;
+  const runTargetLabel =
+    runTarget && runTarget !== currentFile ? (
+      <span className="editor-toolbar-target">{runTarget.split("/").pop()}</span>
+    ) : null;
+
   // ── sequence ──────────────────────────────────────────────────────────────
   const isFfsqActive = currentFile?.endsWith(".ffsq") ?? false;
   const currentSeqResult = isFfsqActive ? (seqRenderResults.get(currentFile!) ?? null) : null;
 
   runFileRef.current = (debug: boolean) => {
-    const path = currentFileRef.current;
-    if (!path?.endsWith(".ffpy")) return;
-    const code = editorRef.current?.getValue();
-    if (!code || !wsRef.current) return;
-    fetch(withToken(`/file?path=${encodeURIComponent(path)}`), {
-      method: "PUT",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-      body: code,
-    })
-      .then(() => markActiveTabClean())
-      .catch(() => {});
-    if (path !== lastRunPathRef.current) {
+    const active = currentFileRef.current;
+    // On a non-scene file (prologue.py, fairyflow.toml, …) re-run the last evaluated scene.
+    const target = active?.endsWith(".ffpy") ? active : lastRunPathRef.current;
+    const ws = wsRef.current;
+    if (!target || !ws) return;
+
+    // Save the file being edited, plus the target scene if it has unsaved edits in another tab,
+    // then run — the Python re-run reads both from disk.
+    const saved: string[] = [];
+    const writes: Promise<unknown>[] = [];
+    for (const path of active && active !== target ? [active, target] : [target]) {
+      const tab = tabsRef.current.find((t) => t.path === path);
+      if (!tab || tab.isFfsq) continue;
+      if (path !== active && !tab.isDirty) continue;
+      const content = modelsRef.current.get(path)?.getValue();
+      if (content == null) continue;
+      saved.push(path);
+      writes.push(saveFile(path, content).catch(() => {}));
+    }
+
+    if (target !== lastRunPathRef.current) {
       resetFrameOnNextTreeRef.current = true;
     }
-    lastRunPathRef.current = path;
+    setLastRunPath(target);
     setLines([]);
     setRunning(true);
-    wsRef.current.send(JSON.stringify({ type: "run", path, debug }));
+    Promise.allSettled(writes).then(() => {
+      markTabsClean(saved);
+      if (ws.readyState !== WebSocket.OPEN) {
+        setRunning(false);
+        return;
+      }
+      ws.send(JSON.stringify({ type: "run", path: target, debug }));
+    });
   };
 
   const handleSeqRenderResult = (path: string, res: SequenceRenderResult) => {
@@ -1384,21 +1420,21 @@ export default function App() {
                         </button>
                       </div>
                     )}
-                    {currentFile?.endsWith(".ffpy") && !isFfsqActive && (
+                    {runTarget && !isFfsqActive && (
                       <div className="editor-toolbar">
                         <button
                           className="editor-toolbar-btn editor-toolbar-run"
                           onClick={() => runFileRef.current?.(false)}
-                          title="Run (Ctrl+Enter)"
+                          title={`Run ${runTarget} (Ctrl+Enter)`}
                         >
-                          ▶ Run
+                          ▶ Run{runTargetLabel}
                         </button>
                         <button
                           className="editor-toolbar-btn editor-toolbar-debug"
                           onClick={() => runFileRef.current?.(true)}
-                          title="Run with debug info"
+                          title={`Run ${runTarget} with debug info`}
                         >
-                          ▷ Debug
+                          ▷ Debug{runTargetLabel}
                         </button>
                       </div>
                     )}

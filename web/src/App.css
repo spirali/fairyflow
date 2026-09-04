@@ -989,6 +989,7 @@
 .editor-toolbar-btn:hover { background: var(--bg-hover); }
 .editor-toolbar-run { border-color: #1177bb; color: #4ec9b0; }
 .editor-toolbar-debug { border-color: #555; color: #ce9178; }
+.editor-toolbar-target { margin-left: 5px; color: var(--text-muted); }
 
 .ws-overlay {
   position: fixed;

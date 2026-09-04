@@ -179,26 +179,78 @@ impl TextLayoutEngine {
         }
     }
 
-    /// The "measure pass": build + break (no alignment, no glyph extraction)
-    /// and read the natural (possibly wrapped) width of one line.
+    /// The "measure pass": shape + break (no alignment, no glyph extraction)
+    /// and read the natural (possibly wrapped) width of one line. Goes
+    /// through [`Self::shaped_layout`] like the extract pass does, so both
+    /// passes agree on which boundaries were split — otherwise a line could
+    /// be aligned against a reference width shaped under different rules.
     fn measure_natural_width(&mut self, spans: &[&TextSpan], wrap: Option<f32>) -> f32 {
         let (full_text, ranges) = build_span_text(spans);
         if full_text.is_empty() {
             return 0.0;
         }
-        let mut layout = self.build_layout(&full_text, spans, &ranges);
+        self.shaped_layout(&full_text, spans, &ranges, wrap).width()
+    }
+
+    /// Shape and line-break one line's spans, splitting the shaper's runs at
+    /// the fewest boundaries that keep each span's glyphs its own.
+    ///
+    /// First pass shapes the spans as one uninterrupted run, so kerning, mark
+    /// attachment and cursive joining all work across a span boundary exactly
+    /// as they would in unsplit text — a word coloured letter by letter stays
+    /// kerned. That is wrong in one specific way: a ligature may span two
+    /// spans and become a single glyph carrying a single brush, leaving the
+    /// second span nothing of its own to paint. Parley flags precisely that
+    /// (`Cluster::is_ligature_continuation`), so the second pass re-shapes
+    /// with `RUN_SPLIT_FEATURE` at those boundaries only, and every other
+    /// boundary keeps its shaping. Lines are cached by `LineKey`, and the
+    /// decision is derived from the same spans that key it, so the second
+    /// pass is paid once per distinct line at most.
+    fn shaped_layout(
+        &mut self,
+        full_text: &str,
+        spans: &[&TextSpan],
+        ranges: &[(Range<usize>, usize)],
+        wrap: Option<f32>,
+    ) -> parley::Layout<usize> {
+        let mut layout = self.build_layout(full_text, spans, ranges, &[]);
         layout.break_all_lines(wrap);
-        layout.width()
+
+        let split_at = ligature_crossings(&layout, ranges);
+        if split_at.is_empty() {
+            return layout;
+        }
+
+        let mut layout = self.build_layout(full_text, spans, ranges, &split_at);
+        layout.break_all_lines(wrap);
+        layout
     }
 
     /// Shared parley builder setup for one line's spans — factored out since
     /// both the measure pass and the align+extract pass need it.
+    ///
+    /// `split_at` holds the span indices that must start a new shaping run
+    /// (see [`Self::shaped_layout`]). The flag alternates on each of them and
+    /// is held otherwise, so a run breaks at exactly those boundaries: parley
+    /// compares `font_features` between adjacent styles, so what matters is
+    /// that neighbours differ there and nowhere else.
     fn build_layout(
         &mut self,
         full_text: &str,
         spans: &[&TextSpan],
         ranges: &[(Range<usize>, usize)],
+        split_at: &[usize],
     ) -> parley::Layout<usize> {
+        let mut split_feature = vec![false; spans.len()];
+        for (i, flag) in split_feature.iter_mut().enumerate() {
+            *flag = split_at.contains(&i);
+        }
+        let mut carried = false;
+        for flag in split_feature.iter_mut() {
+            carried ^= *flag;
+            *flag = carried;
+        }
+
         let mut builder = self
             .layout_cx
             .ranged_builder(&mut self.font_cx, full_text, 1.0, true);
@@ -206,7 +258,7 @@ impl TextLayoutEngine {
         for (range, span_idx) in ranges {
             let span = spans[*span_idx];
             builder.push(StyleProperty::Brush(*span_idx), range.clone());
-            if span_idx % 2 == 1 {
+            if split_feature[*span_idx] {
                 builder.push(
                     StyleProperty::FontFeatures(FontSettings::List(std::borrow::Cow::Borrowed(
                         &RUN_SPLIT_FEATURE,
@@ -260,8 +312,7 @@ impl TextLayoutEngine {
             });
         }
 
-        let mut layout = self.build_layout(&full_text, spans, &ranges);
-        layout.break_all_lines(wrap);
+        let mut layout = self.shaped_layout(&full_text, spans, &ranges, wrap);
         layout.align(
             Some(alignment_width),
             to_parley_alignment(align),
@@ -486,6 +537,41 @@ pub fn build_span_text(spans: &[&TextSpan]) -> (String, Vec<(std::ops::Range<usi
         ranges.push((start..full_text.len(), i));
     }
     (full_text, ranges)
+}
+
+/// The span boundaries a ligature swallowed, as span indices.
+///
+/// A cluster parley marks as a ligature continuation is one whose characters
+/// were absorbed into a preceding cluster's single glyph. When such a cluster
+/// starts exactly where a span starts, that span's text has no glyph of its
+/// own left to paint in its own colour, and the boundary has to be shaped
+/// apart. Mark attachment (a combining accent joining its base) is *not*
+/// flagged this way, so re-shaping is never forced on it — which matters,
+/// since splitting a mark from its base is precisely what would break it.
+fn ligature_crossings(
+    layout: &parley::Layout<usize>,
+    ranges: &[(Range<usize>, usize)],
+) -> Vec<usize> {
+    let mut split_at = Vec::new();
+    for line in layout.lines() {
+        for run in line.runs() {
+            for cluster in run.clusters() {
+                if !cluster.is_ligature_continuation() {
+                    continue;
+                }
+                let start = cluster.text_range().start;
+                if let Some((_, span_idx)) = ranges
+                    .iter()
+                    .find(|(range, span_idx)| *span_idx > 0 && range.start == start)
+                {
+                    split_at.push(*span_idx);
+                }
+            }
+        }
+    }
+    split_at.sort_unstable();
+    split_at.dedup();
+    split_at
 }
 
 pub fn collect_spans<'a>(child: &'a TextChild, out: &mut Vec<&'a TextSpan>) {
@@ -831,5 +917,63 @@ pub(crate) mod tests {
             "expected one glyph per span: a ligature crossing the boundary would \
              give 1, a separator character inserted between them 3"
         );
+    }
+
+    fn letter_spans(text: &str) -> TextChild {
+        TextChild::Group(group(
+            100,
+            text.chars()
+                .enumerate()
+                .map(|(i, c)| TextChild::Span(span(200 + i as u64, &c.to_string())))
+                .collect(),
+            None,
+        ))
+    }
+
+    #[test]
+    fn kerning_survives_a_span_boundary() {
+        init_test_resources();
+        let mut engine = TextLayoutEngine::new(Resources::get());
+        // A word split letter by letter — what `.span()` chains and per-letter
+        // animation build — has to kern exactly like the same word in one
+        // span. "AV" and "TA" are real kern pairs in DejaVu Sans, so a shaper
+        // run broken at every boundary loosens the word visibly (~6% wider).
+        let joined = [TextChild::Span(span(1, "AVATAR"))];
+        let split = [letter_spans("AVATAR")];
+
+        let one = engine.layout_text(&joined, None, TextAlign::Left);
+        let two = engine.layout_text(&split, None, TextAlign::Left);
+
+        assert_eq!(one.width, two.width, "span boundaries dropped the kerning");
+        let (a, b) = (&one.lines[0].glyphs, &two.lines[0].glyphs);
+        assert_eq!(a.len(), b.len());
+        for (i, (ga, gb)) in a.iter().zip(b).enumerate() {
+            assert_eq!(ga.x, gb.x, "glyph {i} moved");
+        }
+    }
+
+    #[test]
+    fn only_the_boundary_a_ligature_crossed_is_split() {
+        init_test_resources();
+        let mut engine = TextLayoutEngine::new(Resources::get());
+        // "AVAfi" in one span shapes to 4 glyphs — A, V, A and an fi ligature.
+        // Split letter by letter, only the f|i boundary may be shaped apart
+        // (or the ligature would swallow the last span); the A|V|A boundaries
+        // ahead of it keep their kerning, so those glyphs must not move.
+        let joined = [TextChild::Span(span(1, "AVAfi"))];
+        let split = [letter_spans("AVAfi")];
+
+        let one = engine.layout_text(&joined, None, TextAlign::Left);
+        let two = engine.layout_text(&split, None, TextAlign::Left);
+
+        let (a, b) = (&one.lines[0].glyphs, &two.lines[0].glyphs);
+        assert_eq!(a.len(), 4, "expected an fi ligature in the joined word");
+        assert_eq!(b.len(), 5, "the ligature has to break at the span boundary");
+        // Only up to the split: from the broken boundary on, positions may
+        // legitimately differ, since a bare "f" kerns against its neighbour
+        // differently than the ligature glyph that replaced it.
+        for i in 0..3 {
+            assert_eq!(a[i].x, b[i].x, "glyph {i} moved: kerning was lost");
+        }
     }
 }

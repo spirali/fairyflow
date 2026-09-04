@@ -1043,6 +1043,128 @@ mod tests {
         assert_close(rect_xy(&scene, 1), (10.0, 0.0));
     }
 
+    const JUSTIFY_COLUMN_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "JustifyColumn", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "w": 100, "h": 100,
+        "layout": {"kind": "column", "gap": 6, "align": 0, "justify": 0.5, "reserve": true},
+        "padding_top": 10, "padding_bottom": 20,
+        "children": [1, 2]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"},
+       {"kind": "rect", "w": 20, "h": 14, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    const JUSTIFY_ROW_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "JustifyRow", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "w": 100, "h": 50,
+        "layout": {"kind": "row", "gap": 4, "align": 1.0, "justify": 1.0, "reserve": true},
+        "padding_left": 8, "padding_right": 2,
+        "children": [1, 2]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"},
+       {"kind": "rect", "w": 30, "h": 20, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    const JUSTIFY_AUTOSIZED_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "JustifyAutosized", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group",
+        "layout": {"kind": "column", "gap": 6, "align": 0.5, "justify": 0.5, "reserve": true},
+        "children": [1, 2]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"},
+       {"kind": "rect", "w": 20, "h": 14, "fill": "blue"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn justify_places_the_whole_flow_along_the_main_axis() {
+        let anim = AnimationDef::from_json(JUSTIFY_COLUMN_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // content = 10 + 6 + 14 = 30; free = 100 - 10 (pt) - 20 (pb) - 30 = 40;
+        // start = 40 * 0.5 = 20, so the stack begins at padding_top + 20 = 30.
+        assert_close(rect_xy(&scene, 1), (0.0, 30.0));
+        assert_close(rect_xy(&scene, 2), (0.0, 46.0));
+
+        let anim = AnimationDef::from_json(JUSTIFY_ROW_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // content = 20 + 4 + 30 = 54; free = 100 - 8 (pl) - 2 (pr) - 54 = 36;
+        // justify=1.0 pushes the run flush against the padded right edge.
+        // The cross axis is untouched: align=1.0 still bottom-aligns each child.
+        assert_close(rect_xy(&scene, 1), (44.0, 40.0));
+        assert_close(rect_xy(&scene, 2), (68.0, 30.0));
+    }
+
+    /// The same 80x60 group holding one 20x10 rect, laid out three ways:
+    /// the default centering layout, then a column and a row both centered on
+    /// their main axis. `{LAYOUT}` is substituted per case.
+    const ONE_CHILD_JSON: &str = r#"{
+  "version": 2,
+  "scenes": [
+    {"name": "OneChild", "width": 200, "height": 200, "frames": 1,
+     "background": "white", "children": [0],
+     "nodes": [
+       {"kind": "group", "w": 80, "h": 60, "layout": {LAYOUT}, "children": [1]},
+       {"kind": "rect", "w": 20, "h": 10, "fill": "red"}
+     ]}
+  ]
+}"#;
+
+    #[test]
+    fn justified_flow_of_one_child_matches_the_centering_layout() {
+        let xy = |layout: &str| {
+            let anim =
+                AnimationDef::from_json(&ONE_CHILD_JSON.replace("{LAYOUT}", layout)).unwrap();
+            let scene = anim
+                .build_scene(FrameId::new(0), SceneSelection::All)
+                .unwrap();
+            rect_xy(&scene, 1)
+        };
+        // Without `justify` a single-child column/row is start-packed on its
+        // main axis and so disagrees with `center` on one coordinate each;
+        // `justify: 0.5` is what makes all three agree.
+        assert_close(xy(r#"{"kind": "center"}"#), (30.0, 25.0));
+        assert_close(
+            xy(r#"{"kind": "column", "gap": 0, "align": 0.5, "justify": 0.5, "reserve": true}"#),
+            (30.0, 25.0),
+        );
+        assert_close(
+            xy(r#"{"kind": "row", "gap": 0, "align": 0.5, "justify": 0.5, "reserve": true}"#),
+            (30.0, 25.0),
+        );
+    }
+
+    #[test]
+    fn justify_is_inert_when_the_container_hugs_its_content() {
+        let anim = AnimationDef::from_json(JUSTIFY_AUTOSIZED_JSON).unwrap();
+        let scene = anim
+            .build_scene(FrameId::new(0), SceneSelection::All)
+            .unwrap();
+        // An auto-sized column is exactly as tall as its content (10+6+14=30),
+        // so there is no free space to distribute and the stack still starts
+        // at 0 - `justify` only bites once the group is given a size.
+        assert_close(group_wh(&scene, 0), (20.0, 30.0));
+        assert_close(rect_xy(&scene, 1), (0.0, 0.0));
+        assert_close(rect_xy(&scene, 2), (0.0, 16.0));
+    }
+
     const FLOAT_MAX_JSON: &str = r#"{
   "version": 2,
   "scenes": [

@@ -33,6 +33,27 @@ def test_row_layout(test_scene):
         Ellipse().size(10, 5).fill("green")
 
 
+def test_column_justify(test_scene):
+    """justify places the stack as a whole along the main (vertical) axis;
+    align keeps controlling the cross axis independently."""
+    with (
+        test_scene.size(60, 40),
+        Group().size(50, 30).column(gap=4, align=0.0, justify=0.5),
+    ):
+        Rect().size(20, 6).fill("orange")
+        Rect().size(30, 6).fill("blue")
+
+
+def test_row_justify(test_scene):
+    """justify=1.0 pushes the run flush against the group's right edge."""
+    with (
+        test_scene.size(60, 40),
+        Group().size(50, 30).row(gap=4, align=1.0, justify=1.0),
+    ):
+        Rect().size(10, 6).fill("orange")
+        Rect().size(14, 10).fill("blue")
+
+
 def test_row_layout_with_rotated_rect(test_scene):
     """A rotated rect in a Row is laid out using its rotated (outer) bounding
     box, not its raw width - regression test for aabb_offset/get_outer_width

@@ -15,9 +15,10 @@ CENTERING_LAYOUT = CenteringLayout()
 
 
 class ColumnLayout(LayoutBase):
-    def __init__(self, frame, gap, align, reserve):
+    def __init__(self, frame, gap, align, reserve, justify):
         self.gap = AnimatedValue(gap, frame)
         self.align = AnimatedValue(align, frame)
+        self.justify = AnimatedValue(justify, frame)
         self.reserve = reserve
 
     def serialize(self, serializer):
@@ -27,14 +28,16 @@ class ColumnLayout(LayoutBase):
             "kind": "column",
             "gap": serialize_expr(self.gap),
             "align": serialize_expr(self.align),
+            "justify": serialize_expr(self.justify),
             "reserve": self.reserve,
         }
 
 
 class RowLayout(LayoutBase):
-    def __init__(self, frame, gap, align, reserve):
+    def __init__(self, frame, gap, align, reserve, justify):
         self.gap = AnimatedValue(gap, frame)
         self.align = AnimatedValue(align, frame)
+        self.justify = AnimatedValue(justify, frame)
         self.reserve = reserve
 
     def serialize(self, serializer):
@@ -44,6 +47,7 @@ class RowLayout(LayoutBase):
             "kind": "row",
             "gap": serialize_expr(self.gap),
             "align": serialize_expr(self.align),
+            "justify": serialize_expr(self.justify),
             "reserve": self.reserve,
         }
 

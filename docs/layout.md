@@ -24,11 +24,12 @@ For absolute coordinates, proportional alignment, and cross-node positioning
 
 ## Column layout
 
-Call `.column(gap, align, reserve)` on a `Group` to stack its children **vertically**:
+Call `.column(gap, align, reserve, justify)` on a `Group` to stack its children **vertically**:
 
 - `gap` — vertical spacing between children in pixels (default `0`)
-- `align` — horizontal alignment: `0.0` = left, `0.5` = center, `1.0` = right (default `0.5`)
+- `align` — horizontal alignment of each child: `0.0` = left, `0.5` = center, `1.0` = right (default `0.5`)
 - `reserve` — whether inactive children still occupy space (default `True`; see [below](#the-reserve-parameter))
+- `justify` — vertical placement of the stack as a whole: `0.0` = top, `0.5` = center, `1.0` = bottom (default `0.0`; see [below](#the-justify-parameter))
 
 ```ffpy frame="0"
 with Scene():
@@ -53,11 +54,12 @@ with Scene():
 
 ## Row layout
 
-Call `.row(gap, align, reserve)` on a `Group` to place its children **horizontally**:
+Call `.row(gap, align, reserve, justify)` on a `Group` to place its children **horizontally**:
 
 - `gap` — horizontal spacing between children in pixels (default `0`)
-- `align` — vertical alignment: `0.0` = top, `0.5` = center, `1.0` = bottom (default `0.5`)
+- `align` — vertical alignment of each child: `0.0` = top, `0.5` = center, `1.0` = bottom (default `0.5`)
 - `reserve` — whether inactive children still occupy space (default `True`; see [below](#the-reserve-parameter))
+- `justify` — horizontal placement of the run as a whole: `0.0` = left, `0.5` = center, `1.0` = right (default `0.0`; see [below](#the-justify-parameter))
 
 ```ffpy frame="0"
 with Scene():
@@ -79,6 +81,70 @@ with Scene():
         Rect().size(40, 60).fill("cornflowerblue")
         Rect().size(40, 30).fill("lightskyblue")
 ```
+
+---
+
+## The `justify` parameter
+
+Column and row layouts have two independent axes:
+
+- the **cross axis** — where each child sits *across* the flow, controlled by
+  `align` (horizontal for a column, vertical for a row);
+- the **main axis** — where the stack or run sits *along* the flow, controlled
+  by `justify` (vertical for a column, horizontal for a row).
+
+`justify` defaults to `0.0`, i.e. children are packed from the start of the
+flow: a column begins at the top of the group, a row at its left edge. Raise it
+to slide the whole block towards the far end, exactly like `align` does across
+the flow:
+
+```ffpy frame="0"
+with Scene(width=300, height=140):
+    with Group().size(280, 120):
+        Rect().expand().fill(None).stroke("silver", 1)
+        with Group().expand().row(gap=16, justify=0.5):
+            Rect().size(50, 50).fill("steelblue")
+            Rect().size(50, 50).fill("coral")
+```
+
+The two axes compose freely — a column pinned to the bottom of its group with
+its children right-aligned:
+
+```ffpy frame="0"
+with Scene(width=200, height=200):
+    with Group().size(180, 180):
+        Rect().expand().fill(None).stroke("silver", 1)
+        with Group().expand().column(gap=8, align=1.0, justify=1.0):
+            Rect().size(120, 30).fill("steelblue")
+            Rect().size(90, 30).fill("cornflowerblue")
+            Rect().size(60, 30).fill("lightskyblue")
+```
+
+`justify` distributes the group's *free* space, so it only has an effect once
+the group is bigger than its content along the flow axis. A group with no
+explicit `size()` hugs its children (see [Padding](#padding)), leaving nothing
+to distribute — `justify` is silently inert there.
+
+With `justify=0.5` a single-child column or row places that child exactly where
+the [default centering layout](#default-centering-layout) would:
+
+```ffpy frame="0"
+with Scene(width=200, height=120):
+    with Group().size(180, 100):
+        Rect().expand().fill(None).stroke("silver", 1)
+        with Group().expand().column(justify=0.5):
+            Rect().size(80, 30).fill("steelblue")
+```
+
+Without it, `.column()` would leave that child at the top and `.row()` at the
+left, since a lone child is still start-packed — the same rule that keeps a
+stack from jumping when you add a second item to it.
+
+!!! note
+
+    `justify` applies to column and row layouts only. [Grid](#grid-layout)
+    layout has no equivalent yet; its cells always start at the group's
+    top-left corner.
 
 ---
 

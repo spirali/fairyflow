@@ -655,7 +655,9 @@ export default function App() {
 
   // ── fetch scene tree on demand (with cache) ────────────────────────────────
   useEffect(() => {
-    if (frames <= 0) return;
+    // runId is only bumped when a `tree` message arrives, so runId === 0 means no run has
+    // completed and the server has no animation cached yet — fetching now would just 404.
+    if (frames <= 0 || runId === 0) return;
     const ctrl = new AbortController();
 
     const fetchTree = async (n: number): Promise<SceneData | null> => {

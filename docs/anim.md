@@ -310,6 +310,12 @@ transform that instead). The pivot defaults to the node's centre — `pivot_x`/
 defaulting to `width * 0.5`/`height * 0.5`. Set it with `.pivot()`, e.g.
 `g.pivot("top_left")` or `g.pivot(x=rel(0.3), y=rel(0.7))` for an own-box fraction.
 
+Because the pivot is the centre by default, a scaled node grows outward in every
+direction: its centre holds still while its top-left moves, even when `xy()`
+pinned that corner. `Group().xy(0, 0).scale(2)` around a 100x100 box spans
+`-50..150`, not `0..200` — add `.pivot("top_left")` to keep the node's own origin
+fixed instead.
+
 ```ffpy video="mp4"
 with Scene():
     with Group().size(80, 80).align(0.5, 0.5) as g:

@@ -1073,6 +1073,9 @@ class RotAndScaleMixin:
     ) -> Self:
         """Scale the node along the x axis.
 
+        Scaling happens about the node's pivot (the node's centre unless
+        ``pivot()`` says otherwise) — see ``scale()``.
+
         Args:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the width.
@@ -1090,6 +1093,9 @@ class RotAndScaleMixin:
     ) -> Self:
         """Scale the node along the y axis.
 
+        Scaling happens about the node's pivot (the node's centre unless
+        ``pivot()`` says otherwise) — see ``scale()``.
+
         Args:
             value: Scale factor. ``1.0`` is the original size; ``2.0`` doubles
                 the height.
@@ -1106,6 +1112,13 @@ class RotAndScaleMixin:
         self, value: FloatLike, *, dur: Duration = None, ease: Easing = None
     ) -> Self:
         """Scale the node uniformly along both axes.
+
+        Scaling happens about the node's pivot, which defaults to its centre
+        and is set with ``pivot()``. A scaled node therefore grows outward in
+        every direction: its centre stays put while its top-left moves, even
+        when ``xy()`` pinned that corner. ``Group().xy(0, 0).scale(2)`` around
+        a 100x100 box spans ``-50..150``, not ``0..200`` — add
+        ``pivot("top_left")`` to keep the node's own origin fixed instead.
 
         Args:
             value: Scale factor applied to both x and y. ``1.0`` is the
@@ -1126,8 +1139,7 @@ class RotAndScaleMixin:
     ) -> Self:
         """Rotate the node around its pivot point.
 
-        The pivot defaults to the node's center (``0.5``, ``0.5``) and is
-        set with ``pivot()``.
+        The pivot defaults to the node's centre and is set with ``pivot()``.
 
         Args:
             value: Rotation angle in degrees, clockwise.

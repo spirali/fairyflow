@@ -1,6 +1,6 @@
 # Changelog
 
-## Unrelased
+## 0.7.0
 
 ### New
  

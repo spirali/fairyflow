@@ -52,11 +52,12 @@ fn err(status: StatusCode, msg: impl Into<String>) -> axum::response::Response {
 /// shifted by the running offset — the caller renders in the concatenated
 /// (`SceneSelection::All`) frame space.
 ///
-/// Pages follow the points where the player stops: every cue frame, plus the
-/// last frame of every non-`flow` scene (`crates/player`'s `scene_end_frames`)
-/// — without the latter a scene that has no cues would contribute nothing at
-/// all. `is_last_file` marks the file that ends the sequence, whose final frame
-/// is a stop point too, `flow` or not (same rule as the sequence preview).
+/// Pages follow the points where the player stops: every cue frame, which
+/// already includes the implied end-of-scene cue of a non-`flow` scene (see
+/// `SceneInfo::cue_frames`) — without the latter a scene that has no explicit
+/// cues would contribute nothing at all. `is_last_file` marks the file that
+/// ends the sequence, whose final frame is a stop point too, `flow` or not
+/// (same rule as the sequence preview).
 fn selected_frames(anim: &AnimationDef, selection: FrameSelection, is_last_file: bool) -> Vec<u32> {
     let total_frames = anim.frame_count(SceneSelection::All);
     match selection {
@@ -75,9 +76,6 @@ fn selected_frames(anim: &AnimationDef, selection: FrameSelection, is_last_file:
                     }
                 }
                 offset += si.frame_count;
-                if !si.flow && si.frame_count > 0 {
-                    set.insert(offset - 1);
-                }
             }
             if is_last_file && total_frames > 0 {
                 set.insert(total_frames - 1);

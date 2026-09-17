@@ -259,9 +259,9 @@ struct PlayerApp {
     // Loaded animation data (owns temp dir via _temp_dir)
     frame_map: Arc<Vec<(usize, u32)>>,
     animations: Arc<Vec<AnimationDef>>,
+    /// Frames the player stops on — every cue, including the implied
+    /// end-of-scene cue of a non-`flow` scene (see `SceneInfo::cue_frames`).
     cue_frames: HashSet<u32>,
-    /// Last global frame of every non-`flow` scene — autoplay also pauses here.
-    scene_end_frames: HashSet<u32>,
     scene_segments: Vec<SceneSegmentInfo>,
     fps: u32,
     scene_width: u32,
@@ -293,10 +293,7 @@ impl PlayerApp {
                 return;
             }
             self.current_frame -= 1;
-            if self.current_frame == 0
-                || self.cue_frames.contains(&self.current_frame)
-                || self.scene_end_frames.contains(&self.current_frame)
-            {
+            if self.current_frame == 0 || self.cue_frames.contains(&self.current_frame) {
                 self.paused = true;
             }
         } else {
@@ -306,9 +303,7 @@ impl PlayerApp {
                 return;
             }
             self.current_frame += 1;
-            if self.cue_frames.contains(&self.current_frame)
-                || self.scene_end_frames.contains(&self.current_frame)
-            {
+            if self.cue_frames.contains(&self.current_frame) {
                 self.paused = true;
             }
         }
@@ -664,7 +659,6 @@ pub fn open_player(
     // Build global frame map: (animation_index, local_frame) per global frame
     let mut frame_map: Vec<(usize, u32)> = Vec::new();
     let mut cue_frames: HashSet<u32> = HashSet::new();
-    let mut scene_end_frames: HashSet<u32> = HashSet::new();
     let mut scene_segments: Vec<SceneSegmentInfo> = Vec::new();
 
     for (anim_idx, anim) in package.animations.iter().enumerate() {
@@ -672,9 +666,9 @@ pub fn open_player(
         for local_frame in 0..anim.frame_count(SceneSelection::All) {
             frame_map.push((anim_idx, local_frame));
         }
-        // Collect cue frames, non-`flow` scene end frames, and per-scene
-        // segment info (local cues/notes + this scene's global start), all
-        // with global offsets.
+        // Collect cue frames (already including each non-`flow` scene's
+        // implied end-of-scene cue) and per-scene segment info (local
+        // cues/notes + this scene's global start), all with global offsets.
         let mut within_anim = 0u32;
         for si in anim.scene_infos() {
             for &cf in &si.cue_frames {
@@ -687,9 +681,6 @@ pub fn open_player(
                 notes: si.notes,
             });
             within_anim += si.frame_count;
-            if !si.flow && si.frame_count > 0 {
-                scene_end_frames.insert(base_offset + within_anim - 1);
-            }
         }
     }
 
@@ -725,7 +716,6 @@ pub fn open_player(
         frame_map,
         animations,
         cue_frames,
-        scene_end_frames,
         scene_segments,
         fps,
         scene_width,

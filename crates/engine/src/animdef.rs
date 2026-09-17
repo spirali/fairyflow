@@ -25,7 +25,10 @@ pub struct SceneInfo {
     pub name: String,
     /// Key frames within this scene (local frame numbers, 0-based).
     pub key_frames: Vec<u32>,
-    /// Cue frames within this scene (local frame numbers, 0-based).
+    /// Cue frames within this scene (local frame numbers, 0-based), sorted
+    /// and deduplicated. A non-`flow` scene ends with an implied cue on its
+    /// last frame, so this list already contains it — consumers never have to
+    /// add scene ends themselves.
     pub cue_frames: Vec<u32>,
     /// If `true`, the player does not pause at the end of this scene.
     pub flow: bool,
@@ -213,6 +216,20 @@ impl SingleScene {
     fn frame_count(&self) -> u32 {
         self.scene.frames
     }
+
+    /// Explicit cues plus the implied end-of-scene cue: a scene that is not
+    /// `flow` stops on its last frame, exactly as if `cue()` had been called
+    /// there. Sorted and deduplicated (an explicit cue on the last frame does
+    /// not produce a second entry).
+    fn cue_frames(&self) -> Vec<u32> {
+        let mut cues = self.scene.cues.clone();
+        if !self.scene.flow && self.scene.frames > 0 {
+            cues.push(self.scene.frames - 1);
+        }
+        cues.sort_unstable();
+        cues.dedup();
+        cues
+    }
 }
 
 // ─────────────────────────── AnimationDef impl ───────────────────────────────
@@ -299,7 +316,7 @@ impl AnimationDef {
                 SceneInfo {
                     name: s.name.clone(),
                     key_frames: kf.into_iter().map(|f| f.as_u32()).collect(),
-                    cue_frames: s.scene.cues.clone(),
+                    cue_frames: s.cue_frames(),
                     flow: s.scene.flow,
                     notes: s.scene.notes.clone(),
                     frame_count: s.frame_count(),

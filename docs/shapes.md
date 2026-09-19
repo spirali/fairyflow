@@ -155,15 +155,16 @@ with Scene():
     p.close()
 ```
 
-`move_to`/`line_to` also accept a live `Position` instead of `(x, y)` —
+`move_to`/`line_to`/`cubic_to` also accept a live `Position` instead of `(x, y)` —
 `p.line_to(other.at("right"))` tracks `other`'s right edge as it moves.
 
 ### Cubic Bézier curves
 
 `cubic_to(x, y, c1=, c2=)` appends a cubic Bézier segment in one call — `c1`/`c2` are
 `(dx, dy)` offsets for the two control points, relative to the segment's start and end
-respectively. The returned handle's `.c1(dx, dy, dur=)`/`.c2(dx, dy, dur=)` re-animate
-them later.
+respectively. The endpoint may also be a `Position`, as in
+`p.cubic_to(other.at("left"), c1=(0, 20), c2=(-50, 0))`. The returned handle's
+`.c1(dx, dy, dur=)`/`.c2(dx, dy, dur=)` re-animate them later.
 
 ```ffpy frame="0"
 with Scene():

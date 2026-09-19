@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+  * `Path.cubic_to()` now accepts a `Position` as its endpoint, like `move_to()`/`line_to()` already did
+
 ## 0.7.0
 
 ### New

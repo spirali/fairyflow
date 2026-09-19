@@ -1904,10 +1904,10 @@ class Ellipse(
 
 
 def _resolve_path_point(parent: "Path", x, y, *, method: str):
-    """Resolve a `move_to`/`line_to` argument pair into a plain (x, y) pair
-    already in `parent`'s own frame - `x` may be a live `Position` (in which
-    case `y` must be omitted), or a plain coordinate (in which case `y` is
-    required)."""
+    """Resolve a `move_to`/`line_to`/`cubic_to` argument pair into a plain
+    (x, y) pair already in `parent`'s own frame - `x` may be a live `Position`
+    (in which case `y` must be omitted), or a plain coordinate (in which case
+    `y` is required)."""
     if isinstance(x, Position):
         pos = x.into_node(parent)
         return pos.x, pos.y
@@ -2022,8 +2022,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
 
     def cubic_to(
         self,
-        x: FloatLike,
-        y: FloatLike,
+        x: FloatLike | Position,
+        y: FloatLike | None = None,
         *,
         c1: tuple[FloatLike, FloatLike] | None = None,
         c2: tuple[FloatLike, FloatLike] | None = None,
@@ -2034,8 +2034,9 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
         shaped by two control points.
 
         Args:
-            x: The target x coordinate.
-            y: The target y coordinate.
+            x: The target x coordinate, or a `Position` (in which case `y`
+                must be omitted).
+            y: The target y coordinate. Required unless `x` is a `Position`.
             c1: Control point 1 as an ``(dx, dy)`` offset relative to the
                 segment's start point.
             c2: Control point 2 as an ``(dx, dy)`` offset relative to the
@@ -2045,7 +2046,8 @@ class Path(NodeWithChildren, StyleMixin, ZLevelMixin):
             The newly created `PathCubic` node. Use its `c1()`/`c2()` methods
             to animate the control points later.
         """
-        p = PathCubic(self, x, y)
+        rx, ry = _resolve_path_point(self, x, y, method="cubic_to")
+        p = PathCubic(self, rx, ry)
         self._children.append(p)
         if c1 is not None:
             p.c1(*c1)

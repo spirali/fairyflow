@@ -76,6 +76,32 @@ def test_line_to_requires_y_when_not_position():
             p.line_to(5)
 
 
+def test_cubic_to_accepts_position():
+    """`cubic_to(a_position, c1=..., c2=...)` resolves the endpoint exactly
+    like `line_to` does, and still applies the control-point offsets."""
+    s = Scene(100, 100)
+    with s, Group().size(100, 100):
+        anchor = Ellipse().size(20, 20).xy(30, 40)
+        p = Path().stroke("black")
+        p.move_to(0, 0)
+        expected = anchor.at("left").into_node(p)
+        handle = p.cubic_to(anchor.at("left"), c1=(0, 20), c2=(-50, 0))
+    assert repr(handle._get_attr("x").get_first_value()) == repr(expected.x)
+    assert repr(handle._get_attr("y").get_first_value()) == repr(expected.y)
+    assert handle._attrs["c1_x"].get_first_value() == 0
+    assert handle._attrs["c1_y"].get_first_value() == 20
+    assert handle._attrs["c2_x"].get_first_value() == -50
+    assert handle._attrs["c2_y"].get_first_value() == 0
+
+
+def test_cubic_to_requires_y_when_not_position():
+    with Scene(100, 100):
+        p = Path()
+        p.move_to(0, 0)
+        with pytest.raises(TypeError):
+            p.cubic_to(5)
+
+
 def test_cubic_to_sets_endpoint_and_control_points_in_one_call():
     with Scene(100, 100):
         p = Path()

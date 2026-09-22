@@ -5,6 +5,7 @@
 ### Fixes
 
   * `Path.cubic_to()` now accepts a `Position` as its endpoint, like `move_to()`/`line_to()` already did
+  * Fixed UI crash in the scene tree when a node has a gradient fill
 
 ## 0.7.0
 

@@ -42,7 +42,7 @@ export interface RawNode {
   scale_y?: number;
   rotation?: number;
   // style (rect, ellipse, path, tspan)
-  fill_color?: string;
+  fill_color?: Paint;
   stroke_color?: string;
   stroke_width?: number;
   dash?: [number, number];
@@ -70,6 +70,10 @@ export interface RawNode {
   hidden_layers?: string[];
   all_svg_layers?: string[];
 }
+
+// A fill: hex color string, or a linear gradient (stops are [offset 0..1, hex color];
+// angle in degrees, 0 = bottom-to-top, 90 = left-to-right — same as CSS linear-gradient)
+export type Paint = string | { stops: [number, string][]; angle: number };
 
 // The scene root returned by GET /tree/{n}
 export interface SceneData {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { RawNode, RawImageLayer, SceneData, TreeNodeData } from "../types";
+import type { Paint, RawNode, RawImageLayer, SceneData, TreeNodeData } from "../types";
 import { NodeKindIcon } from "./Icons";
 
 const KIND_LABELS: Partial<Record<TreeNodeData["kind"], string>> = {
@@ -11,8 +11,28 @@ function fmt(v: number | string): number | string {
   return typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(1)) : v;
 }
 
-function isTransparent(color: string): boolean {
-  return color === "#00000000";
+function isTransparent(paint: Paint): boolean {
+  return typeof paint === "string"
+    ? paint === "#00000000"
+    : paint.stops.every(([, c]) => c === "#00000000");
+}
+
+function paintCss(paint: Paint): string {
+  if (typeof paint === "string") return paint;
+  const stops = paint.stops.map(([o, c]) => `${c} ${o * 100}%`).join(", ");
+  return `linear-gradient(${paint.angle}deg, ${stops})`;
+}
+
+function paintLabel(paint: Paint): string {
+  if (typeof paint === "string") return shortHex(paint);
+  return paint.stops.map(([, c]) => shortHex(c)).join("→");
+}
+
+// Gradient fills are objects, recreated for every frame — compare structurally.
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a == null || b == null) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function shortHex(color: string): string {
@@ -49,7 +69,8 @@ function NodeLabel({
   prevNode?: TreeNodeData;
   displayLabel: string;
 }) {
-  const ch = (key: keyof TreeNodeData): boolean => prevNode != null && prevNode[key] !== node[key];
+  const ch = (key: keyof TreeNodeData): boolean =>
+    prevNode != null && !sameValue(prevNode[key], node[key]);
 
   const TRACKED = [
     "width",
@@ -90,14 +111,14 @@ function NodeLabel({
               display: "inline-block",
               width: 10,
               height: 10,
-              background: node.fill_color,
+              background: paintCss(node.fill_color),
               border: "1px solid rgba(255,255,255,0.3)",
               borderRadius: 2,
               verticalAlign: "middle",
               marginRight: 3,
             }}
           />
-          {shortHex(node.fill_color)}
+          {paintLabel(node.fill_color)}
         </span>
       )}
       {node.stroke_color != null && !isTransparent(node.stroke_color) && (
@@ -203,7 +224,7 @@ function TreeNode({
         "c2_y",
         "z_level",
       ] as const
-    ).some((k) => prevNode[k] !== node[k]);
+    ).some((k) => !sameValue(prevNode[k], node[k]));
 
   const iconKind = isDirectTextChild ? "t_line" : node.kind;
   const displayLabel = isDirectTextChild
